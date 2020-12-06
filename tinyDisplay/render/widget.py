@@ -12,6 +12,7 @@ import abc
 
 from PIL import Image, ImageDraw
 from tinyDisplay.utility import dataset as Dataset
+from tinyDisplay.utility import image2Text
 from tinyDisplay.font import tdImageFont
 
 
@@ -28,7 +29,7 @@ class widget(metaclass=abc.ABCMeta):
         """
         self.name = name
         self._requestedSize = size
-        self._dataset = Dataset(dataset)
+        self._dataset = dataset if isinstance(dataset, Dataset) else Dataset(dataset)
         self.just = just.lower()
         self.type = self.__class__.__name__
         self.image = None
@@ -60,6 +61,11 @@ class widget(metaclass=abc.ABCMeta):
         v = f'value({self._reprVal}) ' if self._reprVal else ''
         return f'<{n}.{self.type} {v}size{self.size} {cw}at 0x{id(self):x}>'
 
+    def __str__(self):
+        if self.image:
+            return image2Text(self.image)
+        return 'image empty'
+
     def clear(self):
         """
         Set the image of the widget to empty and the default size of the widget
@@ -78,7 +84,6 @@ class widget(metaclass=abc.ABCMeta):
     def _place(self, retainImage=False, wImage=None, offset=(0, 0), just='lt'):
         just = just or 'lt'
         offset = offset or (0, 0)
-        assert wImage, 'Cannot place widget.  No widget provided'
         assert just[0] in 'lmr' and just[1] in 'tmb', \
             f'Requested justification "{just}" is invalid.  Valid values are left top (\'lt\'), left middle (\'lm\'), left bottom (\'lb\'), middle top (\'mt\'), middle middle (\'mm\'), middle bottom (\'mb\'), right top (\'rt\'), right middle (\'rm\'), and right bottom (\'rb\')'
 
@@ -88,7 +93,10 @@ class widget(metaclass=abc.ABCMeta):
 
         # If no existing image and no size requested then the provide wImage is the image
         if not self.image and not self._requestedSize:
-            self.image = wImage
+            if wImage:
+                self.image = wImage
+            else:
+                self.image = Image.new('1', (0, 0))
             return (0, 0)
 
         # If no existing image and a size has been requested, provision a new image
@@ -101,26 +109,31 @@ class widget(metaclass=abc.ABCMeta):
             if self.image.size != self._requestedSize:
                 self.image = self.image.crop((0, 0, self._requestedSize[0], self._requestedSize[1]))
 
-        mh = round((self.image.size[0] - wImage.size[0]) / 2)
-        r = self.image.size[0] - wImage.size[0]
+        # if there is an image to place
+        if wImage:
+            mh = round((self.image.size[0] - wImage.size[0]) / 2)
+            r = self.image.size[0] - wImage.size[0]
 
-        mv = round((self.image.size[1] - wImage.size[1]) / 2)
-        b = self.image.size[1] - wImage.size[1]
+            mv = round((self.image.size[1] - wImage.size[1]) / 2)
+            b = self.image.size[1] - wImage.size[1]
 
-        a = \
-            0 if just[0] == 'l' else \
-            mh if just[0] == 'm' else \
-            r if just[0] == 'r' else \
-            0
-        b = \
-            0 if just[1] == 't' else \
-            mv if just[1] == 'm' else \
-            b if just[1] == 'b' else \
-            0
+            a = \
+                0 if just[0] == 'l' else \
+                mh if just[0] == 'm' else \
+                r if just[0] == 'r' else \
+                0
+            b = \
+                0 if just[1] == 't' else \
+                mv if just[1] == 'm' else \
+                b if just[1] == 'b' else \
+                0
 
-        pos = (offset[0] + a, offset[1] + b)
-        self.image.paste(wImage, pos)
-        return (pos[0], pos[1])
+            pos = (offset[0] + a, offset[1] + b)
+            self.image.paste(wImage, pos)
+            return (pos[0], pos[1])
+        else:
+            # If not return position 0, 0
+            return (0, 0)
 
     def render(self, *args, **kwargs):
         self._computeLocalDB()
@@ -258,55 +271,6 @@ class progressBar(widget):
 
         self._place(wImage=img, just=self.just)
         return (self.image, True)
-
-
-class canvas(widget):
-    def __init__(self, placements=None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self._newWidget = True
-        self.placements = list(placements or [])
-        self._reprVal = f'{len(self.placements) or "no"} widgets'
-
-    def append(self, widget=None, offset=(0, 0), anchor='lt'):
-        assert widget, 'Attempted to append to canvas but did not provide a widget'
-        self.placements.append((widget, offset, anchor))
-        self._newWidget = True
-
-    def _render(self, force=False, *args, **kwargs):
-        changed = False if not force and not self._newWidget and self.image else True
-
-        # Render all of the widgets on the canvas
-        list = []
-
-        for i in self.placements:
-            wid, off, anc = self._getPlacement(i)
-            img, updated = wid.render(force=force, *args, **kwargs)
-            list.append((img, off, anc))
-            if updated:
-                changed = True
-
-        # If any have changed, render a fresh canvas
-        if changed:
-            self._newWidget = False
-            self.image = Image.new('1', self.size)
-            for img, off, anc in list:
-                self._place(retainImage=True, wImage=img, offset=off, just=anc)
-
-        return (self.image, changed)
-
-    @staticmethod
-    def _getPlacement(item):
-        if len(item) == 3:
-            w, o, a = item  # Extract placement, anchor and widget
-        elif len(item) == 2:
-            w, o = item  # or if no anchor just extract placement and widget
-            a = 'lt'
-        else:
-            w = item[0]
-            a = 'lt'
-            o = (0, 0)
-        return (w, o, a)
 
 
 class marquee(widget):
@@ -600,7 +564,6 @@ class staticWidget(widget):
 
     def __init__(self, image=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.image = image
 
     def _render(self, force=False, *args, **kwargs):
         return (self.image, force)

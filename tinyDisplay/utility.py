@@ -278,6 +278,10 @@ class dataset():
         '''
         Update database named dbName using the dictionary contained within update.
         '''
+
+        # Copy update
+        update = dict(update)
+
         # Add timestamp to update
         update['__timestamp__'] = time.time()-self._startedAt
 
@@ -492,11 +496,12 @@ class evaluate():
             self._evalLock.release()
 
 
-def printImage(img):
-    print ('-'*(img.size[0]+2))
+def image2Text(img):
+    retval = '-'*(img.size[0]+2)
     for j in range(img.size[1]):
         s = ''
         for i in list(img.crop( (0, j, img.size[0], j+1)).tobytes()):
             s += f'{i:>08b}'.replace('0', ' ').replace('1', '*')
-        print (f'|{s[0:img.size[0]]}|')
-    print ('-'*(img.size[0]+2))
+        retval += f'\n|{s[0:img.size[0]]}|'
+    retval += '\n'+('-'*(img.size[0]+2))
+    return retval

@@ -3,7 +3,7 @@
 # See License.rst for details
 
 """
-Test of Image Widget for the tinyDisplay system
+Test of Widget class for the tinyDisplay system
 
 .. versionadded:: 0.0.1
 """
@@ -11,6 +11,7 @@ import pytest
 from PIL import Image, ImageChops, ImageDraw
 
 from tinyDisplay.render.widget import text, staticText, rectangle
+from tinyDisplay.utility import dataset
 
 def test_image_placement():
 
@@ -52,7 +53,23 @@ def test_clear():
 def test_repr():
     w = staticText(name='STATIC12345', value='12345')
     v = '<STATIC12345.staticText value(\'12345\') size(25, 8)'
-    assert f'{w}'[0:len(v)] == v, f'Unexpected repr value given: {w}'
+    assert repr(w)[0:len(v)] == v, f'Unexpected repr value given: {w}'
+
+
+def test_text_image_print():
+    w = staticText(name='STATIC12345', value='12345')
+    v =  '---------------------------\n'
+    v += '|                         |\n'
+    v += '|  *   *** *****   * *****|\n'
+    v += '| **  *   *   *   ** *    |\n'
+    v += '|  *      *  *   * * **** |\n'
+    v += '|  *     *    * *  *     *|\n'
+    v += '|  *    *      ******    *|\n'
+    v += '|  *   *   *   *   * *   *|\n'
+    v += '| *** ***** ***    *  *** |\n'
+    v += '---------------------------'
+
+    assert str(w)[0:len(v)] == v, f'Unexpected image produced:\n{w}\n\nShould have been\n{v}'
 
 
 def test_string_eval():
@@ -79,9 +96,12 @@ def test_request_size():
     assert img1 == img2, f'Image should only contain \'ab\''
 
     db = {'value': s}
-    w = text(value='f"{db[\'value\']}"', dataset = { 'db': db }, size=(10,8))
+    ds = dataset()
+    ds.add('db', db)
+    w = text(value='f"{db[\'value\']}"', dataset = ds, size=(10,8))
     w.render()[0]
     db['value']= s[0]
+    ds.update('db', db)
     img1 = w.render()[0]
     img2 = Image.new('1', (10, 8))
     drw = ImageDraw.Draw(img2)

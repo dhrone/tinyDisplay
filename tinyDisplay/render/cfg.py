@@ -3,7 +3,7 @@
 # See License.rst for details
 
 """
-Manager to control the animation of the tinyDisplay system
+Load tinyDisplay system from yaml file (or pydPiper pageFile)
 
 .. versionadded:: 0.0.1
 """
@@ -13,29 +13,29 @@ import re
 import os
 import pathlib
 from PIL import ImageFont
-from inspect import isclass, getfullargspec
+from inspect import isclass, getfullargspec, getmro
 
 from tinyDisplay.utility import dataset as Dataset
-from tinyDisplay.render.sequence import sequence, collection
+from tinyDisplay.render.collection import sequence, windows
 import tinyDisplay.render.widget as widget
 from tinyDisplay.font import tdImageFont
 
 
-class Loader(yaml.SafeLoader):
+class _yamlLoader(yaml.SafeLoader):
     def __init__(self, stream):
         self._root = os.path.split(stream.name)[0]
-        super(Loader, self).__init__(stream)
+        super(_yamlLoader, self).__init__(stream)
 
     def include(self, node):
         filename = os.path.join(self._root, self.construct_scalar(node))
         with open(filename, 'r') as f:
-            return yaml.load(f, Loader)
+            return yaml.load(f, _yamlLoader)
 
 
-Loader.add_constructor('!include', Loader.include)
+_yamlLoader.add_constructor('!include', _yamlLoader.include)
 
 
-class manager():
+class tdLoader():
 
     def __init__(self, pageFile=None, pydPageFile=None, dataset=None, displaySize=None, defaultCanvas=None):
         self.size = displaySize if displaySize else (0, 0)
@@ -48,12 +48,21 @@ class manager():
         self._sequences = {}
 
         # Load valid parameters for each widget type
-        self._wParams = {k: getfullargspec(v.__init__)[0][1:] for k, v in widget.__dict__.items() if isclass(v) and issubclass(v, widget.widget) and k != 'widget'}
+        self._wParams = {k: self.getArgDecendents(v) for k, v in widget.__dict__.items() if isclass(v) and issubclass(v, widget.widget) and k != 'widget'}
 
         if pageFile:
             self._loadPageFile(pageFile)
         elif pydPageFile:
             self._loadpydPiperPageFile(pydPageFile)
+
+    @staticmethod
+    def getArgDecendents(c):
+        args = []
+        for i in getmro(c):
+            for arg in getfullargspec(i)[0][1:]:
+                if arg not in args:
+                    args.append(arg)
+        return args
 
     def _loadPageFile(self, filename):
         """
@@ -67,7 +76,7 @@ class manager():
             raise FileNotFoundError(f'Page File \'{filename}\' not found')
 
         f = open(path)
-        self._pf = yaml.load(f, Loader)
+        self._pf = yaml.load(f, _yamlLoader)
         self._transform()
 
     def _loadpydPiperPageFile(self, filename):
@@ -88,18 +97,18 @@ class manager():
 
         self._transform()
 
-    def _createCollection(self):
-        self._collection = collection(size=self.size, defaultCanvas=self._defaultCanvas)
+    def _createWindows(self):
+        self._windows = windows(size=self.size, defaultCanvas=self._defaultCanvas)
         for name, seqConfig in self._pf['SEQUENCES'].items():
             seq = self._createSequence(name, seqConfig)
-            self._collection.append(sequence=seq, placement=seqConfig.get('placement'), just=seqConfig.get('just'))
+            self._windows.append(window=seq, offset=seqConfig.get('offset'), just=seqConfig.get('just'), z=seqConfig.get('Z', windows.ZSTD), minDuration=seqConfig.get('minDuration', 0), coolingPeriod=seqConfig.get('coolingPeriod', 0))
 
     def _createSequence(self, name, cfg):
 
         if name in self._sequences:
             return self._sequences[name]
 
-        seq = sequence(name=name, condition=cfg.get('condition'), minDuration=cfg.get('minDuration'), priority=cfg.get('priority'), coolingPeriod=cfg.get('coolingPeriod'), dataset=self._dataset, defaultCanvas=self._defaultCanvas)
+        seq = sequence(name=name, condition=cfg.get('condition'), dataset=self._dataset, defaultCanvas=self._defaultCanvas)
 
         for canvas in cfg['canvases']:
             c = self._createCanvas(canvas['name'])
@@ -120,12 +129,12 @@ class manager():
             if 'placements' not in cfg:
                 raise ValueError(f'Trying to create canvas {name} but there are no placements')
             for pi in cfg['placements']:
-                wname, p, a = pi if len(pi) == 3 else (pi[0], pi[1], 'lt')
+                wname, o, j = pi if len(pi) == 3 else (pi[0], pi[1], 'lt')
                 w = self._createWidget(wname, self._pf['WIDGETS'][wname])
-                placements.append((p, a, w))
+                placements.append((w, o, j))
 
             # name=None, size=None, placements=None
-            c = widget.canvas(name, size=cfg['size'], placements=placements)
+            c = widget.canvas(name=name, size=cfg['size'], placements=placements)
             if 'effect' in cfg:
                 c = self._addEffect(c, name, cfg)
         else:
@@ -162,6 +171,23 @@ class manager():
         cfg['name'] = name
         cfg['dataset'] = self._dataset
 
+        # Translate format/variable into value
+        if cfg['type'] == 'text':
+            if 'format' in cfg:
+                if 'variables' in cfg:
+                    cfg['value'] = "f\"{0}\"".format(cfg['format'].format(*[f'{{{i}}}' for i in cfg['variables']]))
+                    del cfg['variables']
+                else:
+                    cfg['value'] = cfg['format']
+                del cfg['format']
+        elif cfg['type'] == 'progressBar':
+            if 'variables' in cfg:
+                cfg['value'] = cfg['variables'][0]
+            del cfg['variables']
+
+        if cfg['type'] == 'progressBar':
+            print (name, {k: v for k, v in cfg.items() if k != 'dataset'})
+
         kwargs = {k: v for k, v in cfg.items() if k in self._wParams[cfg['type']]}
         w = widget.__dict__[cfg['type']](**kwargs)
 
@@ -184,10 +210,14 @@ class manager():
 
     def _findFile(self, name, type):
 
-        search = [
-            pathlib.Path(self._pf['DEFAULTS']['paths'][type]) / name,
-            pathlib.Path(__file__).parent / self._pf['DEFAULTS']['paths'][type] / name
-        ] if 'DEFAULTS' in self._pf and 'paths' in self._pf['DEFAULTS'] else []
+        # If DEFAULTS/paths/type exists, add to search path
+        try:
+            search = [
+                pathlib.Path(self._pf['DEFAULTS']['paths'][type]) / name,
+                pathlib.Path(__file__).parent / self._pf['DEFAULTS']['paths'][type] / name
+            ]
+        except KeyError:
+            search = []
 
         search = search + \
         [
@@ -226,12 +256,12 @@ class manager():
             if k == key:
                 yield (k, v, dictionary)
             elif isinstance(v, dict):
-                for result in manager._find(key, v):
+                for result in tdLoader._find(key, v):
                     yield result
             elif isinstance(v, list):
                 for d in v:
                     if isinstance(d, dict):
-                        for result in manager._find(key, d):
+                        for result in tdLoader._find(key, d):
                             yield result
 
     def _transformPyd(self, pydPF):
@@ -455,3 +485,51 @@ class manager():
             if k in vDefaults and k not in d:
                 d[k] = vDefaults[k]
         return d
+
+def load(file, dataset=None, displaySize=None, defaultCanvas=None):
+    '''
+    Initialize and return a tinyDisplay windows object from a tinyDisplay yaml file
+
+    :param file: The filename of the tinyDisplay yaml file
+    :type file: str
+    :param dataset: A dataset to provide variables to any widgets which require them
+    :type dataset: tinyDisplay.utility.dataset
+    :param displaySize: A tuple containing the size of the display
+    :type displaySize: (int, int)
+    :param defaultWindow: A window (canvas) to display if there are no active windows
+    :type defaultWindow: tinyDisplay.widget.canvas
+    '''
+    tdl = tdLoader(pageFile = file, dataset = dataset, displaySize = displaySize, defaultCanvas = defaultCanvas)
+    tdl._createWindows()
+
+    return tdl._windows
+
+def loadPydPiper(file, dataset=None, displaySize=None, defaultCanvas=None, imageDir=None, fontDir=None):
+    '''
+    Initialize and return a tinyDisplay windows object from a pydPiper page file
+
+    :param file: The filename of the pydPiper page file
+    :type file: str
+    :param dataset: A dataset to provide variables to any widgets which require them
+    :type dataset: tinyDisplay.utility.dataset
+    :param displaySize: A tuple containing the size of the display
+    :type displaySize: (int, int)
+    :param defaultWindow: A window (canvas) to display if there are no active windows
+    :type defaultWindow: tinyDisplay.widget.canvas
+    '''
+    tdl = tdLoader(pydPageFile = file, dataset = dataset, displaySize = displaySize, defaultCanvas = defaultCanvas)
+
+    # Set file locations if provided
+    if imageDir or fontDir:
+        if not 'DEFAULTS' in tdl._pf:
+            tdl._pf['DEFAULTS'] = {}
+        if not 'paths' in tdl._pf['DEFAULTS']:
+            tdl._pf['DEFAULTS']['paths'] = {}
+        if imageDir:
+            tdl._pf['DEFAULTS']['paths']['images'] = imageDir
+        if fontDir:
+            tdl._pf['DEFAULTS']['paths']['fonts'] = fontDir
+
+    tdl._createWindows()
+
+    return tdl._windows

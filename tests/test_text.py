@@ -12,6 +12,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw
 
 from tinyDisplay.render.widget import text
+from tinyDisplay.utility import dataset
 
 
 def test_text_widget():
@@ -19,7 +20,8 @@ def test_text_widget():
     img = Image.open(path).convert('1')
 
     db = {'artist': 'Sting'}
-    w = text(value='f"Artist {db[\'artist\']}"', dataset = { 'db': db }, size=(60,8))
+    ds = dataset({'db': db})
+    w = text(value='f"Artist {db[\'artist\']}"', dataset = ds, size=(60,8))
     renderImage = w.render()[0]
     bbox = ImageChops.difference(img, renderImage).getbbox()
     assert not bbox, f'Sting image did not match'
@@ -28,6 +30,7 @@ def test_text_widget():
     img = Image.open(path).convert('1')
 
     db['artist']='New Republic'
+    ds.update('db', db)
     renderImage = w.render()[0]
     bbox = ImageChops.difference(img, renderImage).getbbox()
     assert not bbox, f'New Republic image did not match'

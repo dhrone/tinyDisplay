@@ -11,7 +11,8 @@ import pytest
 from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw
 
-from tinyDisplay.render.widget import text, canvas
+from tinyDisplay.render.widget import text
+from tinyDisplay.render.collection import canvas
 
 
 def compute_placement(size, wsize, offset, anchor):
@@ -100,6 +101,7 @@ def test_canvas_widget_change():
     img, m1 = c.render()
     img, m2 = c.render()
     db['artist'] = 'Moby'
+    w._dataset.update('db', db)
     img, m3 = c.render()
 
     assert m1 and m3 and not m2
