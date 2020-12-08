@@ -3,7 +3,7 @@
 # See License.rst for details
 
 """
-Test of Text Widget for the tinyDisplay system
+Test of tinyDisplay canvas class
 
 .. versionadded:: 0.0.1
 """
@@ -11,9 +11,8 @@ import pytest
 from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw
 
-from tinyDisplay.render.widget import text
+from tinyDisplay.render.widget import text, staticText
 from tinyDisplay.render.collection import canvas
-
 
 def compute_placement(size, wsize, offset, anchor):
     anchor = anchor or 'lt'
@@ -74,11 +73,14 @@ def test_canvas_widget(size, offset, anchor):
     fnt = w.font
 
     if anchor and offset:
-        c = canvas(size=size, placements=((w, offset, anchor), ))
+        c = canvas(size=size)
+        c.append(w, offset, anchor)
     elif offset:
-        c = canvas(size=size, placements=((w, offset), ))
+        c = canvas(size=size)
+        c.append(w, offset, anchor)
     else:
-        c = canvas(size=size, placements=((w, ), ))
+        c = canvas(size=size)
+        c.append(w)
     pos = compute_placement(size, fnt.getsize('X'), offset, anchor)
     drw.text( pos, 'X', font=fnt, fill='white')
     assert c.render()[0] == img, f'Placing \'X\' on {size} canvas at {offset} anchored {anchor} failed'
@@ -90,6 +92,23 @@ def test_canvas_widget(size, offset, anchor):
     c.append(w, offset, anchor)
     drw.text( pos, 'X', font=fnt, fill='white')
     assert c.render()[0] == img, f'Placing \'X\' by append on {size} canvas at {offset} anchored {anchor} failed'
+
+
+def test_z_order():
+    w1 = staticText('ABC', size=(20,8))
+    w2 = staticText('123', size=(20,8))
+
+    # Place second append at a higher z
+    c1 = canvas(size=(20,8))
+    c1.append(w1)
+    c1.append(w2, z=canvas.ZHIGH)
+    assert w2.render()[0] == c1.render()[0], f"123 should have been on top but got {c1}"
+
+    # Place both appends at the same z level.  Should make first append higher than the second
+    c2 = canvas(size=(20,8))
+    c2.append(w1)
+    c2.append(w2)
+    assert w1.render()[0] == c2.render()[0], f"ABC should have been on top but got {c1}"
 
 
 def test_canvas_widget_change():

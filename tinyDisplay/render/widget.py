@@ -36,6 +36,7 @@ class widget(metaclass=abc.ABCMeta):
         self.current = None
         self._reprVal = None
 
+        self._place()
         self._computeLocalDB()
 
     def _computeLocalDB(self):
