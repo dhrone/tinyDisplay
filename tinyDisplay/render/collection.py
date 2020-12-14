@@ -35,6 +35,8 @@ class canvas(widget):
         assert widget, 'Attempted to append to canvas but did not provide a widget'
         self._newWidget = True
 
+        widget.reset()
+
         # Place widget according to its z value
         pos = bisect.bisect_left(self._priorities, z)
         self._priorities.insert(pos, z)
@@ -42,24 +44,60 @@ class canvas(widget):
 
         self._reprVal = f'{len(self._placements) or "no"} widgets'
 
-    def _render(self, force=False, *args, **kwargs):
-        changed = False if not force and not self._newWidget and self.image else True
 
-        # Render all of the widgets on the canvas
-        list = []
+    def _renderWidgets(self, force=False, *args, **kwargs):
+        notReady = {}
 
+        # Check wait status for any widgets that have wait settings
         for i in self._placements:
             wid, off, anc = self._getPlacement(i)
-            img, updated = wid.render(force=force, *args, **kwargs)
-            list.append((img, off, anc))
+            if hasattr(wid, '_wait'):
+                notReady[wid._wait] = not { 'atStart': wid.atStart, 'atPause': wid.atPause, 'atPauseEnd': wid.atPauseEnd }.get(wid._wait) or notReady.get(wid._wait, False)
+
+        changed = False if not force and not self._newWidget and self.image else True
+        results = []
+        for i in self._placements:
+            wid, off, anc = self._getPlacement(i)
+
+            if not force:
+                # If widget has wait setting
+                if hasattr(wid, '_wait'):
+                    # Check to see if any widgets of this widgets wait type are not ready
+                    if notReady[wid._wait]:
+                        # If there are widgets waiting, see if this widget should still be
+                        # rendered because it has not reached the point it should wait
+                        if not { 'atStart': wid.atStart, 'atPause': wid.atPause, 'atPauseEnd': wid.atPauseEnd }.get(wid._wait):
+                            img, updated = wid.render(force=force, *args, **kwargs)
+                        else:
+                            img = wid.image
+                            updated = False
+                    else:
+                        # If everyone is ready, then it's ok to render all of the waiting widgets
+                        img, updated = wid.render(force=force, *args, **kwargs)
+                else:
+                    # If this widget isn't part of a wait type, then it always gets rendered
+                    img, updated = wid.render(force=force, *args, **kwargs)
+            else:
+                # If force then all widgets get rendered
+                img, updated = wid.render(force=force, *args, **kwargs)
+
             if updated:
                 changed = True
+            results.append((img, off, anc))
+
+        return (results, changed)
+
+
+    def _render(self, force=False, *args, **kwargs):
+
+
+        results, changed = self._renderWidgets(force, *args, **kwargs)
 
         # If any have changed, render a fresh canvas
         if changed:
             self._newWidget = False
             self.image = Image.new('1', self.size)
-            for img, off, just in list:
+            for img, off, just in results:
                 self._place(retainImage=True, wImage=img, offset=off, just=just)
 
         return (self.image, changed)

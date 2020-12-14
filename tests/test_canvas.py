@@ -83,7 +83,7 @@ def test_canvas_widget(size, offset, anchor):
         c.append(w)
     pos = compute_placement(size, fnt.getsize('X'), offset, anchor)
     drw.text( pos, 'X', font=fnt, fill='white')
-    assert c.render()[0] == img, f'Placing \'X\' on {size} canvas at {offset} anchored {anchor} failed'
+    assert c.render()[0] == img, f'Placing \'X\' on {size} canvas at {offset} anchored {anchor} failed\n{str(c)}'
 
     img = Image.new('1', size, 0)
     drw = ImageDraw.Draw(img)
@@ -91,7 +91,7 @@ def test_canvas_widget(size, offset, anchor):
     c = canvas(size=size)
     c.append(w, offset, anchor)
     drw.text( pos, 'X', font=fnt, fill='white')
-    assert c.render()[0] == img, f'Placing \'X\' by append on {size} canvas at {offset} anchored {anchor} failed'
+    assert c.render()[0] == img, f'Placing \'X\' by append on {size} canvas at {offset} anchored {anchor} failed\n{str(c)}'
 
 
 def test_z_order():

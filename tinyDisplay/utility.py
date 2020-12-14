@@ -152,8 +152,8 @@ class animate(Thread):
                   self._Force = False
                   self._emptyQueue()
 
-                  # Must put value in queue before clearing the forceRender Event
-                  # so that the forced render receives the newly computed value
+                  # Must put value in queue before clearing the force Event
+                  # so that the forced function receives the newly computed value
                   retval = self._invoke(*self._args, **self._kwargs)
                   self._queue.put( retval )
                   self._forceEvent.set()

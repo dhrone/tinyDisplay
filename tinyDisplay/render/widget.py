@@ -73,6 +73,10 @@ class widget(metaclass=abc.ABCMeta):
         """
         self.image = Image.new("1", self.size)
 
+    def reset(self):
+        if hasattr(self, '_reset'):
+            self._reset()
+
     def _eval(self, v):
         return self._dataset.eval(v, dataset=self._localDB)
 
@@ -276,7 +280,7 @@ class progressBar(widget):
 
 class marquee(widget):
 
-    def __init__(self, widget=None,  resetOnChange=True, actions=('rtl',), speed=1, distance=1, tps=30, condition=None, *args, **kwargs):
+    def __init__(self, widget=None,  resetOnChange=True, actions=('rtl',), speed=1, distance=1, condition=None, wait=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert widget, "No widget supplied to initialize scroll"
 
@@ -288,9 +292,13 @@ class marquee(widget):
             a = a if type(a) == tuple else (a,)
             self._actions.append(a)
         self._distance = int(distance)
-        self._tps = tps
         self._timeline = []
         self._tick = 0
+
+        assert wait in ['atStart', 'atPause', 'atPauseEnd', None], f'{0} is an invalid wait type.  Supported values are \'atSTart\', \'atPause\' or \'atPauseEnd\''
+        if wait:
+            self._wait = wait
+
         self._condition = \
             self._dataset.compile(condition) if type(condition) is str else \
             condition if condition else self._shouldIMove
@@ -312,26 +320,26 @@ class marquee(widget):
     # The at properties can be used by a controlling system to coordinate pauses between multiple marquee objects
     @property
     def atPause(self):
-        if self._tick in self._pauses:
+        if (self._tick - 1) % len(self._timeline) in self._pauses:
             return True
         return False
 
     @property
     def atPauseEnd(self):
-        if self._tick in self._pauseEnds:
+        if (self._tick - 1) % len(self._timeline) in self._pauseEnds:
             return True
         return False
 
     @property
     def atStart(self):
-        if not self._tick % len(self._timeline):
+        if not (self._tick - 1) % len(self._timeline):
             return True
         return False
 
     def _addPause(self, length, startingPos, tickCount):
         self._pauses.append(tickCount)
-        tickCount += int(length * self._tps)
-        for i in range(int(length * self._tps)):
+        tickCount += int(length)
+        for i in range(int(length)):
             self._timeline.append(startingPos)
         return tickCount
 
