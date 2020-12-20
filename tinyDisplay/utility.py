@@ -19,10 +19,38 @@ from simple_pid import PID
 
 
 class animate(Thread):
-    def __init__(self, Kp=1, Ki=0.1, Kd=0.05, cps=1, function=None, queueSize=10, *args, **kwargs):
+    '''
+    Create a thread to call a function at a specified number of calls per second (CPS)
+    placing the results in a queue for consumption
+
+    :param function: the function (or method) that will be called
+    :type function: function or method
+    :param cps: Calls per second.  The rate to call the provided function
+    :type cps: int
+    :param queueSize: The size of the queue used to record return results from function
+    :type queueSize: int
+    :param args:  The arguments to pass to the function
+    :type args: tuple
+    :param kwargs:  The keyworded arguments to pass to the function
+    :type kwargs: dict
+
+    To begin animation, call the start method.  Example::
+        a = animate(function=func, cps=10)
+        a.start
+
+    ..note:
+        The animate function uses a queue to pass results back.  This allows for the
+        results to be consumed asynchronous.  If the queue fills up though,
+        the function will no longer be called until space opens up in the queue.
+    '''
+    def __init__(self, function=None, cps=1, queueSize=100, *args, **kwargs):
         Thread.__init__(self)
         assert function, 'You must supply a function to animate'
         self._speed = 1/cps
+
+        Kp = 1
+        Ki = 0.1
+        Kd = 0.05
         self._pid = PID(Kp, Ki, Kd, setpoint = self._speed, sample_time=self._speed)
 
         self._function = function
@@ -37,35 +65,65 @@ class animate(Thread):
 
     @property
     def empty(self):
+        '''
+        Is the queue empty?
+        '''
         return self._queue.empty()
 
     @property
     def full(self):
+        '''
+        Is the queue full?
+        '''
         return self._queue.full()
 
     @property
     def qsize(self):
+        '''
+        How big is the queue?
+        '''
         return self._queue.qsize()
 
     def pause(self):
+        '''
+        Temporarily pause calling the function
+        '''
         self._event.clear()
 
     def restart(self):
+        '''
+        Restart calling the function (if paused).  Otherwise this will have no effect
+        '''
         self._event.set()
 
     def toggle(self):
+        '''
+        Toggle calling the function from on to off or off to on
+        '''
         if self._event.isSet():
             self._event.clear()
         else:
             self._event.set()
 
     def stop(self):
+        '''
+        Shut down the animate object including terminating its internal thread
+        '''
         self._running = False
         self._event.set()
         self.get()
         self.join()
 
+    def clear(self):
+        '''
+        Clear the queue of all curent values
+        '''
+        self._emptyQueue()
+
     def force(self, *args, **kwargs):
+        '''
+        Change the parameters that are passed to the function
+        '''
         self._Force = True
 
         # Set new arguments for animated function
@@ -84,7 +142,18 @@ class animate(Thread):
         self._forceEvent.wait()
 
     def get(self, wait=0):
+        '''
+        Get the latest value from the results queue
 
+        :param wait: Number of seconds to wait for a response.  If zero (the default)
+            return immediately even if no value is currently available
+        :type wait: float
+
+        ..note:
+            Be careful with long wait values.  The animate function will block during
+            the wait.  If you attempt to shut down the animate object (using stop),
+            it will not finish closing down until the wait has completed.
+        '''
         try:
             retval = self._queue.get(wait)
             self._queue.task_done()
@@ -168,25 +237,21 @@ class animate(Thread):
               loopTime = time.time() - startLoop
 
 
-
-
-
-
 class dataset():
     '''
     Used to manage data that tinyDisplay will use to render widgets and test conditions
 
     '''
 
-    def __init__(self, data=None, dataset=None, suppressErrors=False, returnOnError='', historySize=100):
+    def __init__(self, data=None, dataset=None, suppressErrors=False, returnOnError='', historySize=100, lookBack=10):
         '''
         Initialize the dataset with the dictionary provided in 'data' (or optionally 'dataset').
         All keys at the root of the data dictionary must be strings as they will become
         the names of the databases contained within the dataset
         '''
 
-        if data and dataset:
-            raise RuntimeError(f'You must provide data or a dataset but not both')
+        if data != None and dataset != None:
+            raise RuntimeError('You must provide data or a dataset but not both')
 
         dataset = data or dataset or {}
         for tk in ( (False, i) if type(i) is not str else (True, i) for i in dataset.keys() ):
@@ -200,6 +265,11 @@ class dataset():
         self._historySize = int(historySize)
         if self._historySize < 1:
             raise ValueError(f'Requested history size "{self._historySize}" is too small.  It must be at least one.')
+
+        # Set the number of updates back that you can request from the history method
+        self._lookBack = int(lookBack)
+        if self._lookBack < 1:
+            raise ValueError(f'Requested lookBack size "{self._lookBack}" is too small.  It must be at least one.')
 
         # Initialize empty dataset
         self._dataset = {}
@@ -220,7 +290,6 @@ class dataset():
 
         # Initialize prev dataset
         self._prevDS = {}
-#        self.__dict__['prev'] = self._Data(self._prevDS)
 
         # If data was provided during initialization, update the state of the dataset with it
         if dataset:
@@ -243,11 +312,11 @@ class dataset():
 
     def __getitem__(self, key):
         if key == 'prev':
-            return self._Data(self.prev)
+            return self.prev
         return self._dataset[key]
 
     def __iter__(self):
-        self._dataset['prev'] = self._Data(self.prev)
+        self._dataset['prev'] = self.prev
         return iter(self._dataset)
 
     def __len__(self):
@@ -255,6 +324,11 @@ class dataset():
 
     def __repr__(self):
         return self._dataset.__repr__()
+
+    def get(self, key, default=None):
+        if key in self._dataset:
+            return self._dataset[key]
+        return default
 
     def _checkForReserved(self, dbName):
         if dbName in self.__class__.__dict__:
@@ -289,10 +363,11 @@ class dataset():
             self._checkForReserved(dbName)
             d = update
             # Initialize _prevDS with current values
-            self._prevDS[dbName] = d
+            self._prevDS[dbName] = deque(maxlen=self._lookBack)
+            self._prevDS[dbName].append(d)
         else:
             # Update prevDS with the current values that are about to get updated
-            self._prevDS[dbName]= { **self._prevDS[dbName], **self._dataset[dbName] }
+            self._prevDS[dbName].append({ **self._prevDS[dbName][-1], **self._dataset[dbName] })
 
             # Merge current db values with new values
             d = { **self._dataset[dbName], **update }
@@ -326,7 +401,8 @@ class dataset():
 
         self._baseUpdate(dbName, update)
 
-
+    # TODO: add persistence methods
+    '''
     def save(self, filename):
         with open(filename, 'w') as fn:
             fn.write(f'# STARTED AT: {self._startedAt}\n{json.dumps(self._dsStart)}\n')
@@ -334,36 +410,42 @@ class dataset():
             for item in self._ringBuffer:
                 fn.write(json.dumps(item))
                 fn.write('\n')
+    '''
 
     def history(self, dbName, back):
         '''
         Returns the version of the database {versions} back from the current one
         If version does not exist, return the oldest version that does.
 
-        Note: history(0) would return the current version and history(1) is equivelant to prev()
+        ..Note:
+            history(dbName, 0) is current state
+            history(dbName, 1) is previous state (e.g. equiv to using `prev`)
+            history(dbName, `back`) where `back` is between 2 and size of the history buffer,
+                are increasingly older versions of the dbName database
+
+            If `back` is larger than the size of the history buffer, the oldest
+            available version is used instead.
         '''
-        dbUpdates = [v for v in self._ringBuffer if dbName in v]
+        if back == 0:
+            return self._dataset[dbName]
 
-        d = deepcopy(self._dsStart[dbName]) if dbName in self._dsStart else {}
-        for i in range(len(dbUpdates)-abs(back)):
-            d = { **d, **dbUpdates[i] }
-        return self._Data(d)
+        try:
+            return self._prevDS[dbName][0 - abs(back)]
+        except IndexError:
+            return self._prevDS[dbName][-len(self._prevDS[dbName])]
 
-    class _Data(dict):
+    class _PrevData(dict):
         def __init__(self, *args, **kwargs):
             self.update(dict(*args, **kwargs))
             for k, v in self.items():
-                self.__dict__[k] = v
-
+                self.__dict__[k] = v[-1]
 
     @property
     def prev(self):
         '''
         Returns a dataset composed of the version of the databases that is one update behind the current versions
         '''
-        return self._Data(self._prevDS)
-
-
+        return self._PrevData(self._prevDS)
 
 
 class evaluate():
@@ -449,9 +531,9 @@ class evaluate():
 
 
     def eval(self, f, dataset=None, data=None, suppressErrors=False, returnOnError=''):
-        if data and dataset:
+        if data != None and dataset != None:
             raise RuntimeError(f'You can provide data or a dataset but not both')
-        dataset = dataset if dataset else data if data else None
+        dataset = dataset if dataset != None else data if data != None else None
 
         d = { **self._dataset, **dataset } if dataset else self._dataset
 
@@ -471,7 +553,7 @@ class evaluate():
             return f
 
 
-    def _eval(self, code, variables, input, suppressErrors=True, returnOnError=''):
+    def _eval(self, code, variables, input, suppressErrors=False, returnOnError=''):
 
         ''' If suppressErrors set, return returnOnError value when KeyError or TypeError is thrown.
             This in effect causes widgets to be blank when there is an error in the evaluated statement

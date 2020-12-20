@@ -13,7 +13,7 @@ import abc
 from PIL import Image, ImageDraw
 from tinyDisplay.utility import dataset as Dataset
 from tinyDisplay.utility import image2Text
-from tinyDisplay.font import tdImageFont
+from tinyDisplay.font import bmImageFont
 
 
 class widget(metaclass=abc.ABCMeta):
@@ -163,7 +163,7 @@ class widget(metaclass=abc.ABCMeta):
         pass    # pragma: no cover
 
 
-_textDefaultFont = tdImageFont(pathlib.Path(__file__).parent / "../fonts/hd44780.fnt")
+_textDefaultFont = bmImageFont(pathlib.Path(__file__).parent / "fonts/hd44780.fnt")
 
 
 class text(widget):

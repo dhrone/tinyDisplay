@@ -85,7 +85,7 @@ def test_min_duration(makeSetup):
     sTst = seq.render()[0]
     sTst2 = seq.render()[0]
 
-    # STst should == sOrig (because of the minDuration of 2 for cAlert)
+    # sTst should == sOrig (because of the minDuration of 2 for cAlert)
     assert sOrig == sTst, f'Images should have been identical but instead were\n{image2Text(sOrig)}\nand\n{image2Text(sTst)}'
 
     assert sOrig != sTst2, f'Images should have been different but instead were\n{image2Text(sOrig)}\nand\n{image2Text(sTst2)}'

@@ -31,16 +31,17 @@ class canvas(widget):
         self._reprVal = 'no widgets'
 
 
-    def append(self, widget=None, offset=(0, 0), just='lt', z=ZSTD):
-        assert widget, 'Attempted to append to canvas but did not provide a widget'
+    def append(self, item=None, offset=None, just='lt', z=ZSTD):
+        assert item, 'Attempted to append to canvas but did not provide an item to add'
         self._newWidget = True
+        offset = offset or (0, 0)
 
-        widget.reset()
+        item.reset()
 
         # Place widget according to its z value
         pos = bisect.bisect_left(self._priorities, z)
         self._priorities.insert(pos, z)
-        self._placements.insert(pos, (widget, offset, just))
+        self._placements.insert(pos, (item, offset, just))
 
         self._reprVal = f'{len(self._placements) or "no"} widgets'
 
@@ -50,14 +51,14 @@ class canvas(widget):
 
         # Check wait status for any widgets that have wait settings
         for i in self._placements:
-            wid, off, anc = self._getPlacement(i)
+            wid, off, anc = i
             if hasattr(wid, '_wait'):
                 notReady[wid._wait] = not { 'atStart': wid.atStart, 'atPause': wid.atPause, 'atPauseEnd': wid.atPauseEnd }.get(wid._wait) or notReady.get(wid._wait, False)
 
         changed = False if not force and not self._newWidget and self.image else True
         results = []
         for i in self._placements:
-            wid, off, anc = self._getPlacement(i)
+            wid, off, anc = i
 
             if not force:
                 # If widget has wait setting
@@ -102,19 +103,6 @@ class canvas(widget):
 
         return (self.image, changed)
 
-    @staticmethod
-    def _getPlacement(item):
-        if len(item) == 3:
-            w, o, j = item  # Extract placement, just and widget
-        elif len(item) == 2:
-            w, o = item  # or if no just setting, use default 'left/top' and extract placement and widget
-            j = 'lt'
-        else:
-            w = item[0]
-            j = 'lt'
-            o = (0, 0)
-        return (w, o, j)
-
 
 class windows(canvas):
     '''
@@ -128,17 +116,12 @@ class windows(canvas):
     :type defaultCanvas: tinyDisplay.render.widget.canvas
     '''
 
-    # Standard Z levels
-    ZSTD = 100
-    ZHIGH = 1000
-    ZVHIGH = 10000
-
-    def __init__(self, name=None, size=(0, 0), dataset = None, defaultCanvas=None):
+    def __init__(self, name=None, size=(0, 0), dataset = None, defaultCanvas=None, *args, **kwargs):
 
         self._defaultCanvas = defaultCanvas or image(image=Image.new('1', size)) # Set an empty image if no defaultCanvas provided
 
         super().__init__(name = name,
-            size=(max(size[0], self._defaultCanvas.size[0]), max(size[1], self._defaultCanvas.size[1])), dataset = dataset)
+            size=(max(size[0], self._defaultCanvas.size[0]), max(size[1], self._defaultCanvas.size[1])), dataset = dataset, *args, **kwargs)
 
         self._windows = []
         self._reset()
@@ -182,7 +165,7 @@ class windows(canvas):
         '''
         offset = offset if offset else (0, 0)
         just = just if just else 'lt'
-        z = z or ZSTD
+        z = z or canvas.ZSTD
 
         # Compile condition
         condition = self._dataset.compile(condition) if type(condition) is str else condition
@@ -206,27 +189,27 @@ class windows(canvas):
         self._minTimer = {k: v for k, v in self._minTimer.items() if v[0] + v[1] >= ct}
 
         # Remove any window that's Duration period has ended
-        self._duration = {k: v for k, v in self._minTimer.items() if v[0] + v[1] >= ct}
+        self._duration = {k: v for k, v in self._duration.items() if v[0] + v[1] >= ct}
 
         renderList = []
         # Look for active windows
-        for w, o, j, z, min, dur, cool, cond in self._windows:
+        for w, o, j, z, dur, min, cool, cond in self._windows:
             # Reminder: w-window, o-offset, j-justification, z-z order, dur-max duration, min-min duration, cool-cooling period, cond-condition
 
             ''' If window is active and not in a cooling period (or still has time left
             from its minimum display timer) add it to the render list '''
-            if (self._dataset.eval(cond) and \
-                w not in self._cooling and \
-                (dur == 0 or w not in self._duration)) \
-                or w in self._minTimer:
+            winActive = self._dataset.eval(cond)
+            if (winActive and w not in self._cooling and w not in self._inUse) or \
+                (winActive and w in self._inUse and (dur == 0 or w in self._duration)) or \
+                w in self._minTimer:
                 # When a window is newly activated, force render it and place it in the inUse record.
                 # Also record start time in _active and _cooling
                 inUse = False
                 if w not in self._inUse:
                     self._inUse.add(w)
-                    self._minTimer[w] = (ct, min)
-                    self._cooling[w] = (ct, cool)
-                    self._duration[w] = (ct, dur)
+                    self._minTimer[w] = (ct-1, min)
+                    self._cooling[w] = (ct-1, cool)
+                    self._duration[w] = (ct-1, dur)
                     inUse = True
                 renderList.append((w, w.render(force=inUse or force)[0], o, j, z))
             else:
@@ -238,7 +221,7 @@ class windows(canvas):
 
         c = canvas(size=self.size)
         for w, img, o, j, z in renderList:
-            c.append(widget=image(img), offset=o, just=j, z=z)
+            c.append(item=image(img), offset=o, just=j, z=z)
 
         self.image, result = c.render()
         self._tick += 1
@@ -247,43 +230,32 @@ class windows(canvas):
 
 
 
-class sequence(widget):
-    def __init__(self, name=None, size=(0, 0), dataset=None, canvases=None, defaultCanvas=None):
+class sequence(canvas):
+    def __init__(self, name=None, size=(0, 0), dataset=None, defaultCanvas=None, *args, **kwargs):
         """
         Create a sequence of canvases
 
         :param name: the name of the new sequence
         :type name: str
+        :param size: the requested size for the sequence
+        :type size: tuple (int, int)
         :param dataset: shared dataset for all widgets, canvases, and sequences
         :type dataset: dict
-        :param canvases: List of tuples containing (canvas, duration, minDuration, and condition) that form the sequence.
-        :type canvases: list(tuple)
         :param defaultCanvas: a canvas to return by render method when there are no active canvases
         :type defaultCanvas: tinyDisplay.render.widget
         """
 
         self._defaultCanvas = defaultCanvas or image(image=Image.new('1', (0, 0)))  # Set an empty image if no defaultCanvas provided
 
+        size = size or (0, 0)
         super().__init__(name = name,
-            size=(max(size[0], self._defaultCanvas.size[0]), max(size[1], self._defaultCanvas.size[1])), dataset=dataset)
+            size=(max(size[0], self._defaultCanvas.size[0]), max(size[1], self._defaultCanvas.size[1])), dataset=dataset, *args, **kwargs)
 
         self._place()
         self._canvases = []
         self._currentCanvas = None
         self._tick = 0
         self._minTimer = 0
-
-        # Populate canvases if provided
-        if canvases:
-            for c in canvases:
-                # Canvas tuple is (canvas, duration, minDuration, condition)
-                # Min information that can be provided is (canvas, duration)
-                if len(c) < 2:
-                    raise ValueError('Each canvas in a sequence must provide at least a duration')
-                if len(c) == 2:
-                    # if only (canvas, duration) provided, add minDuration of 0 and a condition of True
-                    c = (c[0], c[1], 0, 'True')
-                self.append(*c)
 
         self.reset()  # Initialize starting time to now
 
@@ -292,12 +264,12 @@ class sequence(widget):
 
         return f'<sequence {n} at 0x{id(self):x}>'
 
-    def append(self, canvas, duration=30, minDuration=0, condition='True'):
+    def append(self, item=None, duration=30, minDuration=0, condition='True'):
         """
-        Add a canvas to the sequence
+        Add an item (either canvas or widget) to the sequence
 
-        :param canvas: the canvas to be added to the sequence
-        :type canvas: tinyDisplay.render.canvas
+        :param item: the canvas or widget to be added to the sequence
+        :type item: tinyDisplay.render.canvas or tinyDisplay.render.widget
         :param duration: number of ticks this canvas will be rendered until it expires
         :type duration: int
         :param minDuration: the minimum amount of ticks this canvas should remain active (even if condition becomes False)
@@ -305,29 +277,15 @@ class sequence(widget):
         :param condition: boolean function to determine if the canvas is active based the information contained within the dataset.  Can either be a function or a string that 'evals' to a boolean
         :type condition: function or str
         """
+        assert item, 'Attempted to append to sequence but did not provide an item to add'
         condition = self._dataset.compile(condition) if type(condition) is str else condition
-        self._canvases.append((canvas, duration, minDuration, condition))
-        canvas.render(True)
-        cs = canvas.size
+        self._canvases.append((item, duration, minDuration, condition))
+        item.render(True)
 
         # Resize sequence's canvas as needed to fit any appended canvas
-        mx = max(cs[0], self._requestedSize[0])
-        my = max(cs[1], self._requestedSize[1])
+        mx = max(item.size[0], self._requestedSize[0])
+        my = max(item.size[1], self._requestedSize[1])
         self._requestedSize = (mx, my)
-
-    def _setFirst(self):
-        '''
-        Determines what the first canvas should be and sets the min timer for it if needed
-        '''
-        self._currentCanvas = 0
-        for i in range(len(self._canvases)):
-            if self._activeCanvas():
-                self._minTimer = self._canvases[self._currentCanvas][2]
-                break
-            self._currentCanvas += 1
-
-        # If no active canvas found, set starting canvas back at 0
-        self._currentCanvas = 0
 
 
     def _render(self, force=False, *args, **kwargs):
@@ -336,13 +294,12 @@ class sequence(widget):
 
         c, new = self.activeCanvas()
         self._tick += 1
+        self.image = c.image
         if not c:
+            self.image = self._defaultCanvas.image
             return self._defaultCanvas.render()
         return c.render(new)
 
-    def stop(self):
-        for c in self._canvases:
-            c[0].stop()
 
     def activeCanvas(self):
         """

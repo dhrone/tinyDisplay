@@ -1,0 +1,183 @@
+FONTS:
+  small: hd44780.fnt
+  large: Vintl01_10x16.fnt
+  tiny: upperascii_3x5.fnt
+
+DEFAULTS:
+  display:
+    size: &dsize 100, 16
+    type: &dtype !include display.cfg
+
+  zorder:
+    low: &ZLOW 10
+    mid: &ZMID 100
+    high: &ZHIGH 1000
+    Vhigh: &ZVHIGH 10000
+
+  paths:
+    'images': '../tests/reference/images'
+    'fonts': '../tests/reference/fonts/'
+
+  widgets:
+    scroll: &scroll
+      type: scroll
+      gap: 25%, 0
+      size: 100, 8
+      wait: 'atStart'
+      actions:
+        - pause, 5
+        - rtl
+
+WIDGETS:
+
+  # STARTING WIDGET
+  splash:
+      type: image
+      file: pydPiper_splash.png
+
+  ### PLAY WIDGETS ###
+
+  # NOW PLAYING
+  nowPlaying:
+      type: text
+      format: NOW PLAYING
+      font: tiny
+  nowPlayingData:
+      type: text
+      font: tiny
+      variables: ["db['plPos']", "db['plLen']"]
+      format: "{0} OF {1}"
+      size: 50, 5
+      just: rt
+
+  # ARTIST, TITLE, ALBUM
+  artist:
+      type: text
+      value: db['artist']
+      effect: *scroll
+  album:
+      type: text
+      value: db['album']
+      effect: *scroll
+  title:
+      type: text
+      value: db['title']
+      effect: *scroll
+
+  # PROGRESS
+  songProgress:
+      type: progressBar
+      value: db['elapsed']
+      range: 0, db['length']
+      size: 100, 1
+
+  # TIME
+  time:
+      type: text
+      font: large
+      just: rt
+      value: time.strftime('%-I:%M',time.localtime(sys['time']))
+      size: 50, 16
+  amPm:
+      type: text
+      font: tiny
+      value: time.strftime('%p',time.localtime(sys['time']))
+
+  # ALERT
+  alert:
+      type: staticText
+      just: rt
+      value: 'ALERT -- HOT'
+
+  rectAlert:
+      type: rectangle
+      xy: 0, 0, 63, 11
+      fill: black
+      outline: white
+
+
+CANVASES:
+
+  playArtist:
+    items:
+      - name: artist
+        placement: 0, 6, lt
+      - name: nowPlaying
+        placement: 0, 0
+      - name: nowPlayingData
+        placement: 50, 0
+      - name: songProgress
+        placement: 0, 15
+    size: *dsize
+
+  playAlbum:
+    items:
+      - name: album
+        placement: 0, 6
+      - name: nowPlaying
+        placement: 0, 0
+      - name: nowPlayingData
+        placement: 50, 0
+      - name: songProgress
+        placement: 0, 15
+    size: *dsize
+
+  playTitle:
+    items:
+      - name: title
+        placement: 0, 6
+      - name: nowPlaying
+        placement: 0, 0
+      - name: nowPlayingData
+        placement: 50, 0
+      - name: songProgress
+        placement: 0, 15
+    size: *dsize
+
+  stopTime:
+    items:
+      - name: time
+        placement: 16, 1
+      - name: amPm
+        placement: 70, 2
+    size: *dsize
+
+  cAlert:
+    items:
+      - name: rectAlert
+        placement: mm
+        z: *ZLOW
+      - name: alert
+        placement: mm
+        z: *ZHIGH
+
+    size: 64, 12
+
+
+SEQUENCES:
+  seqPlay:
+    items:
+      - name: playArtist
+        duration: 15
+      - name: playAlbum
+        duration: 15
+      - name: playTitle
+        duration: 15
+      - name: splash
+        duration: 5
+
+
+WINDOWS:
+  seqPlay:
+    condition: db['state']=='play'
+
+  stopTime:
+    condition: db['state']=='stop'
+
+  cAlert:
+    condition: sys['temp'] >= 100
+    placement: mm
+    duration: 5
+    minDuration: 2
+    coolingPeriod: 10
+    z: *ZVHIGH

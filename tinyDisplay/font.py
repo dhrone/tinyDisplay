@@ -18,12 +18,11 @@ import pathlib
 
 
 def _readGlyphData(fileName):
-
     """
     Read glyph data from BMFont file
 
-    :param fp: file pointer associated with font file
-    :type fp:
+    :param filename: file name for the associated with font file
+    :type filename: str
 
     :return: tuple of line height and dictionary of glyph data tuples containing glyph advance, offset, size, and image indexed by glyph unicode value
     :rtype: tuple(int, dict)
@@ -92,15 +91,22 @@ def _readGlyphData(fileName):
     return (lineHeight, glyphs)
 
 
-class tdImageFont(ImageFont.ImageFont):
+class bmImageFont(ImageFont.ImageFont):
+    """
+    Load BMFONT using a PIL ImageFont style interface
+    Allows a BMFONT to be used anywhere an ImageFont is accepted
+
+    :param fileName: the name of the file containing the BMFONT
+    :type fileName: str
+    :param defaultChar: Character to display if a glyph is requested that
+        does not exist in the font
+    :type defaultChar: str
+    """
     def __init__(self, fileName, defaultChar=' ', *args, **kwargs):
         self._defaultChar = defaultChar
-        self.load(fileName, **kwargs)
+        self._load(fileName, **kwargs)
 
-    def load(self, fileName, *args, **kwargs):
-        """
-        Load BMFONT file
-        """
+    def _load(self, fileName, *args, **kwargs):
         self.lineHeight, self.tdGlyphs = _readGlyphData(fileName)
         self.xadvance = kwargs['xadvance'] if 'xadvance' in kwargs else None
 
@@ -136,62 +142,3 @@ class tdImageFont(ImageFont.ImageFont):
         img.load()
         self.gmImage = img
         return img.im
-
-
-# Convert pydPiper's broken BMFONT format to Pillow's PIL format (or the BDF format)
-class tdBMFontFile(FontFile.FontFile):
-    def __init__(self, fileName):
-        super().__init__()
-
-        self.lineHeight, self.tdGlyphs = _readGlyphData(fileName)
-        w = 0
-        self.pixelSize = 0
-        for k, v in self.tdGlyphs.items():
-            if int(k) < 256:
-                self.glyph[int(k)] = v
-            w += v[2][2]  # add width
-            self.pixelSize = max(self.pixelSize, v[2][3])
-        self.avgWidth = w // len(self.tdGlyphs)
-
-    def saveBDF(self, fileName=None, familyName=None, weight='Medium', slant='R', pixelSize=8, resolution=(75, 75), spacing='C'):
-
-        foundry = 'tinyDisplay'
-
-        cnt = len(self.tdGlyphs)
-        # BDF Header Values
-        START = 'STARTFONT 2.1'
-        FONT = f'FONT -{foundry}-{familyName}-{weight}-{slant}-Normal--{self.pixelSize}-{self.pixelSize*10}-{resolution[0]}-{resolution[1]}-{spacing}-{self.avgWidth}-ISO10646-1'
-        SIZE = f'SIZE {self.lineHeight} {resolution[0]} {resolution[1]}'
-        FONTBOUNDINGBOX = f'FONTBOUNDINGBOX {self.avgWidth} {self.lineHeight} 0 0'
-        PROPERTIES = f'STARTPROPERTIES 2\nFONT_ASCENT {self.lineHeight}\nFONT_DESCENT 0\nENDPROPERTIES'
-        CHARS = f'CHARS {cnt}'
-
-        HEADER = \
-            START + '\n' + \
-            FONT + '\n' + \
-            SIZE + '\n' + \
-            FONTBOUNDINGBOX + '\n' +\
-            PROPERTIES + '\n' + \
-            CHARS + '\n'
-
-        p = pathlib.Path(fileName)
-        with open(p, 'wb') as f:
-            f.write(HEADER.encode('utf-8'))
-            for k, v in self.tdGlyphs.items():
-                # v = (dx, dy), (l, -d - h, w + l, -d), (0, 0, w, h), gImg
-                STARTCHAR = f'STARTCHAR U+{k:08x}' if k > 0xFFFF else f'STARTCHAR u+{k:04x}'
-                ENCODING = f'ENCODING {k}'
-                SWIDTH = f'SWIDTH {v[2][2] // self.avgWidth * 1000} 0'  # sw = v[2][2]/avgWidth * 1000
-                DWIDTH = f'DWIDTH {v[2][2]} 0'
-                BBX = f'BBX {v[2][2]} {v[2][3]} {v[1][0]} {-v[1][3]}'
-                DATA = 'BITMAP\n' + '\n'.join([f'{i:02x}' for i in list(v[3].tobytes('raw', '1'))])
-
-                CHARDATA = \
-                    STARTCHAR + '\n' + \
-                    ENCODING + '\n' + \
-                    SWIDTH + '\n' + \
-                    DWIDTH + '\n' + \
-                    BBX + '\n' + \
-                    DATA + '\nENDCHAR\n'
-                f.write(CHARDATA.encode('utf-8'))
-            f.write('ENDFONT\n'.encode('utf-8'))
