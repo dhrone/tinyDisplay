@@ -12,3 +12,8 @@ It supports a collection of widgets including:
 * image
 * line and rectangle
 * slide, scroll and popUp
+
+And a set of collection classes to organize the widgets into useful screens:
+* canvas -- For designing a collection of widgets to display together
+* sequence -- For rotating through a set of canvases
+* windows -- For displaying a set of canvases simultaneously on a display
