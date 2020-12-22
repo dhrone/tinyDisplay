@@ -12,18 +12,19 @@ from PIL import Image, ImageChops, ImageDraw
 
 from tinyDisplay.render.widget import rectangle
 
+
 def test_rectangle_widget():
 
-    img = Image.new('1', (10, 8))
+    img = Image.new("1", (10, 8))
     d = ImageDraw.Draw(img)
-    d.rectangle((0, 0, 9, 7), outline='white')
+    d.rectangle((0, 0, 9, 7), outline="white")
 
-    w = rectangle(xy=(0, 0, 9, 7), outline='white', fill='black')
+    w = rectangle(xy=(0, 0, 9, 7), outline="white", fill="black")
     renderImage = w.render()[0]
     bbox = ImageChops.difference(img, renderImage).getbbox()
-    assert not bbox, f'Rectangles did not match'
+    assert not bbox, f"Rectangles did not match"
 
-    w = rectangle(xy=[(0, 0), (9, 7)], outline='white', fill='black')
+    w = rectangle(xy=[(0, 0), (9, 7)], outline="white", fill="black")
     renderImage = w.render()[0]
     bbox = ImageChops.difference(img, renderImage).getbbox()
-    assert not bbox, f'Rectangles did not match'
+    assert not bbox, f"Rectangles did not match"

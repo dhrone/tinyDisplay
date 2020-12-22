@@ -3,33 +3,41 @@
 # See License.rst for details
 
 """
-Widgets for the tinyDisplay system
+Widgets for the tinyDisplay system.
 
 .. versionadded:: 0.0.1
 """
-import pathlib
 import abc
+import pathlib
 
 from PIL import Image, ImageDraw
+
+from tinyDisplay.font import bmImageFont
 from tinyDisplay.utility import dataset as Dataset
 from tinyDisplay.utility import image2Text
-from tinyDisplay.font import bmImageFont
 
 
 class widget(metaclass=abc.ABCMeta):
+    """
+    Base class for all widgets.
 
-    def __init__(self, name=None, size=None, dataset=None, just='lt'):
-        """
-        Create a new widget
+    :param name: The name of the widget (optional)
+    :type name: str
+    :param size: the max size of the widget (x,y) in pixels
+    :type size: (int, int)
+    :param dataset: dataset to be used for any arguments that are evaluated during run-time
+    :type dataset: `tinyDisplay.utility.dataset`
+    :param just: The justification to use when placing the widget on its image.
+    :type just: str
+    """
 
-        :param size: the max size of the widget (x,y)
-        :type size: tuple
-        :param dataset: shared dataset for all widgets, canvases, and sequences
-        :type dataset: dict
-        """
+    def __init__(self, name=None, size=None, dataset=None, just="lt"):
+
         self.name = name
         self._requestedSize = size
-        self._dataset = dataset if isinstance(dataset, Dataset) else Dataset(dataset)
+        self._dataset = (
+            dataset if isinstance(dataset, Dataset) else Dataset(dataset)
+        )
         self.just = just.lower()
         self.type = self.__class__.__name__
         self.image = None
@@ -40,16 +48,22 @@ class widget(metaclass=abc.ABCMeta):
         self._computeLocalDB()
 
     def _computeLocalDB(self):
-        self._localDB = {'widget':
-            {
-                'size': self.size,
-                'name': self.name,
-                'just': self.just,
+        self._localDB = {
+            "widget": {
+                "size": self.size,
+                "name": self.name,
+                "just": self.just,
             }
         }
 
     @property
     def size(self):
+        """
+        Return the current size of the widget (x, y).
+
+        :returns: size in pixels (x, y)
+        :rtype: (int, int)
+        """
         if self.image:
             return self.image.size
         if self._requestedSize:
@@ -57,24 +71,23 @@ class widget(metaclass=abc.ABCMeta):
         return (0, 0)
 
     def __repr__(self):
-        cw = ''
-        n = self.name if self.name else 'unnamed'
-        v = f'value({self._reprVal}) ' if self._reprVal else ''
-        return f'<{n}.{self.type} {v}size{self.size} {cw}at 0x{id(self):x}>'
+        cw = ""
+        n = self.name if self.name else "unnamed"
+        v = f"value({self._reprVal}) " if self._reprVal else ""
+        return f"<{n}.{self.type} {v}size{self.size} {cw}at 0x{id(self):x}>"
 
     def __str__(self):
         if self.image:
             return image2Text(self.image)
-        return 'image empty'
+        return "image empty"
 
     def clear(self):
-        """
-        Set the image of the widget to empty and the default size of the widget
-        """
+        """Set the image of the widget to empty."""
         self.image = Image.new("1", self.size)
 
     def reset(self):
-        if hasattr(self, '_reset'):
+        """Reset animated widget back to starting position."""
+        if hasattr(self, "_reset"):
             self._reset()
 
     def _eval(self, v):
@@ -82,15 +95,20 @@ class widget(metaclass=abc.ABCMeta):
 
     def _compile(self, stmt):
         try:
-            return self._dataset.compile(stmt, self._localDB) if type(stmt) == str else stmt
+            return (
+                self._dataset.compile(stmt, self._localDB)
+                if type(stmt) == str
+                else stmt
+            )
         except (NameError, SyntaxError):
             return stmt
 
-    def _place(self, retainImage=False, wImage=None, offset=(0, 0), just='lt'):
-        just = just or 'lt'
+    def _place(self, retainImage=False, wImage=None, offset=(0, 0), just="lt"):
+        just = just or "lt"
         offset = offset or (0, 0)
-        assert just[0] in 'lmr' and just[1] in 'tmb', \
-            f'Requested justification "{just}" is invalid.  Valid values are left top (\'lt\'), left middle (\'lm\'), left bottom (\'lb\'), middle top (\'mt\'), middle middle (\'mm\'), middle bottom (\'mb\'), right top (\'rt\'), right middle (\'rm\'), and right bottom (\'rb\')'
+        assert (
+            just[0] in "lmr" and just[1] in "tmb"
+        ), f"Requested justification \"{just}\" is invalid.  Valid values are left top ('lt'), left middle ('lm'), left bottom ('lb'), middle top ('mt'), middle middle ('mm'), middle bottom ('mb'), right top ('rt'), right middle ('rm'), and right bottom ('rb')"
 
         # Reset image if thie is not a multi-placement (e.g. canvas)
         if not retainImage:
@@ -101,18 +119,20 @@ class widget(metaclass=abc.ABCMeta):
             if wImage:
                 self.image = wImage
             else:
-                self.image = Image.new('1', (0, 0))
+                self.image = Image.new("1", (0, 0))
             return (0, 0)
 
         # If no existing image and a size has been requested, provision a new image
         if not self.image:
-            self.image = Image.new('1', self._requestedSize)
+            self.image = Image.new("1", self._requestedSize)
 
         # If a size has been requested, crop the image to the requested size
         # Note: Not sure I need this, not executing during testing
         if self._requestedSize:
             if self.image.size != self._requestedSize:
-                self.image = self.image.crop((0, 0, self._requestedSize[0], self._requestedSize[1]))
+                self.image = self.image.crop(
+                    (0, 0, self._requestedSize[0], self._requestedSize[1])
+                )
 
         # if there is an image to place
         if wImage:
@@ -122,16 +142,24 @@ class widget(metaclass=abc.ABCMeta):
             mv = round((self.image.size[1] - wImage.size[1]) / 2)
             b = self.image.size[1] - wImage.size[1]
 
-            a = \
-                0 if just[0] == 'l' else \
-                mh if just[0] == 'm' else \
-                r if just[0] == 'r' else \
+            a = (
                 0
-            b = \
-                0 if just[1] == 't' else \
-                mv if just[1] == 'm' else \
-                b if just[1] == 'b' else \
+                if just[0] == "l"
+                else mh
+                if just[0] == "m"
+                else r
+                if just[0] == "r"
+                else 0
+            )
+            b = (
                 0
+                if just[1] == "t"
+                else mv
+                if just[1] == "m"
+                else b
+                if just[1] == "b"
+                else 0
+            )
 
             pos = (offset[0] + a, offset[1] + b)
             self.image.paste(wImage, pos)
@@ -140,33 +168,53 @@ class widget(metaclass=abc.ABCMeta):
             # If not return position 0, 0
             return (0, 0)
 
-    def render(self, *args, **kwargs):
-        self._computeLocalDB()
-        img, changed = self._render(*args, **kwargs)
-        return (img, changed)
-
-    @abc.abstractmethod
-    def _render(self, *args, **kwargs):
+    def render(self, force=False, tick=None, move=True):
         """
-        Compute image for widget based upon its configuration and the current dataset values
+        Compute image for widget.
+
+        Compute current image based upon widgets configuration and the current
+        dataset values.
 
         :param force: Set force True to force the widget to re-render itself
         :type force: bool
         :param tick: Change the current tick (e.g. time) for animated widgets
         :type tick: int
-        :param move: Determine whether time moves forward during the render. Default is True.
+        :param move: Determine whether time moves forward during the render.
+            Default is True.
         :type move: bool
-        :return: a 2-tuple with the widget's current image and a flag to indicate whether
-            the image has just changed.  If force was set, it will always return changed
+        :returns: a 2-tuple with the widget's current image and a flag to
+            indicate whether the image has just changed.  If force was set, it
+            will always return changed
         :rtype: (PIL.Image, bool)
         """
-        pass    # pragma: no cover
+        self._computeLocalDB()
+        img, changed = self._render(force=force, tick=tick, move=move)
+        return (img, changed)
+
+    @abc.abstractmethod
+    def _render(self, *args, **kwargs):
+        pass  # pragma: no cover
 
 
-_textDefaultFont = bmImageFont(pathlib.Path(__file__).parent / "fonts/hd44780.fnt")
+_textDefaultFont = bmImageFont(
+    pathlib.Path(__file__).parent / "fonts/hd44780.fnt"
+)
 
 
 class text(widget):
+    """
+    text widget.
+
+    Displays a line of text based upon the provided evaluation value
+
+    :param value: The value to evaluate
+    :type value: str
+    :param font: the font that should be used to render the value.  If not supplied
+        a default font will be used which is similar to fonts used on HD44780 style devices
+    :type font: `PIL.ImageFont`
+    :param lineSpacing: The number of pixels to add between lines of text (default 0)
+    :type lineSpacing: int
+    """
 
     def __init__(self, value=None, font=None, lineSpacing=0, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -175,7 +223,7 @@ class text(widget):
         self.font = font
         self.lineSpacing = lineSpacing
         self._cValue = self._compile(value)
-        self._tsDraw = ImageDraw.Draw(Image.new('1', (0, 0)))
+        self._tsDraw = ImageDraw.Draw(Image.new("1", (0, 0)))
 
         self.render(force=True)
 
@@ -188,20 +236,36 @@ class text(widget):
         self.current = value
         self._reprVal = f"'{value}'"
 
-        tSize = self._tsDraw.textsize(value, font=self.font, spacing=self.lineSpacing)
+        tSize = self._tsDraw.textsize(
+            value, font=self.font, spacing=self.lineSpacing
+        )
         tSize = (0, 0) if tSize[0] == 0 else tSize
 
-        img = Image.new('1', tSize)
+        img = Image.new("1", tSize)
         if img.size[0] != 0:
             d = ImageDraw.Draw(img)
-            just = {'l': 'left', 'r': 'right', 'm': 'center'}.get(self.just[0])
-            d.text((0, 0), value, font=self.font, fill='white', spacing=self.lineSpacing, align=just)
+            just = {"l": "left", "r": "right", "m": "center"}.get(self.just[0])
+            d.text(
+                (0, 0),
+                value,
+                font=self.font,
+                fill="white",
+                spacing=self.lineSpacing,
+                align=just,
+            )
 
         self._place(wImage=img, just=self.just)
         return (self.image, True)
 
 
 class staticText(text):
+    """
+    A static version of the text widget.
+
+    :param value: A static (e.g. not evaluated) string containing the value to display
+    :type value: str
+    """
+
     def _compile(self, value):
         return value
 
@@ -210,13 +274,53 @@ class staticText(text):
 
 
 class progressBar(widget):
+    """
+    progressBar widget.  Shows percent completion graphically.
 
-    def __init__(self, value=None, range=None, mask=None, barSize=None, direction='ltr',  *args, **kwargs):
+    :param value: Current value to display (EVAL)
+    :type value: str
+    :param range: Pair of values that form the range of possible values.  The progressBar
+        will show how far the current value is between the low and high ends of the range. Both the start and end of the range are evaluated values. (EVAL)
+    :type range: (str, str)
+    :param mask: A `PIL.Image` or filename for a image to use as a mask
+    :type mask: `PIL.Image` or str
+    :param barSize: The x and y dimensions of the progressBar
+    :type barSize: (int, int)
+    :param direction: The direction to fill from when filling in the progressBar.  Values are
+        'ltr' for left to right, 'rtl' for right to left, 'ttb' for top to bottom and 'btt'
+        for bottom to top.
+    :type direction: str
+
+    ..note:
+        You can supply a mask or a barSize but not both.
+
+        If using a mask, your PIL.Image must contain a region within
+        the image that is transparent.
+    """
+
+    def __init__(
+        self,
+        value=None,
+        range=None,
+        mask=None,
+        barSize=None,
+        direction="ltr",
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
 
-        assert mask or barSize or self._requestedSize, 'You must either provide a mask image or provide a size for the progressBar'
-        assert not (mask and barSize), 'You can either provide a mask image or a barSize but not both'
-        self.mask = mask if mask else self._defaultMask(barSize if barSize else self._requestedSize)
+        assert (
+            mask or barSize or self._requestedSize
+        ), "You must either provide a mask image or provide a size for the progressBar"
+        assert not (
+            mask and barSize
+        ), "You can either provide a mask image or a barSize but not both"
+        self.mask = (
+            mask
+            if mask
+            else self._defaultMask(barSize if barSize else self._requestedSize)
+        )
         if type(mask) in [str, pathlib.PosixPath]:
             self.mask = Image.open(pathlib.PosixPath(mask))
         self.direction = direction.lower()
@@ -227,13 +331,17 @@ class progressBar(widget):
 
     @staticmethod
     def _defaultMask(size):
-        img = Image.new('RGB', size)
+        img = Image.new("RGB", size)
         d = ImageDraw.Draw(img)
         if size[0] - 1 < 3 or size[1] - 1 < 3:
-            d.rectangle((0, 0, size[0] - 1, size[1] - 1), fill='black', outline='black')
+            d.rectangle(
+                (0, 0, size[0] - 1, size[1] - 1), fill="black", outline="black"
+            )
         else:
-            d.rectangle((0, 0, size[0] - 1, size[1] - 1), fill='black', outline='white')
-        imga = img.copy().convert('L')
+            d.rectangle(
+                (0, 0, size[0] - 1, size[1] - 1), fill="black", outline="white"
+            )
+        imga = img.copy().convert("L")
         img.putalpha(imga)
         img.load()
         return img
@@ -261,17 +369,27 @@ class progressBar(widget):
             return (self.image, False)
         self.current = scale
 
-        self._reprVal = f'{scale*100:.1f}%'
+        self._reprVal = f"{scale*100:.1f}%"
 
         size = self.mask.size
         dir = self.direction
 
-        (w, h) = (size[0], round(size[1] * scale)) if dir in ['ttb', 'btt'] else (round(size[0] * scale), size[1])
-        (px, py) = (0, 0) if dir in ['ltr', 'ttb'] else (size[0] - w, 0) if dir == 'rtl' else (0, size[1] - h)
+        (w, h) = (
+            (size[0], round(size[1] * scale))
+            if dir in ["ttb", "btt"]
+            else (round(size[0] * scale), size[1])
+        )
+        (px, py) = (
+            (0, 0)
+            if dir in ["ltr", "ttb"]
+            else (size[0] - w, 0)
+            if dir == "rtl"
+            else (0, size[1] - h)
+        )
 
         # Build Fill
-        img = Image.new('1', size)
-        img.paste(Image.new('1', (w, h), 1), (px, py))
+        img = Image.new("1", size)
+        img.paste(Image.new("1", (w, h), 1), (px, py))
         img.paste(self.mask, (0, 0), self.mask)
 
         self._place(wImage=img, just=self.just)
@@ -279,8 +397,44 @@ class progressBar(widget):
 
 
 class marquee(widget):
+    """
+    Base class for the animated scroll, slide and popup classes.
 
-    def __init__(self, widget=None,  resetOnChange=True, actions=('rtl',), speed=1, distance=1, condition=None, wait=None, *args, **kwargs):
+    :param: widget: The widget that will be animated
+    :type widget: `tinyDisplay.render.widget`
+    :param resetOnChange: Determines whether to reset the contained widget to its starting
+        position if the widget changes value
+    :type resetOnChange: bool
+    :param actions: A list of instructions for how the widget should move.  Each
+        value in the list is a tuple containing a command/direction and an optional
+        integer parameter
+    :type actions: [(str, int)]
+    :param speed: Determines the number of ticks between moves of the object.  A speed of
+        of 1 will move the widget every tick.  A speed of 2, every two ticks, etc.  This combined with distance determines how fast the widget moves.  Larger speed values
+        will decrease the speed at which the widget appears to move.
+    :type speed: int
+    :param distance: Determines how many pixels to move per tick.  Larger values will
+        make the widget appear to move faster.
+    :type distance: int
+    :param condition: A function or evaluatable statement to determine whether the
+        widget should be moved.  If the statement returns True, the animation will
+        continue, or False, the animation will be paused. If not provided, a default
+        will be used that is appropriate to the subclass.
+    :type condition: `function` or str
+    """
+
+    def __init__(
+        self,
+        widget=None,
+        resetOnChange=True,
+        actions=("rtl",),
+        speed=1,
+        distance=1,
+        condition=None,
+        wait=None,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         assert widget, "No widget supplied to initialize scroll"
 
@@ -295,43 +449,70 @@ class marquee(widget):
         self._timeline = []
         self._tick = 0
 
-        assert wait in ['atStart', 'atPause', 'atPauseEnd', None], f'{0} is an invalid wait type.  Supported values are \'atSTart\', \'atPause\' or \'atPauseEnd\''
+        self._condition = (
+            self._dataset.compile(condition)
+            if type(condition) is str
+            else condition
+            if condition
+            else self._shouldIMove
+        )
+
+        assert wait in [
+            "atStart",
+            "atPause",
+            "atPauseEnd",
+            None,
+        ], f"{0} is an invalid wait type.  Supported values are 'atSTart', 'atPause' or 'atPauseEnd'"
         if wait:
             self._wait = wait
-
-        self._condition = \
-            self._dataset.compile(condition) if type(condition) is str else \
-            condition if condition else self._shouldIMove
 
         self.render(force=True, move=False)
 
     @abc.abstractmethod
     def _shouldIMove(self, *args, **kwargs):
-        pass    # pragma: no cover
+        pass  # pragma: no cover
 
     @abc.abstractmethod
     def _computeTimeline(self):
-        pass    # pragma: no cover
+        pass  # pragma: no cover
 
     @abc.abstractmethod
     def _adjustWidgetSize(self):
-        pass    # pragma: no cover
+        pass  # pragma: no cover
 
     # The at properties can be used by a controlling system to coordinate pauses between multiple marquee objects
     @property
     def atPause(self):
+        """
+        Has animation reached the start of a pause action.
+
+        :returns: True if yes, False if No
+        :rtype: bool
+        """
         if (self._tick - 1) % len(self._timeline) in self._pauses:
             return True
         return False
 
     @property
     def atPauseEnd(self):
+        """
+        Has animation reached the end of a pause action.
+
+        :returns: True if yes, False if No
+        :rtype: bool
+        """
         if (self._tick - 1) % len(self._timeline) in self._pauseEnds:
             return True
         return False
 
     @property
     def atStart(self):
+        """
+        Has an animation return to it's starting position.
+
+        :returns: True if yes, False if No
+        :rtype: bool
+        """
         if not (self._tick - 1) % len(self._timeline):
             return True
         return False
@@ -353,10 +534,15 @@ class marquee(widget):
             tickCount = 1
 
         for _ in range(length // self._distance):
-            dir = (self._distance, 0) if direction == 'ltr' else \
-            (-self._distance, 0) if direction == 'rtl' else \
-            (0, self._distance) if direction == 'ttb' else \
-            (0, -self._distance)
+            dir = (
+                (self._distance, 0)
+                if direction == "ltr"
+                else (-self._distance, 0)
+                if direction == "rtl"
+                else (0, self._distance)
+                if direction == "ttb"
+                else (0, -self._distance)
+            )
             curPos = (curPos[0] + dir[0], curPos[1] + dir[1])
 
             for _ in range(self._timeRatio):
@@ -376,21 +562,33 @@ class marquee(widget):
 
     @staticmethod
     def _withinDisplayArea(pos, d):
-        if ((pos[0] >= 0 and pos[0] < d[0]) or (pos[2] >= 0 and pos[2] < d[0]) or (pos[0] < 0 and pos[2] >= d[0])) and \
-        ((pos[1] >= 0 and pos[1] < d[1]) or (pos[3] >= 0 and pos[3] < d[1]) or (pos[1] < 0 and pos[3] >= d[1])):
+        if (
+            (pos[0] >= 0 and pos[0] < d[0])
+            or (pos[2] >= 0 and pos[2] < d[0])
+            or (pos[0] < 0 and pos[2] >= d[0])
+        ) and (
+            (pos[1] >= 0 and pos[1] < d[1])
+            or (pos[3] >= 0 and pos[3] < d[1])
+            or (pos[1] < 0 and pos[3] >= d[1])
+        ):
             return True
         return False
 
     @staticmethod
     def _enclosedWithinDisplayArea(pos, d):
-        if ((pos[0] >= 0 and pos[0] <= d[0]) and (pos[2] >= 0 and pos[2] <= d[0])) and \
-        ((pos[1] >= 0 and pos[1] <= d[1]) and (pos[3] >= 0 and pos[3] <= d[1])):
+        if (
+            (pos[0] >= 0 and pos[0] <= d[0])
+            and (pos[2] >= 0 and pos[2] <= d[0])
+        ) and (
+            (pos[1] >= 0 and pos[1] <= d[1])
+            and (pos[3] >= 0 and pos[3] <= d[1])
+        ):
             return True
         return False
 
     @abc.abstractmethod
     def _paintScrolledWidget(self):
-        pass    # pragma: no cover
+        pass  # pragma: no cover
 
     def _render(self, force=False, tick=None, move=True):
         self._tick = tick or self._tick
@@ -410,99 +608,179 @@ class marquee(widget):
             moved = True
             self._lastPos = self._curPos
 
-        self._tick = (self._tick + 1)%len(self._timeline) if move else self._tick
+        self._tick = (
+            (self._tick + 1) % len(self._timeline) if move else self._tick
+        )
         return (self.image, moved)
 
 
 class slide(marquee):
+    """Slides a widget from side to side or top to bottom."""
 
     def _shouldIMove(self, *args, **kwargs):
         return self._enclosedWithinDisplayArea(
-            (self._curPos[0], self._curPos[1], self._curPos[0] + self._widget.image.size[0],
-            self._curPos[1] + self._widget.image.size[1]), (self.size))
+            (
+                self._curPos[0],
+                self._curPos[1],
+                self._curPos[0] + self._widget.image.size[0],
+                self._curPos[1] + self._widget.image.size[1],
+            ),
+            (self.size),
+        )
 
     def _adjustWidgetSize(self):
         self._aWI = self._widget.image
 
     def _boundaryDistance(self, direction, pos):
-        return \
-            pos[0] if direction == 'rtl' else \
-            self.size[0] - (pos[0] + self._widget.size[0]) if direction == 'ltr' else \
-            pos[1] if direction == 'btt' else \
-            self.size[1] - (pos[1] + self._widget.size[1])
+        return (
+            pos[0]
+            if direction == "rtl"
+            else self.size[0] - (pos[0] + self._widget.size[0])
+            if direction == "ltr"
+            else pos[1]
+            if direction == "btt"
+            else self.size[1] - (pos[1] + self._widget.size[1])
+        )
 
     def _returnToStart(self, direction, curPos, tickCount):
         sp = self._timeline[0]
 
-        dem = 0 if direction[0] == 'h' else 1
+        dem = 0 if direction[0] == "h" else 1
         for i in range(2):
-            dir = \
-                'rtl' if dem == 0 and curPos[dem] > sp[dem] else \
-                'ltr' if dem == 0 and curPos[dem] < sp[dem] else \
-                'btt' if dem == 1 and curPos[dem] > sp[dem] else \
-                'ttb'
-            curPos, tickCount = self._addMovement(abs(curPos[dem] - sp[dem]), dir, curPos, tickCount)
+            dir = (
+                "rtl"
+                if dem == 0 and curPos[dem] > sp[dem]
+                else "ltr"
+                if dem == 0 and curPos[dem] < sp[dem]
+                else "btt"
+                if dem == 1 and curPos[dem] > sp[dem]
+                else "ttb"
+            )
+            curPos, tickCount = self._addMovement(
+                abs(curPos[dem] - sp[dem]), dir, curPos, tickCount
+            )
             dem = 0 if dem == 1 else 1
 
         return (curPos, tickCount)
 
     def _computeTimeline(self):
         if self._dataset.eval(self._condition):
-            self._reprVal = 'sliding'
+            self._reprVal = "sliding"
             tickCount = 0
             curPos = self._curPos
 
             for a in self._actions:
                 a = a if type(a) == tuple else (a,)
-                if a[0] == 'pause':
+                if a[0] == "pause":
                     tickCount = self._addPause(a[1], curPos, tickCount)
-                elif a[0] == 'rts':
-                    dir = 'h' if len(a) == 1 else a[1]
-                    curPos, tickCount = self._returnToStart(dir, curPos, tickCount)
+                elif a[0] == "rts":
+                    dir = "h" if len(a) == 1 else a[1]
+                    curPos, tickCount = self._returnToStart(
+                        dir, curPos, tickCount
+                    )
                 else:
-                    distance = self._boundaryDistance(a[0], curPos) if len(a) == 1 else a[1]
-                    curPos, tickCount = self._addMovement(distance, a[0], curPos, tickCount)
+                    distance = (
+                        self._boundaryDistance(a[0], curPos)
+                        if len(a) == 1
+                        else a[1]
+                    )
+                    curPos, tickCount = self._addMovement(
+                        distance, a[0], curPos, tickCount
+                    )
         else:
-            self.reprVal = 'not sliding'
+            self.reprVal = "not sliding"
             self._timeline.append(self._curPos)
 
     def _paintScrolledWidget(self):
-        img = Image.new('1', self.size)
+        img = Image.new("1", self.size)
         img.paste(self._aWI, self._curPos)
         return img
 
 
 class popUp(slide):
-    def __init__(self, size=None, widget=None, delay=(10, 10), *args, **kwargs):
+    """
+    popUp widget.
+
+    Implements a type that starts by displaying the top portion of a widget
+    and then moves the widget up to show the bottom portion, pausing each time
+    it reaches one direction of the other.
+
+    :param: widget: The widget that will be animated
+    :type widget: `tinyDisplay.render.widget`
+    :param size: the max size of the widget (x,y) in pixels
+    :type size: (int, int)
+    :param delay: The amount of time to delay at the top and then the bottom of
+        the slide motion.
+    :type delay: (int, int)
+    """
+
+    def __init__(
+        self, widget=widget, size=(0, 0), delay=(10, 10), *args, **kwargs
+    ):
+
         delay = delay if type(delay) == tuple else (delay, delay)
         range = widget.size[1] - size[1]
-        actions = [('pause', delay[0]), ('btt', range), ('pause', delay[1]), ('ttb', range)]
+        actions = [
+            ("pause", delay[0]),
+            ("btt", range),
+            ("pause", delay[1]),
+            ("ttb", range),
+        ]
 
-        super().__init__(size=size, widget=widget, actions=actions, *args, **kwargs)
+        super().__init__(
+            widget=widget, size=size, actions=actions, *args, **kwargs
+        )
 
     def _shouldIMove(self, *args, **kwargs):
         return self._withinDisplayArea(
-            (self._curPos[0], self._curPos[1], self._curPos[0] + self._widget.image.size[0],
-            self._curPos[1] + self._widget.image.size[1]), (self.size))
+            (
+                self._curPos[0],
+                self._curPos[1],
+                self._curPos[0] + self._widget.image.size[0],
+                self._curPos[1] + self._widget.image.size[1],
+            ),
+            (self.size),
+        )
 
 
 class scroll(marquee):
-    def __init__(self, gap=None, actions=('rtl',), *args, **kwargs):
+    """
+    Scroll widget.
 
-        self._gap = gap if type(gap) == tuple else (gap, gap) if gap else (0, 0)
+    Scrolls contained widget within its image, looping it when it reaches the boundary
+
+    :param gap: The amount of space to add in the x and y axis to the widget in
+        order to create space between the beginning and the end of the widget.
+    :type gap: (int, int) or (str, str)
+    """
+
+    def __init__(self, gap=None, actions=("rtl",), *args, **kwargs):
+
+        self._gap = (
+            gap if type(gap) == tuple else (gap, gap) if gap else (0, 0)
+        )
 
         # Figure out which directions the scroll will move so that we can inform the _computeShadowPlacements method
-        dirs = [v for v in actions if (type(v) == tuple and v[0] in ['rtl', 'ltr', 'ttb', 'btt']) or v in ['rtl', 'ltr', 'ttb', 'btt']]
-        h = True if ('ltr' in dirs or 'rtl' in dirs) else False
-        v = True if ('ttb' in dirs or 'btt' in dirs) else False
+        dirs = [
+            v
+            for v in actions
+            if (type(v) == tuple and v[0] in ["rtl", "ltr", "ttb", "btt"])
+            or v in ["rtl", "ltr", "ttb", "btt"]
+        ]
+        h = True if ("ltr" in dirs or "rtl" in dirs) else False
+        v = True if ("ttb" in dirs or "btt" in dirs) else False
         self._movement = (h, v)
 
         super().__init__(actions=actions, *args, **kwargs)
 
     def _shouldIMove(self, *args, **kwargs):
-        if (('rtl',) in self._actions or ('ltr',) in self._actions) and self._widget.image.size[0] > self.size[0]:
+        if (
+            ("rtl",) in self._actions or ("ltr",) in self._actions
+        ) and self._widget.image.size[0] > self.size[0]:
             return True
-        if (('btt',) in self._actions or ('ttb',) in self._actions) and self._widget.image.size[1] > self.size[1]:
+        if (
+            ("btt",) in self._actions or ("ttb",) in self._actions
+        ) and self._widget.image.size[1] > self.size[1]:
             return True
         return False
 
@@ -510,8 +788,8 @@ class scroll(marquee):
     def _computeGap(gap, displaySize):
         if type(gap) in [int, float]:
             return int(round(gap))
-        if type(gap) == str and gap.strip()[-1] == '%':
-            return int(round((int(gap.strip()[0: -1])) / 100 * displaySize))
+        if type(gap) == str and gap.strip()[-1] == "%":
+            return int(round((int(gap.strip()[0:-1])) / 100 * displaySize))
         return int(round(float(gap)))
 
     def _adjustWidgetSize(self):
@@ -523,33 +801,69 @@ class scroll(marquee):
 
     def _computeTimeline(self):
         if self._dataset.eval(self._condition):
-            self._reprVal = 'scrolling'
+            self._reprVal = "scrolling"
             tickCount = 0
             curPos = self._curPos
             for a in self._actions:
                 a = a if type(a) == tuple else (a,)
-                if a[0] == 'pause':
+                if a[0] == "pause":
                     tickCount = self._addPause(a[1], curPos, tickCount)
                 else:
-                    aws = self._aWI.size[0] if a[0] in ['ltr', 'rtl'] else self._aWI.size[1]
-                    curPos, tickCount = self._addMovement(aws, a[0], curPos, tickCount)
+                    aws = (
+                        self._aWI.size[0]
+                        if a[0] in ["ltr", "rtl"]
+                        else self._aWI.size[1]
+                    )
+                    curPos, tickCount = self._addMovement(
+                        aws, a[0], curPos, tickCount
+                    )
 
             # If position has looped back to start remove last position to prevent stutter
-            if (a[0] == 'ltr' and self._timeline[-1][0] - aws == self._timeline[0][0]) or \
-                (a[0] == 'rtl' and self._timeline[-1][0] + aws == self._timeline[0][0]) or \
-                (a[0] == 'ttb' and self._timeline[-1][1] - aws == self._timeline[0][1]) or \
-                (a[0] == 'btt' and self._timeline[-1][1] + aws == self._timeline[0][1]):
+            if (
+                (
+                    a[0] == "ltr"
+                    and self._timeline[-1][0] - aws == self._timeline[0][0]
+                )
+                or (
+                    a[0] == "rtl"
+                    and self._timeline[-1][0] + aws == self._timeline[0][0]
+                )
+                or (
+                    a[0] == "ttb"
+                    and self._timeline[-1][1] - aws == self._timeline[0][1]
+                )
+                or (
+                    a[0] == "btt"
+                    and self._timeline[-1][1] + aws == self._timeline[0][1]
+                )
+            ):
                 self._timeline.pop()
         else:
-            self._reprVal = 'not scrolling'
+            self._reprVal = "not scrolling"
             self._timeline.append(self._curPos)
 
     def _computeShadowPlacements(self):
         lShadows = []
-        x = (self._curPos[0] - self._aWI.size[0], self._curPos[0], self._curPos[0] + self._aWI.size[0])
-        y = (self._curPos[1] - self._aWI.size[1], self._curPos[1], self._curPos[1] + self._aWI.size[1])
-        a = (x[0] + self._widget.size[0] - 1, x[1] + self._widget.size[0] - 1, x[2] + self._widget.size[0] - 1)
-        b = (y[0] + self._widget.size[1] - 1, y[1] + self._widget.size[1] - 1, y[2] + self._widget.size[1] - 1)
+        x = (
+            self._curPos[0] - self._aWI.size[0],
+            self._curPos[0],
+            self._curPos[0] + self._aWI.size[0],
+        )
+        y = (
+            self._curPos[1] - self._aWI.size[1],
+            self._curPos[1],
+            self._curPos[1] + self._aWI.size[1],
+        )
+        a = (
+            x[0] + self._widget.size[0] - 1,
+            x[1] + self._widget.size[0] - 1,
+            x[2] + self._widget.size[0] - 1,
+        )
+        b = (
+            y[0] + self._widget.size[1] - 1,
+            y[1] + self._widget.size[1] - 1,
+            y[2] + self._widget.size[1] - 1,
+        )
 
         # Determine which dimensions need to be shadowed
         xr = range(3) if self._movement[0] else range(1, 2)
@@ -557,20 +871,21 @@ class scroll(marquee):
 
         for i in xr:
             for j in yr:
-                if self._withinDisplayArea((x[i], y[j], a[i], b[j]), (self.size[0], self.size[1])):
+                if self._withinDisplayArea(
+                    (x[i], y[j], a[i], b[j]), (self.size[0], self.size[1])
+                ):
                     lShadows.append((x[i], y[j]))
         return lShadows
 
     def _paintScrolledWidget(self):
-        img = Image.new('1', self.size)
+        img = Image.new("1", self.size)
         pasteList = self._computeShadowPlacements()
         for p in pasteList:
             img.paste(self._aWI, p)
         return img
 
 
-class staticWidget(widget):
-
+class _staticWidget(widget):
     def __init__(self, image=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -578,7 +893,18 @@ class staticWidget(widget):
         return (self.image, force)
 
 
-class image(staticWidget):
+class image(_staticWidget):
+    """
+    image widget.
+
+    Contains an image sourced from either a PIL.Image object or
+    from a file that contains an Image that PIL can read.
+
+    :param image: The image object (if initializating from an PIL.Image)
+    :type image: PIL.Image
+    :param file: The filename of the image (if initializing from a file)
+    :type file: str
+    """
 
     def __init__(self, image=None, file=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -587,46 +913,68 @@ class image(staticWidget):
 
         if type(image) is str or type(image) is pathlib.PosixPath:
             img = Image.open(pathlib.Path(image))
-            self._reprVal = f'{image}'
+            self._reprVal = f"{image}"
         else:
-            self._reprVal = f'img at 0x{id(image):x}'
+            self._reprVal = f"img at 0x{id(image):x}"
             img = image.copy()
 
         self._place(wImage=img, just=self.just)
 
 
-def makeFourTupleDraw(xy):
+def _makeFourTupleDraw(xy):
     if len(xy) == 4:
         x0, y0, x1, y1 = xy[0], xy[1], xy[2], xy[3]
     elif len(xy) == 2:
         x0, y0, x1, y1 = xy[0][0], xy[0][1], xy[1][0], xy[1][1]
     else:
-        raise ValueError(f"xy must be an array of two tuples or four integers.  Instead received {xy}")
+        raise ValueError(
+            f"xy must be an array of two tuples or four integers.  Instead received {xy}"
+        )
 
-    img = Image.new('1', (max(x0, x1) + 1, max(y0, y1) + 1))
+    img = Image.new("1", (max(x0, x1) + 1, max(y0, y1) + 1))
     drw = ImageDraw.Draw(img)
     return (img, drw)
 
 
-class line(staticWidget):
+class line(_staticWidget):
+    """
+    line widget.
 
-    def __init__(self, xy=[], fill='white', width=0, *args, **kwargs):
+    :param xy: coordinates to place line
+    :type xy: [x1, y1, x2, y2] or [(x1, y1), (x2, y2)]
+    :param fill: the color to fill the interior of the line
+    :type fill: str
+    :param width: thickness of the line in pixels
+    :type width: int
+    """
+
+    def __init__(self, xy=[], fill="white", width=0, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        img, d = makeFourTupleDraw(xy)
+        img, d = _makeFourTupleDraw(xy)
         d.line(xy, fill=fill, width=width)
 
-        self._reprVal = f'{xy}'
+        self._reprVal = f"{xy}"
         self._place(wImage=img, just=self.just)
 
 
-class rectangle(staticWidget):
+class rectangle(_staticWidget):
+    """
+    rectangle widget.
 
-    def __init__(self, xy=[], fill='white', outline=None, *args, **kwargs):
+    :param xy: coordinates to place rectangle
+    :type xy: [x1, y1, x2, y2] or [(x1, y1), (x2, y2)]
+    :param fill: the color to fill the interior of the rectangle
+    :type fill: str
+    :param outline: the color to draw the outline of the rectangle
+    :type outline: str
+    """
+
+    def __init__(self, xy=[], fill="white", outline=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        img, d = makeFourTupleDraw(xy)
+        img, d = _makeFourTupleDraw(xy)
         d.rectangle(xy, fill=fill, outline=outline)
 
-        self._reprVal = f'{xy}'
+        self._reprVal = f"{xy}"
         self._place(wImage=img, just=self.just)
