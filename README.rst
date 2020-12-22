@@ -1,5 +1,5 @@
 tinyDisplay
----------
+-----------
 **A widget library and window manager for small displays**
 
 Python 3 library to simply the development of applications intended to drive
