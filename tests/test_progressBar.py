@@ -21,7 +21,7 @@ from tinyDisplay.render.widget import progressBar
     [
         ({"value": 12}, "ltr", (0, 100), None, "pbd12.png"),
         ({"value": 45}, "rtl", (0, 90), None, "pbd50.png"),
-        ({"value": 45}, "rtl", (0, 90), "progressBar_100x8.png", "pbm50.png"),
+        ({"value": 45}, "rtl", (0, 90), "progressbar_100x8.png", "pbm50.png"),
         (
             {"value": 10},
             "rtl",
