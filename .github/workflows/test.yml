@@ -51,11 +51,6 @@ jobs:
         with:
           python-version: 3.${{ matrix.python-minor-version }}
       #----------------------------------------------
-      #          Display Python Version
-      #----------------------------------------------
-      - name: Display Python version
-         run: python -c "import sys; print(sys.version)"
-      #----------------------------------------------
       #  -----  install & configure poetry  -----
       #----------------------------------------------
       - name: Install Poetry
