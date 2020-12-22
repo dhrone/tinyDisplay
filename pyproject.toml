@@ -50,6 +50,7 @@ isort = "^5.6.4"
 black = "^20.8b1"
 pre-commit = "^2.9.3"
 darglint = "^1.5.8"
+rstcheck = "^3.3.1"
 
 [tool.pytest.ini_options]
 minversion = 6.0
