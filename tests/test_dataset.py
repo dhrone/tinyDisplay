@@ -52,7 +52,7 @@ updates = [
     ),
     ("sys", {"temp": 92.6}),
     ("db", {"state": "stop"}),
-    ("db", {"time": time.localtime(1593626862)}),
+    ("db", {"time": time.gmtime(1593626862)}),
 ]
 
 conditions = [
@@ -68,7 +68,7 @@ conditions = [
     "history('sys', -4)['temp']==54.3",
     "history('sys', 0)['temp']==92.6",
     "db['state']!=prev.db['state']",
-    "time.strftime('%H:%M',db['time']) == '14:07'",
+    "time.strftime('%H:%M',db['time']) == '18:07'",
     "select(db['state'], 'play', True, 'stop', False) == False",
 ]
 
