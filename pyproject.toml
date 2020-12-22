@@ -32,7 +32,7 @@ include_trailing_comma = true
 name = "tinyDisplay"
 version = "0.1.0"
 description = ""
-authors = ["dhrone <ron@ritchey.org>"]
+authors = ["dhrone <dhrone@dhrone.xyz>"]
 
 [tool.poetry.dependencies]
 python = "^3.6.1"
@@ -62,13 +62,18 @@ testpaths = [
 legacy_tox_ini = """
 [tox]
 isolated_build = true
-envlist = py36, py37, py38
+envlist = py{36,37,38},qa
 
 [testenv]
 whitelist_externals = poetry
 commands =
     poetry install -vvv
     poetry run pytest
+
+[testenv:qa]
+commands =
+  poetry install -vvv
+  poetry run flake8
 """
 
 [build-system]

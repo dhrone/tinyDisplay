@@ -13,6 +13,7 @@ import pytest
 
 from tinyDisplay.utility import dataset
 
+
 updates = [
     ("db", {"state": "play"}),
     (

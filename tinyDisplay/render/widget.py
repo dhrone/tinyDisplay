@@ -13,8 +13,7 @@ import pathlib
 from PIL import Image, ImageDraw
 
 from tinyDisplay.font import bmImageFont
-from tinyDisplay.utility import dataset as Dataset
-from tinyDisplay.utility import image2Text
+from tinyDisplay.utility import dataset as Dataset, image2Text
 
 
 class widget(metaclass=abc.ABCMeta):
