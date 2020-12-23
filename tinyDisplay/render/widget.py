@@ -426,7 +426,7 @@ class marquee(widget):
         self,
         widget=None,
         resetOnChange=True,
-        actions=("rtl",),
+        actions=[("rtl",)],
         speed=1,
         distance=1,
         condition=None,
@@ -461,7 +461,7 @@ class marquee(widget):
             "atPause",
             "atPauseEnd",
             None,
-        ], f"{0} is an invalid wait type.  Supported values are 'atSTart', 'atPause' or 'atPauseEnd'"
+        ], f"{0} is an invalid wait type.  Supported values are 'atStart', 'atPause' or 'atPauseEnd'"
         if wait:
             self._wait = wait
 
@@ -753,7 +753,7 @@ class scroll(marquee):
     :type gap: (int, int) or (str, str)
     """
 
-    def __init__(self, gap=None, actions=("rtl",), *args, **kwargs):
+    def __init__(self, gap=None, actions=[("rtl",)], *args, **kwargs):
 
         self._gap = (
             gap if type(gap) == tuple else (gap, gap) if gap else (0, 0)
@@ -761,11 +761,11 @@ class scroll(marquee):
 
         # Figure out which directions the scroll will move so that we can inform the _computeShadowPlacements method
         dirs = [
-            v
+            v[0]
             for v in actions
             if (type(v) == tuple and v[0] in ["rtl", "ltr", "ttb", "btt"])
-            or v in ["rtl", "ltr", "ttb", "btt"]
-        ]
+        ] + [v for v in actions if v in ["rtl", "ltr", "ttb", "btt"]]
+
         h = True if ("ltr" in dirs or "rtl" in dirs) else False
         v = True if ("ttb" in dirs or "btt" in dirs) else False
         self._movement = (h, v)
