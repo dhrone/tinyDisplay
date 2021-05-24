@@ -15,18 +15,7 @@ from PIL import Image, ImageFont
 
 
 def _readGlyphData(fileName):
-    fp = open(fileName)
-    s = (
-        fp.readline()
-    )  # info face="upperascii" size=6 bold=0 italic=0 charset="" unicode=1 stretchH=100 smooth=0 aa=1 padding=0,0,0,0 spacing=0,0
-    if s[:9] != "info face":
-        raise SyntaxError("not a valid BMFONT file")
-    s = (
-        fp.readline()
-    )  # common lineHeight=5 base=6 scaleW=80 scaleH=30 pages=1 packed=0
-    lineHeight = int(s.split()[1].split("=")[1])
-
-    def _readGlyphPage(fp, filename, pages, count, glyphs):
+    def _readGlyphPage(fp, pages, count, glyphs):
         from os.path import dirname
 
         sketches = {}
@@ -73,20 +62,31 @@ def _readGlyphData(fileName):
 
         return glyphs
 
-    glyphs = {}
-    pages = {}
-    for s in fp:  # page id=0 file="upperasciiwide_3x5.png"
-        if s[0:4].lower() == "page":
-            pages[int(s.split()[1].split("=")[1])] = (
-                s.split()[2].split("=")[1].strip("\"'")
-            )
-        else:
-            if s[0:5].lower() == "chars":
-                count = int(s.split()[1].split("=")[1])
-            break
-            raise ValueError(f"Expected chars count line.  Received {s}")
+    with open(fileName) as fp:
+        s = (
+            fp.readline()
+        )  # info face="upperascii" size=6 bold=0 italic=0 charset="" unicode=1 stretchH=100 smooth=0 aa=1 padding=0,0,0,0 spacing=0,0
+        if s[:9] != "info face":
+            raise SyntaxError("not a valid BMFONT file")
+        s = (
+            fp.readline()
+        )  # common lineHeight=5 base=6 scaleW=80 scaleH=30 pages=1 packed=0
+        lineHeight = int(s.split()[1].split("=")[1])
 
-    glyphs = _readGlyphPage(fp, fileName, pages, count, glyphs)
+        glyphs = {}
+        pages = {}
+        for s in fp:  # page id=0 file="upperasciiwide_3x5.png"
+            if s[0:4].lower() == "page":
+                pages[int(s.split()[1].split("=")[1])] = (
+                    s.split()[2].split("=")[1].strip("\"'")
+                )
+            else:
+                if s[0:5].lower() == "chars":
+                    count = int(s.split()[1].split("=")[1])
+                break
+                raise ValueError(f"Expected chars count line.  Received {s}")
+
+        glyphs = _readGlyphPage(fp, pages, count, glyphs)
 
     return (lineHeight, glyphs)
 

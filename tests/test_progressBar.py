@@ -20,8 +20,8 @@ from tinyDisplay.render.widget import progressBar
     "db, dir, range, mask, file",
     [
         ({"value": 12}, "ltr", (0, 100), None, "pbd12.png"),
-        ({"value": 45}, "rtl", (0, 90), None, "pbd50.png"),
-        ({"value": 45}, "rtl", (0, 90), "progressbar_100x8.png", "pbm50.png"),
+        ({"value": 45}, "ltr", (0, 90), None, "pbd50.png"),
+        ({"value": 45}, "ltr", (0, 90), "progressbar_100x8.png", "pbm50.png"),
         (
             {"value": 10},
             "rtl",
@@ -55,10 +55,11 @@ def test_defaultBar(db, dir, range, mask, file):
         range=range,
         value='db["value"]',
         mask=maskName,
+        mode="1",
     ).render()[0]
     bbox = ImageChops.difference(img, compImage).getbbox()
     assert (
-        bbox
+        not bbox
     ), f'progressBar(size={size}, direction={dir}, range={range}, value={ds["db"]["value"]}) did not match file {file}'
 
 
@@ -67,12 +68,12 @@ def test_thinBar():
     drw = ImageDraw.Draw(img)
     drw.rectangle((0, 0, 4, 0), fill="white")
     ds = {"db": {"value": 50}}
-    pImg = progressBar(size=(10, 1), dataset=ds, value='db["value"]').render()[
-        0
-    ]
+    pImg = progressBar(
+        size=(10, 1), dataset=ds, value='db["value"]', mode="1"
+    ).render()[0]
 
     bbox = ImageChops.difference(img, pImg).getbbox()
-    assert bbox, f"Thin progressBar does not match"
+    assert not bbox, f"Thin progressBar does not match"
 
 
 def test_out_of_range():
@@ -80,11 +81,11 @@ def test_out_of_range():
     drw = ImageDraw.Draw(img)
     drw.rectangle((0, 0, 9, 0), fill="white")
     ds = {"db": {"value": 110}}
-    pb = progressBar(size=(10, 1), dataset=ds, value='db["value"]')
+    pb = progressBar(size=(10, 1), dataset=ds, value='db["value"]', mode="1")
     pImg = pb.render()[0]
 
     bbox = ImageChops.difference(img, pImg).getbbox()
-    assert bbox, f"Thin progressBar does not match"
+    assert not bbox, f"Thin progressBar does not match"
 
     pImg = pb.render()[0]
     assert (

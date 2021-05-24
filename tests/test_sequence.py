@@ -10,7 +10,7 @@ Test of tinyDisplay sequence class
 import pytest
 
 from tinyDisplay.render.collection import canvas, sequence
-from tinyDisplay.render.widget import staticText, text
+from tinyDisplay.render.widget import text
 from tinyDisplay.utility import dataset, image2Text
 
 
@@ -21,24 +21,47 @@ def makeSetup():
     ds = dataset({"db": db, "sys": system})
     artist = text(value="f\"Artist {db['artist']}\"", dataset=ds)
     title = text(value="f\"Title {db['title']}\"", dataset=ds)
-    alert = staticText(value="ALERT -- HOT")
-    time = staticText("12:32p")
-    cArt = canvas(size=(80, 16))
+    alert = text(value="ALERT -- HOT")
+    time = text("12:32p")
+    cArt = canvas(
+        size=(80, 16),
+        duration=2,
+        activeWhen="sys['state'] == 'play'",
+        dataset=ds,
+        name="Artist",
+    )
     cArt.append(artist)
-    cTitle = canvas(size=(80, 16))
+    cTitle = canvas(
+        size=(80, 16),
+        duration=2,
+        activeWhen="sys['state'] == 'play'",
+        dataset=ds,
+        name="Title",
+    )
     cTitle.append(title)
-    cAlert = canvas(size=(80, 16))
+    cAlert = canvas(
+        size=(80, 16),
+        duration=5,
+        minDuration=2,
+        activeWhen="sys['temp'] >= 100",
+        dataset=ds,
+        name="Alert",
+    )
     cAlert.append(alert)
-    cTime = canvas(size=(80, 16))
-    cTime.append(time, just="mm")
+    cTime = canvas(
+        size=(80, 16),
+        duration=10,
+        activeWhen="sys['state'] == 'stop'",
+        dataset=ds,
+        name="Time",
+    )
+    cTime.append(time, placement="mm")
 
     seq = sequence(dataset=ds)
-    seq.append(cArt, duration=2, condition="sys['state'] == 'play'")
-    seq.append(cTitle, duration=2, condition="sys['state'] == 'play'")
-    seq.append(
-        cAlert, duration=5, minDuration=2, condition="sys['temp'] >= 100"
-    )
-    seq.append(cTime, duration=10, condition="sys['state'] == 'stop'")
+    seq.append(cArt)
+    seq.append(cTitle)
+    seq.append(cAlert)
+    seq.append(cTime)
 
     return (ds, seq)
 
@@ -47,7 +70,7 @@ def test_sequence_timing(makeSetup):
 
     ds, seq = makeSetup
 
-    sImg = seq.render()[0]
+    sImg = seq.render(force=True)[0]
     sSame = seq.render()[0]
     sNew = seq.render()[0]
     seq.render()[0]
@@ -70,7 +93,7 @@ def test_sequence_conditions(makeSetup):
     ds, seq = makeSetup
 
     # Should be Artist Play canvas
-    sOrig = seq.render()[0]
+    sOrig = seq.render(force=True)[0]
 
     # Skip to end of sequence (assuming state stays the same)
     for i in range(3):
@@ -93,7 +116,7 @@ def test_min_duration(makeSetup):
 
     ds.update("sys", {"temp": 100, "state": "stop"})
 
-    sOrig = seq.render()[0]
+    sOrig = seq.render(force=True)[0]
     ds.update("sys", {"temp": 40})
     sTst = seq.render()[0]
     sTst2 = seq.render()[0]

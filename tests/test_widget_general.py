@@ -10,7 +10,8 @@ Test of Widget class for the tinyDisplay system
 import pytest
 from PIL import Image, ImageChops, ImageDraw
 
-from tinyDisplay.render.widget import rectangle, staticText, text
+from tinyDisplay import globalVars
+from tinyDisplay.render.widget import rectangle, text
 from tinyDisplay.utility import dataset
 
 
@@ -23,7 +24,7 @@ def test_image_placement():
     d.line([(4, 1), (4, 7)], fill="white")
     d.line([(0, 4), (4, 4)], fill="white")
 
-    w = text(value="H", size=(100, 16), just="rt")
+    w = text(value="H", size=(100, 16), just="rt", mode="1")
     renderImage = w.render()[0]
 
     for size in [(100, 16), (99, 15), (20, 8), (19, 8)]:
@@ -31,7 +32,7 @@ def test_image_placement():
             offsetH = {"r": size[0] - 5, "l": 0, "m": round((size[0] - 5) / 2)}
             offsetV = {"b": size[1] - 8, "t": 0, "m": round((size[1] - 8) / 2)}
 
-            w = text(value="H", size=size, just=j)
+            w = text(value="H", size=size, just=j, mode="1")
             renderImage = w.render()[0]
 
             img = Image.new("1", size)
@@ -41,25 +42,25 @@ def test_image_placement():
 
 
 def test_clear():
-    w = rectangle((0, 0, 10, 10))
-    img = Image.new("1", (11, 11), 0)
+    w = rectangle((0, 0, 10, 10), size=(11, 11))
+    img = Image.new(w.image.mode, (11, 11), w._background)
     drw = ImageDraw.Draw(img)
     drw.rectangle((0, 0, 10, 10), fill="white")
     assert w.render()[0] == img
 
     w.clear()
-    img = Image.new("1", (11, 11))
+    img = Image.new(w.image.mode, (11, 11), w._background)
     assert w.render()[0] == img
 
 
 def test_repr():
-    w = staticText(name="STATIC12345", value="12345")
-    v = "<STATIC12345.staticText value('12345') size(25, 8)"
+    w = text(name="STATIC12345", value="12345")
+    v = "<STATIC12345.text value('12345') size(25, 8)"
     assert repr(w)[0 : len(v)] == v, f"Unexpected repr value given: {w}"
 
 
 def test_text_image_print():
-    w = staticText(name="STATIC12345", value="12345")
+    w = text(name="STATIC12345", value="12345")
     v = "---------------------------\n"
     v += "|                         |\n"
     v += "|  *   *** *****   * *****|\n"
@@ -79,45 +80,45 @@ def test_text_image_print():
 def test_string_eval():
     s = "abc"
     w = text(value=s)
-    img1 = w.render()[0]
-    drw = ImageDraw.Draw(img1)
-    img2 = Image.new("1", drw.textsize(s, font=w.font))
-    drw = ImageDraw.Draw(img2)
-    drw.text((0, 0), s, font=w.font, fill="white")
+    drw = ImageDraw.Draw(Image.new("1", (0, 0), 0))
+    img = Image.new(w.image.mode, drw.textsize(s, font=w.font), w._background)
+    drw = ImageDraw.Draw(img)
+    drw.text((0, 0), s, font=w.font, fill=w._foreground)
 
-    assert img1 == img2, f"Images do not match for value {w.current}"
+    assert w.image == img, f"Images do not match for value {w.current}"
 
 
 def test_request_size():
     s = "abc"
-    w = text("abc", size=(10, 8))
-    img1 = w.render()[0]
-    drw = ImageDraw.Draw(img1)
-    img2 = Image.new("1", (10, 8))
-    drw = ImageDraw.Draw(img2)
-    drw.text((0, 0), s, font=w.font, fill="white")
+    w = text(s, size=(10, 8))
+    img = Image.new(w.image.mode, (10, 8), w._background)
+    drw = ImageDraw.Draw(img)
+    drw.text((0, 0), s, font=w.font, fill=w._foreground)
 
-    assert img1 == img2, f"Image should only contain 'ab'"
+    assert w.image == img, f"Image should only contain 'ab'"
 
     db = {"value": s}
     ds = dataset()
     ds.add("db", db)
     w = text(value="f\"{db['value']}\"", dataset=ds, size=(10, 8))
-    w.render()[0]
     db["value"] = s[0]
     ds.update("db", db)
-    img1 = w.render()[0]
-    img2 = Image.new("1", (10, 8))
-    drw = ImageDraw.Draw(img2)
-    drw.text((0, 0), s[0], font=w.font, fill="white")
+    w.render()
+    img = Image.new(w.image.mode, (10, 8), w._background)
+    drw = ImageDraw.Draw(img)
+    drw.text((0, 0), s[0], font=w.font, fill=w._foreground)
 
-    assert img1 == img2, f"Image should still only contain 'ab'"
+    assert w.image == img, f"Image should still only contain 'ab'"
 
 
 def test_bad_four_tuple():
+    globalVars.__DEBUG__ = True
     with pytest.raises(ValueError) as ex:
         w = rectangle((0, 1, 2, 3, 4), fill="black", outline="white")
-    assert (
-        str(ex.value)
-        == "xy must be an array of two tuples or four integers.  Instead received (0, 1, 2, 3, 4)"
-    )
+    try:
+        assert (
+            str(ex.value)
+            == "xy must be an array of two tuples or four integers.  Instead received (0, 1, 2, 3, 4)"
+        )
+    finally:
+        globalVars.__DEBUG__ = False

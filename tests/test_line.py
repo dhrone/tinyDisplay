@@ -11,20 +11,28 @@ import pytest
 from PIL import Image, ImageChops, ImageDraw
 
 from tinyDisplay.render.widget import line
+from tinyDisplay.utility import compareImage
 
 
 def test_line_widget():
 
-    img = Image.new("1", (10, 8))
+    img = Image.new("1", (50, 50), "black")
     d = ImageDraw.Draw(img)
     d.line([(0, 0), (49, 49)], fill="white")
+    w = line(xy=[(0, 0), (49, 49)], fill="white", mode="1")
+    assert compareImage(
+        img, w.render()[0]
+    ), f"Rectangles did not match (two tuple test)"
 
-    w = line(xy=[(0, 0), (49, 49)], fill="white")
-    renderImage = w.render()[0]
-    bbox = ImageChops.difference(img, renderImage).getbbox()
-    assert not bbox, f"Rectangles did not match"
+    w = line(xy=(0, 0, 49, 49), fill="white", mode="1")
+    assert compareImage(
+        img, w.render()[0]
+    ), f"Rectangles did not match (one tuple test)"
 
-    w = line(xy=(0, 0, 49, 49), fill="white")
-    renderImage = w.render()[0]
-    bbox = ImageChops.difference(img, renderImage).getbbox()
-    assert not bbox, f"Rectangles did not match"
+    img = Image.new("1", (10, 8), "black")
+    d = ImageDraw.Draw(img)
+    d.line([(0, 0), (49, 49)], fill="white")
+    w = line(xy=(0, 0, 49, 49), fill="white", mode="1", size=(10, 8))
+    assert compareImage(
+        img, w.render()[0]
+    ), f"Rectangles did not match (small image test)"

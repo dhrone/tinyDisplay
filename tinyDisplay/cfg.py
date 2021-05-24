@@ -8,8 +8,10 @@ Load tinyDisplay system from yaml file.
 .. versionadded:: 0.0.1
 """
 
+import logging
 import os
 import pathlib
+from copy import deepcopy
 from inspect import getfullargspec, getmro, isclass
 
 import yaml
@@ -17,7 +19,6 @@ from PIL import ImageFont
 
 from tinyDisplay.font import bmImageFont
 from tinyDisplay.render import collection, widget
-from tinyDisplay.render.collection import canvas, sequence, windows
 from tinyDisplay.utility import dataset as Dataset
 
 
@@ -36,24 +37,13 @@ _yamlLoader.add_constructor("!include", _yamlLoader.include)
 
 
 class _tdLoader:
-    def __init__(
-        self, pageFile=None, dataset=None, displaySize=None, defaultCanvas=None
-    ):
+    def __init__(self, pageFile=None, defaultCanvas=None):
         assert pageFile, "You must supply a yaml pageFile to load"
-        self.size = displaySize if displaySize else (0, 0)
         self._defaultCanvas = defaultCanvas
-        self._dataset = (
-            Dataset(dataset)
-            if dataset and type(dataset) is dict
-            else dataset
-            if dataset
-            else Dataset()
-        )
+        self._dataset = Dataset()
 
         self._fonts = {}
-        self._widgets = {}
-        self._canvases = {}
-        self._sequences = {}
+        self._display = None
 
         # Load valid parameters for each widget type
         self._wParams = {
@@ -98,8 +88,8 @@ class _tdLoader:
         if not path.exists():
             raise FileNotFoundError(f"Page File '{filename}' not found")
 
-        f = open(path)
-        self._pf = yaml.load(f, _yamlLoader)
+        with open(path) as f:
+            self._pf = yaml.load(f, _yamlLoader)
         self._transform()
 
     @staticmethod
@@ -118,216 +108,138 @@ class _tdLoader:
         )
         return (offset, just.strip())
 
-    def _createWindows(self):
-        self._windows = windows(
-            name="MAIN",
-            size=self.size,
-            dataset=self._dataset,
-            defaultCanvas=self._defaultCanvas,
+    def _createDataValidations(self):
+        if "DATASET" not in self._pf:
+            return
+
+        cfg = self._pf["DATASET"]
+
+        # for each database in the dataset
+        for db, data in cfg.items():
+            dbcfg = {
+                k: v for k, v in data.items() if k in ["onUpdate", "validate"]
+            }
+            if len(dbcfg) > 0:
+                self._dataset.registerValidation(dbName=db, **dbcfg)
+
+            # for each value element in the database
+            if "values" in data:
+                for k, v in data["values"].items():
+                    # Register its data element settings
+                    self._dataset.registerValidation(dbName=db, key=k, **v)
+
+    def _createDisplay(self):
+
+        try:
+            cfg = None
+            size = None
+            cfg = deepcopy(self._pf["DISPLAY"])
+            size = cfg["size"]
+        except KeyError:
+            if cfg is None:
+                raise RuntimeError(
+                    "No Display configuration found in page file"
+                )
+            if size is None:
+                raise RuntimeError("No size provided for Display in page file")
+            raise RuntimeError("No items provided for Display in page file")
+
+        if "type" not in cfg:
+            cfg["type"] = "canvas"
+        if "name" not in cfg:
+            cfg["name"] = "MAIN"
+
+        return self._createWidget(cfg)
+
+    def _createWidget(self, cfg, parent="", itemNr=0):
+        name = (
+            parent + ":" + cfg.get("name", f"item {itemNr+1}")
+            if parent != ""
+            else cfg.get("name", itemNr)
         )
 
-        for name, config in self._pf["WINDOWS"].items():
-            window = (
-                self._createSequence(name)
-                if name in self._pf["SEQUENCES"]
-                else self._createCanvas(name)
-                if name in self._pf["CANVASES"]
-                else self._createWidget(name, self._pf["WIDGETS"][name])
-                if name in self._pf["WIDGETS"]
-                else None
-            )
-            if not window:
-                raise ValueError(
-                    f"Cannot locate a sequence, canvas or widget named {name}"
-                )
-            offset, just = self._adjustPlacement(
-                config.get("placement", (0, 0, "lt"))
-            )
-            self._windows.append(
-                window=window,
-                offset=offset,
-                just=just,
-                z=config.get("z", windows.ZSTD),
-                duration=config.get("duration", 0),
-                minDuration=config.get("minDuration", 0),
-                coolingPeriod=config.get("coolingPeriod", 0),
-                condition=config.get("condition"),
-            )
+        if "type" not in cfg:
+            raise RuntimeError(f'Type not provided for {cfg["name"]}')
 
-    def _createSequence(self, name):
-        if name in self._sequences:
-            return self._sequences[name]
-
-        if name not in self._pf["SEQUENCES"]:
-            raise ValueError(f"Cannot locate a sequence named {name}")
-
-        cfg = self._pf["SEQUENCES"][name]
-        items = []
-        for si in cfg.get("items") or []:
-            if si["name"] in self._pf["CANVASES"]:
-                w = self._createCanvas(si["name"])
-            elif si["name"] in self._pf["WIDGETS"]:
-                w = self._createWidget(
-                    si["name"], self._pf["WIDGETS"][si["name"]]
-                )
-            else:
-                raise ValueError(
-                    f"Cannot locate a canvas (or widget) named {si['name']}"
-                )
-
-            duration = si.get("duration", 30)
-            minDuration = si.get("minDuration", 0)
-            condition = si.get("condition", "True")
-            items.append((w, duration, minDuration, condition))
-
-        # name=None, size=None, placements=None
-        s = sequence(name=name, size=cfg.get("size"), dataset=self._dataset)
-        for se in items:
-            s.append(
-                item=se[0], duration=se[1], minDuration=se[2], condition=se[3]
-            )
+        # If effect, move widget config to 'widget' key and
+        # make effect the containing widget
         if "effect" in cfg:
-            s = self._addEffect(s, name, cfg)
+            wHold = dict(cfg)
+            cfg = dict(cfg["effect"])
+            del wHold["effect"]
+            cfg["widget"] = wHold
 
-        self._sequences[name] = s
-        return s
-
-    def _createCanvas(self, name):
-        if name in self._canvases:
-            return self._canvases[name]
-
-        if name not in self._pf["CANVASES"]:
-            raise ValueError(f"Cannot locate a canvas named {name}")
-
-        cfg = self._pf["CANVASES"][name]
-        widgets = []
-        for wi in cfg.get("items") or []:
-            if wi["name"] in self._pf["CANVASES"]:
-                w = self._createCanvas(wi["name"])
-            elif wi["name"] in self._pf["WIDGETS"]:
-                w = self._createWidget(
-                    wi["name"], self._pf["WIDGETS"][wi["name"]]
-                )
-            else:
-                raise ValueError(
-                    f"Cannot locate a canvas (or widget) named {wi['name']}"
-                )
-
-            zorder = wi.get("z", canvas.ZSTD)
-            # Placement is (x, y, just)
-            # If placement includes all three values then use it
-            # If placement only contains two then these are the offset values, use (x, y, 'lt')
-            # If placement only has one value then this is the just, use (0, 0, just)
-            offset, just = self._adjustPlacement(
-                wi.get("placement", (0, 0, "lt"))
-            )
-            widgets.append((w, offset, just, zorder))
-
-        # name=None, size=None, placements=None
-        c = canvas(name=name, size=cfg["size"], dataset=self._dataset)
-        for we in widgets:
-            c.append(item=we[0], offset=we[1], just=we[2], z=we[3])
-        if "effect" in cfg:
-            c = self._addEffect(c, name, cfg)
-
-        self._canvases[name] = c
-        return c
-
-    def _createWidget(self, name, cfg):
-
-        if name in self._widgets:
-            return self._widgets[name]
-
-        # Create any needed resources
+        # Make font for widget if it is needed
         if "font" in cfg:
             cfg["font"] = self._createFont(cfg["font"])
+
+        # Resolve location of files if needed
+        # TODO:  Determine whether this functionality should be removed #
         if "mask" in cfg:
             cfg["mask"] = self._findFile(cfg["mask"], "images")
         if "file" in cfg:
             cfg["file"] = self._findFile(cfg["file"], "images")
+
+        # If widget is inside an effect, create widget that will be effected
         if "widget" in cfg:
-            if type(cfg["widget"]) is str:
-                cfg["widget"] = self._createWidget(
-                    None, self._pf["WIDGETS"][cfg["widget"]]
-                )
+            cfg["widget"] = self._createWidget(cfg["widget"], name, 0)
 
-        if "type" not in cfg:
-            raise KeyError(f"A widget type was not provided for {name}")
-        if cfg["type"] not in self._wParams:
-            raise TypeError(
-                f"{cfg['type']} is not a valid widget.  Valid values are {self._wParams.keys()}"
+        # If this is a widget
+        if cfg["type"] in self._wParams.keys():
+            kwargs = {
+                k: v
+                for k, v in cfg.items()
+                if k in self._wParams[cfg["type"]]
+                and k not in ("dataset", "name")
+            }
+            return widget.__dict__[cfg["type"]](
+                dataset=self._dataset, name=name, **kwargs
             )
 
-        cfg["name"] = name
-        cfg["dataset"] = self._dataset
-
-        # Translate format/variable into value
-        if cfg["type"] == "text":
-            if "format" in cfg:
-                if "variables" in cfg:
-                    cfg["value"] = 'f"{0}"'.format(
-                        cfg["format"].format(
-                            *[f"{{{i}}}" for i in cfg["variables"]]
-                        )
-                    )
-                    del cfg["variables"]
-                else:
-                    cfg["value"] = cfg["format"]
-                del cfg["format"]
-        elif cfg["type"] == "progressBar":
-            if "variables" in cfg:
-                cfg["value"] = cfg["variables"][0]
-                del cfg["variables"]
-
-        kwargs = {
-            k: v for k, v in cfg.items() if k in self._wParams[cfg["type"]]
-        }
-        w = widget.__dict__[cfg["type"]](**kwargs)
-
-        if "effect" in cfg:
-            w = self._addEffect(w, name, cfg)
-
-        if name:
-            self._widgets[name] = w
-        return w
-
-    def _addEffect(self, w, name, cfg):
-        if "type" not in cfg["effect"]:
-            raise TypeError(
-                "Cannot add an effect to a widget without a containing type.  Options are (slide, scroll, or popUp)"
+        # Else a collection
+        elif cfg["type"] in self._cParams.keys():
+            kwargs = {
+                k: v
+                for k, v in cfg.items()
+                if k in self._cParams[cfg["type"]]
+                and k not in ("dataset", "name")
+            }
+            col = collection.__dict__[cfg["type"]](
+                dataset=self._dataset, name=name, **kwargs
             )
-        if cfg["effect"]["type"] not in ["scroll", "slide", "popUp"]:
-            raise TypeError(
-                f"Cannot add a widget to an effect of type '{cfg['effect']['type']}'"
-            )
-        cfg["effect"]["widget"] = w
-        w = self._createWidget(name, cfg["effect"])
-
-        return w
+            items = cfg.get("items", [])
+            for nr, i in enumerate(items):
+                appendArgSpec = getfullargspec(col.append)[0][1:]
+                # contained item
+                appendArgs = {
+                    k: v
+                    for k, v in i.items()
+                    if k in appendArgSpec and k not in ["item", "dataset"]
+                }
+                ci = self._createWidget(i, name, nr)
+                col.append(item=ci, **appendArgs)
+            return col
 
     def _findFile(self, name, type):
 
         # If DEFAULTS/paths/type exists, add to search path
         try:
+            fp = pathlib.Path(self._pf["PATHS"][type]) / name
             search = [
-                pathlib.Path(self._pf["DEFAULTS"]["paths"][type]) / name,
-                pathlib.Path(__file__).parent
-                / self._pf["DEFAULTS"]["paths"][type]
-                / name,
+                fp,
             ]
         except KeyError:
             search = []
 
         search = search + [
             pathlib.Path(name),
-            pathlib.Path(__file__).parent / f"../{type}" / name,
         ]
 
         for s in search:
             if s.exists():
                 return s
         raise FileNotFoundError(
-            f"FileNotFoundError: File {name} of type '{type}' not found"
+            f"FileNotFoundError: File {name} not found at {os.path.realpath(search[0])}"
         )
 
     def _createFont(self, name):
@@ -371,11 +283,6 @@ class _tdLoader:
             for k, v in self._pf["FONTS"].items()
         }
 
-        # Convert sizes into tuples
-        for k, v, d in self._find("size", self._pf):
-            if type(v) is str and len(v.split(",")) > 1:
-                d[k] = tuple([int(v.strip()) for v in v.split(",")])
-
         # Convert actions into tuples
         for k, v, d in self._find("actions", self._pf):
             if type(v) is list:
@@ -386,66 +293,13 @@ class _tdLoader:
                     for i in v
                 ]
 
-        # Convert placements into tuples
-        for k, v, d in self._find("placements", self._pf):
-            if type(v) is list:
-                d[k] = [
-                    (
-                        i.split(",")[0],
-                        tuple([int(i) for i in i.split(",")[1:3]]),
-                    )
-                    if type(i) is str and len(i.split(",")) == 3
-                    else (
-                        i.split(",")[0],
-                        tuple([int(i) for i in i.split(",")[1:3]]),
-                        i.split(",")[3].strip("' \n"),
-                    )
-                    if type(i) is str and len(i.split(",")) == 4
-                    else i
-                    for i in v
-                ]
-
-        # Convert placement into tuples
-        for k, v, d in self._find("placement", self._pf):
-            if type(v) is str and len(v.split(",")) >= 1:
-                d[k] = tuple([v for v in v.split(",")])
-
-        # Convert gap into tuples
-        for k, v, d in self._find("gap", self._pf):
-            if type(v) is str and len(v.split(",")) > 1:
-                d[k] = tuple([v for v in v.split(",")])
-
         # Convert delay into tuples
         for k, v, d in self._find("delay", self._pf):
             if type(v) is str and len(v.split(",")) > 1:
                 d[k] = tuple([int(v) for v in v.split(",")])
 
-        # Convert singleton variables into lists
-        for k, v, d in self._find("variables", self._pf):
-            if type(v) is str:
-                d[k] = [v]
 
-        # Convert range string into tuple
-        for k, v, d in self._find("range", self._pf):
-            if type(v) is str:
-                d[k] = tuple([i.strip() for i in v.split(",")])
-
-        # Convert xy into four integer tuple
-        for k, v, d in self._find("xy", self._pf):
-            if type(v) is str:
-                d[k] = tuple([int(i) for i in v.split(",")])
-
-        # Convert canvas Z values into numeric values
-        for k, v, d in self._find("z", self._pf):
-            if type(v) is str:
-                d[k] = {
-                    "ZVHIGH": canvas.ZVHIGH,
-                    "ZHIGH": canvas.ZHIGH,
-                    "ZSTD": canvas.ZSTD,
-                }.get(v, v)
-
-
-def load(file, dataset=None, displaySize=None, defaultCanvas=None):
+def load(file, dataset=None, defaultCanvas=None, debug=False, demo=False):
     """
     Initialize and return a tinyDisplay windows object from a tinyDisplay yaml file.
 
@@ -453,20 +307,44 @@ def load(file, dataset=None, displaySize=None, defaultCanvas=None):
     :type file: str
     :param dataset: A dataset to provide variables to any widgets which require them
     :type dataset: tinyDisplay.utility.dataset
-    :param displaySize: A tuple containing the size of the display
-    :type displaySize: (int, int)
     :param defaultCanvas: A window (canvas) to display if there are no active windows
     :type defaultCanvas: tinyDisplay.widget.canvas
+    :param debug: Set resulting display into debug mode
+    :type debug: bool
+    :param demo: Set resulting database into demo mode
+    :type demo: bool
 
     :returns: windows collection
     :rtype: `tinyDisplay.collection.windows`
+
+    ..Note:
+        Debug mode causes exceptions to be thrown when dynamic variable
+        evaluation fails or any other issues occur during rendering.  Otherwise
+        these failures will be logged but otherwise ignored.
+
+        Demo mode causes the dataset to be populated with sample data to
+        enable simplified testing of display configurations.
     """
+    if debug:
+        from tinyDisplay import globalVars
+
+        globalVars.__DEBUG__ = True
+        logging.getLogger("tinyDisplay").setLevel(logging.DEBUG)
+
     tdl = _tdLoader(
         pageFile=file,
-        dataset=dataset,
-        displaySize=displaySize,
         defaultCanvas=defaultCanvas,
     )
-    tdl._createWindows()
 
-    return tdl._windows
+    tdl._createDataValidations()
+    if demo:
+        tdl._dataset.setDemo()
+    elif type(dataset) in [Dataset, dict]:
+        tdl._dataset.setDefaults()
+        for db in dataset:
+            if db != "prev":
+                tdl._dataset.update(db, dataset[db])
+    else:
+        tdl._dataset.setDefaults()
+
+    return tdl._createDisplay()

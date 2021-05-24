@@ -1,0 +1,266 @@
+DATASET:
+  # SOURCE: Volumio
+  db:
+    values:
+      status:  # Current state of the player ('play, 'stop', 'pause')
+        onUpdate:
+          - _VAL_.lower()
+          - store('db', 'lastStatus', time.monotonic())
+        default: stop
+        sample: play
+        validate: True if _VAL_ in ['stop', 'play', 'pause'] else False
+      position:  # position in the play queue of the current  track
+        type: int
+        default: 0
+      title:  # title of the current track
+        sample: The Ballad of Dorthy Parker
+      artist:  # name of the track's artist
+        sample: Prince
+      album:  # name of the album the track is on
+        sample: Sign "O" the Times
+      albumart:  # URL to an image of the album cover
+        validation: _VAL_[0:4].lower() == 'http'
+        sample: https://i.scdn.co/image/ab67616d0000b2733b67e4695d120ebfe9ca359a
+      uri:  # URI to the track
+        sample: spotify:track:13UqaNF8STsJSGKxd12rmy
+      trackType:  # The track's type (flac, mp3, spotify, etc)
+        sample: spotify
+      seek:  # Elapsed time in milliseconds
+        type: int
+        sample: 107998
+        onUpdate: store('db', 'elapsed', _VAL_/1000)
+      duration:  # duration of track in seconds
+        type: int
+        sample: 243
+      random:  # Play songs in random order if True
+        type: bool
+        default: False
+      repeat:  # Repeat playlist if True
+        type: bool
+      repeatSingle:  # Repeat current track continuously if True
+        type: bool
+      volume:  # Current volume from 0 to 100
+        type: int
+        onUpdate: 0 if _VAL_ < 0 else 100 if _VAL_ > 100 else _VAL_
+        default: 0
+        sample: 53
+      mute:  # True if player is muted
+        type: bool
+      stream:  # True if webradio else I don't really know
+        type: str
+        onUpdate: False if type(_VAL_) is str else _VAL_
+      updatedb:  # Update of database in progress
+        type: bool
+      volatile:  # Player playing from analog input
+        type: bool
+      samplerate:  # Sample rate used to encode track
+        sample: 44.1Khz
+      bitdepth:  # Number of bits used to encode track
+        sample: 24 bit
+      channels:  # number of channels in the track
+        type: int
+        default: 2
+        onUpdate: "store('db', 'channelDescription', {2: 'stereo', 1: 'mono', 0: 'unknown'}.get(_VAL_, 'multi'))"
+      service:  # Service that is the source of the currently playing music
+        sample: mpd
+      disableVolumeControl:
+        type: bool
+      playlist:
+        type: list
+        onUpdate:
+          - store('db', 'playlistLength', len(_VAL_))
+        sample:
+          - {'service': 'spop', 'uri': 'spotify:track:02MWAaffLxlfxAUY7c5dvx', 'artist': 'Glass Animals', 'album': 'Dreamland', 'title': 'Heat Waves', 'albumart': 'https://i.scdn.co/image/ab67616d0000b2739e495fb707973f3390850eea'}
+          - {'service': 'spop', 'uri': 'spotify:track:40rOlDoGejXXF4B0BYsjx8', 'artist': 'Glass Animals', 'album': 'Dreamland', 'title': 'Badu', 'albumart': 'https://i.scdn.co/image/ab67616d0000b2739e495fb707973f3390850eea'}
+        validate: len([True for i in _VAL_ if len(set(('uri', 'service', )).intersection(set(i)))==2]) == len(_VAL_)
+
+
+SOURCES:
+  volumio:
+    type: volumio
+    url: http://volumio.local:3000
+    messages:
+      pushState:
+        values:
+          seek:
+            type: int
+            sample: 107998
+            onUpdate: store('db', 'elapsed', _VAL_ / 1000)
+        onUpdate: store('db', _VAL_)
+      pushQueue:
+        onUpdate: store('db', 'playlistLength', len(_VAL_))
+
+
+FONTS:
+  small:
+    file: rajdhani-regular.ttf
+    type: truetype
+    size: 12
+  medium:
+    file: rajdhani-regular.ttf
+    type: truetype
+    size: 14
+  large:
+    file: rajdhani-regular.ttf
+    type: truetype
+    size: 16
+
+PATHS:
+  images: 'images/media/'
+  fonts: 'tests/reference/fonts/'
+
+COLORS:
+  background: &bg 0x7, 0x37, 0x63, 0xff
+  foreground: &fg 0, 0, 0, 0xff
+  transparent: &transparent 0, 0, 0, 0
+
+DEFAULTS:
+  display:
+    size: &dsize 320, 240
+    type: &dtype ili9341
+
+  zorder:
+    low: &ZLOW 10
+    mid: &ZMID 100
+    high: &ZHIGH 1000
+    Vhigh: &ZVHIGH 10000
+
+  widgets:
+    scroll: &scroll
+      type: scroll
+      gap: int(__self__['size'][0]/4), 0
+      size: 100, 8
+      wait: 'atStart'
+      actions:
+        - pause, 5
+        - rtl
+
+DISPLAY:
+  size: *dsize
+  items:
+  - name: PLAY
+    type: canvas
+    activeWhen: db['status'] == 'play'
+    size: *dsize
+    background: *bg
+    items:
+      - name: topBar
+        type: canvas
+        size: 320, 20
+        items:
+
+          - name: service
+            type: text
+            value: db['service']
+            placement: 2, -1, lm
+            font: small
+
+          - name: topBarRightIcons
+            type: stack
+            size: int(320 * 0.75), 20
+            just: rm
+            placement: -2, 0, rm
+            items:
+              - name: volumeIcon
+                type: index
+                value: ceil(db['volume']/25)
+                items:
+                  - type: image
+                    file: Volume_Off_16x16.png
+                  - type: image
+                    file: Volume_On_25_16x16.png
+                  - type: image
+                    file: Volume_On_50_16x16.png
+                  - type: image
+                    file: Volume_On_75_16x16.png
+                  - type: image
+                    file: Volume_On_100_16x16.png
+              - name: volume
+                type: text
+                value: db['volume']
+                font: small
+                foreground: "'white' if db['volume'] > 0 else 'grey'"
+
+
+      - name: middleRegion
+        type: canvas
+        size: 320, 200
+        placement: 0, 20
+        items:
+          - name: left
+            type: canvas
+            size: 160, 200
+            items:
+              - name: albumart
+                type: image
+                url: db['albumart']
+                size: 150, 150
+                placement: mm
+
+          - name: right
+            type: canvas
+            size: 160, 200
+            placement: 160, 0
+            items:
+              - name: album
+                type: text
+                font: large
+                value: db['album']
+                placement: 0, 20, mt
+              - name: artist
+                type: text
+                font: small
+                value: db['artist']
+                placement: 0, 36, mt
+              - name: title
+                type: text
+                font: small
+                value: db['title']
+                placement: 0, 60, mt
+              - name: encoding
+                type: text
+                font: small
+                value: f"{db['channelDescription'].upper()} {db['samplerate']} / {db['bitdepth']}"
+                placement: 0, -4, lb
+              - name: playListState
+                type: text
+                font: small
+                value: f"{db['position']+1} of {db['playlistLength']}"
+                just: rt
+                placement: -2, -4, rb
+
+      - name: bottomBar
+        type: canvas
+        size: 320, 20
+        placement: lb
+        items:
+          - name: position
+            type: text
+            font: small
+            value: time.strftime('%M:%S', time.gmtime(int(db['elapsed'])))
+            placement: 2, 0, lm
+          - name: duration
+            type: text
+            font: small
+            value: time.strftime('%M:%S', time.gmtime(int(db['duration'])))
+            placement: -2, 0, rm
+          - name: progress
+            type: progressBar
+            value: db['elapsed']
+            range: 0, db['duration']
+            foreground: f'white'
+            background: 0x3d, 0x85, 0xc6
+            fill: f'white'
+            size: (316, 2)
+            placement: mt
+          - name: playerStateIcon
+            type: index
+            placement: mm
+            value: 0 if db['status'] == 'play' else 1 if db['status'] == 'pause' else 2
+            items:
+              - type: image
+                file: play_16x16.png
+              - type: image
+                file: pause_16x16.png
+              - type: image
+                file: stop_16x16.png

@@ -20,7 +20,7 @@ from tinyDisplay.utility import dataset, image2Text
 
 
 @pytest.fixture(scope="function")
-def make_dataset(request):
+def make_dataset():
     ds = dataset()
     ds.add(
         "db",
@@ -75,7 +75,7 @@ def make_dataset(request):
         (
             "basicMedia.yaml",
             "basicMediaArtistAlert.png",
-            11,
+            15,
             "sys",
             {"temp": 102},
             0,
@@ -91,13 +91,15 @@ def test_load(make_dataset, yaml, ref, ticks, db, update, utick):
     refImg = Image.open(
         Path(__file__).parent / "reference/images/" / ref
     ).convert("1")
-    main = load(path, dataset=ds, displaySize=(100, 16))
+    main = load(path, dataset=ds)
 
+    first = True
     for i in range(ticks):
         if i == utick:
             if db:
                 ds.update(db, update)
-        main.render()
+        main.render(force=first)
+        first = False
 
     assert image2Text(main.image) == image2Text(
         refImg
@@ -107,7 +109,7 @@ def test_load(make_dataset, yaml, ref, ticks, db, update, utick):
 def test_yaml_include(make_dataset):
     ds = make_dataset
     path = Path(__file__).parent / "reference/pageFiles" / "basicMedia.yaml"
-    tdl = _tdLoader(pageFile=path, dataset=ds, displaySize=(100, 16))
+    tdl = _tdLoader(pageFile=path, dataset=ds)
 
     assert (
         tdl._pf["DEFAULTS"]["display"]["type"] == "weh001602a"
@@ -118,6 +120,6 @@ def test_file_open(make_dataset):
     ds = make_dataset
     path = Path(__file__).parent / "reference/pageFiles" / "bad.yaml"
     try:
-        tdl = _tdLoader(pageFile=path, dataset=ds, displaySize=(100, 16))
+        tdl = _tdLoader(pageFile=path)
     except FileNotFoundError as ex:
         assert str(ex) == f"Page File '{path}' not found"

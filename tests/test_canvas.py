@@ -13,7 +13,8 @@ import pytest
 from PIL import Image, ImageChops, ImageDraw
 
 from tinyDisplay.render.collection import canvas
-from tinyDisplay.render.widget import staticText, text
+from tinyDisplay.render.widget import text
+from tinyDisplay.utility import image2Text
 
 
 def compute_placement(size, wsize, offset, anchor):
@@ -79,22 +80,25 @@ def test_canvas_widget(size, offset, anchor):
     """
     Place widgets and verify position
     """
-    w = text("X")
+    w = text("X", mode="1")
     ri = w.render()[0]
 
     img = Image.new("1", size, 0)
     drw = ImageDraw.Draw(img)
     fnt = w.font
 
-    if anchor and offset:
-        c = canvas(size=size)
-        c.append(w, offset, anchor)
-    elif offset:
-        c = canvas(size=size)
-        c.append(w, offset, anchor)
-    else:
-        c = canvas(size=size)
-        c.append(w)
+    placement = (
+        (offset[0], offset[1], anchor)
+        if offset and anchor
+        else (offset[0], offset[1])
+        if offset
+        else anchor
+        if anchor
+        else None
+    )
+    c = canvas(size=size, mode="1")
+    c.append(w, placement)
+
     pos = compute_placement(size, fnt.getsize("X"), offset, anchor)
     drw.text(pos, "X", font=fnt, fill="white")
     assert (
@@ -104,17 +108,17 @@ def test_canvas_widget(size, offset, anchor):
     img = Image.new("1", size, 0)
     drw = ImageDraw.Draw(img)
 
-    c = canvas(size=size)
-    c.append(w, offset, anchor)
+    c = canvas(size=size, mode="1")
+    c.append(w, placement)
     drw.text(pos, "X", font=fnt, fill="white")
     assert (
         c.render()[0] == img
-    ), f"Placing 'X' by append on {size} canvas at {offset} anchored {anchor} failed\n{str(c)}"
+    ), f"Placing 'X' by append on {size} canvas at {offset} anchored {anchor} failed\n{str(c)} instead of {image2Text(img)}"
 
 
 def test_z_order():
-    w1 = staticText("ABC", size=(20, 8))
-    w2 = staticText("123", size=(20, 8))
+    w1 = text("ABC", size=(20, 8))
+    w2 = text("123", size=(20, 8))
 
     # Place second append at a higher z
     c1 = canvas(size=(20, 8))
@@ -142,9 +146,8 @@ def test_canvas_widget_change():
     c = canvas(size=(80, 16))
     c.append(w)
     img, m1 = c.render()
-    img, m2 = c.render()
     db["artist"] = "Moby"
     w._dataset.update("db", db)
-    img, m3 = c.render()
+    img, m2 = c.render()
 
-    assert m1 and m3 and not m2
+    assert not m1 and m2, "When artist changes, canvas should have changed"

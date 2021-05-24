@@ -9,8 +9,8 @@ Test of tinyDisplay windows class
 """
 import pytest
 
-from tinyDisplay.render.collection import canvas, sequence, windows
-from tinyDisplay.render.widget import rectangle, staticText, text
+from tinyDisplay.render.collection import canvas, sequence
+from tinyDisplay.render.widget import rectangle, text
 from tinyDisplay.utility import dataset, image2Text
 
 
@@ -28,47 +28,55 @@ def makeSetup():
     artist = text(value="f\"Artist {db['artist']}\"", dataset=ds)
     title = text(value="f\"Title {db['title']}\"", dataset=ds)
     album = text(value="f\"Album {db['album']}\"", dataset=ds)
-    alert = staticText(value="ALERT -- HOT")
+    alert = text(value="ALERT -- HOT")
     rectAlert = rectangle(
         (0, 0, alert.size[0] + 3, alert.size[1] + 3),
         outline="white",
         fill="black",
     )
 
-    time = staticText("12:32p")
+    time = text("12:32p")
 
     # Canvases
-    cAT = canvas(size=(80, 16))
+    cAT = canvas(size=(80, 16), duration=2)
     cAT.append(artist)
-    cAT.append(title, offset=(0, 8))
+    cAT.append(title, placement=(0, 8))
 
-    cAA = canvas(size=(80, 16))
+    cAA = canvas(
+        size=(80, 16),
+        duration=2,
+        activeWhen="len(db['album']) > 0",
+        dataset=ds,
+    )
     cAA.append(artist)
-    cAA.append(album, offset=(0, 8))
+    cAA.append(album, placement=(0, 8))
 
-    seqPlay = sequence(dataset=ds, size=(80, 16))
-    seqPlay.append(cAT, duration=2)
-    seqPlay.append(cAA, duration=2, condition="len(db['album']) > 0")
+    seqPlay = sequence(
+        size=(80, 16), activeWhen="sys['state'] == 'play'", dataset=ds
+    )
+    seqPlay.append(cAT)
+    seqPlay.append(cAA)
 
-    cStop = canvas(size=(80, 16))
-    cStop.append(time, just="mm")
+    cStop = canvas(
+        size=(80, 16), activeWhen="sys['state'] == 'stop'", dataset=ds
+    )
+    cStop.append(time, placement="mm")
 
-    cAlert = canvas(size=(64, 12))
-    cAlert.append(alert, just="mm")
-    cAlert.append(rectAlert, just="mm")
-
-    wins = windows(size=(80, 16), dataset=ds)
-    wins.append(seqPlay, condition="sys['state'] == 'play'")
-    wins.append(cStop, condition="sys['state'] == 'stop'")
-    wins.append(
-        cAlert,
-        just="mm",
+    cAlert = canvas(
+        size=(64, 12),
         duration=5,
         minDuration=2,
         coolingPeriod=10,
-        z=canvas.ZVHIGH,
-        condition="sys['temp'] >= 100",
+        activeWhen="sys['temp'] >= 100",
+        dataset=ds,
     )
+    cAlert.append(alert, placement="mm")
+    cAlert.append(rectAlert, placement="mm")
+
+    wins = canvas(size=(80, 16), dataset=ds)
+    wins.append(seqPlay)
+    wins.append(cStop)
+    wins.append(cAlert, placement="mm", z=canvas.ZVHIGH)
 
     return (ds, wins, seqPlay, cStop, cAlert, cAT, cAA)
 
@@ -79,7 +87,7 @@ def test_sequence_timing(makeSetup):
 
     for i in range(10):
         # Render two times for sequence entry cAT
-        sImg = wins.render()[0]
+        sImg = wins.render(force=True)[0]
         assert (
             sImg == wins.render()[0]
         ), f"Images should have been identical but instead were \n{image2Text(sImg)}\nand\n{str(wins)}"
@@ -118,10 +126,10 @@ def test_alert_timing(makeSetup):
     ds.update("sys", {"temp": 100})
 
     canvasWAlert = canvas(size=(80, 16))
-    canvasWAlert.append(cAlert, just="mm")
+    canvasWAlert.append(cAlert, placement="mm")
     canvasWAlert.append(cAT)
 
-    sAlert = wins.render()[0]
+    sAlert = wins.render(force=True)[0]
     assert (
         sAlert == canvasWAlert.render()[0]
     ), f"Images should have been identical but instead were \n{image2Text(sAlert)}\nand\n{str(canvasWAlert)}"

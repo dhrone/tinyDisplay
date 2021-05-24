@@ -3,14 +3,10 @@ FONTS:
   large: Vintl01_10x16.fnt
   tiny: upperascii_3x5.fnt
 
-PATHS:
-  'images': 'tests/reference/images/'
-  'fonts': 'tests/reference/fonts/'
-
 DEFAULTS:
   display:
     size: &dsize 100, 16
-    type: &dtype weh001602a
+    type: &dtype !include display.cfg
 
   zorder:
     low: &ZLOW 10
@@ -18,77 +14,111 @@ DEFAULTS:
     high: &ZHIGH 1000
     Vhigh: &ZVHIGH 10000
 
+  paths:
+    'images': '../tests/reference/images'
+    'fonts': '../tests/reference/fonts/'
+
   widgets:
     scroll: &scroll
       type: scroll
-      gap: __self__['size'][0]/4, 0
+      gap: 25%, 0
       size: 100, 8
       wait: 'atStart'
       actions:
         - pause, 5
         - rtl
 
+WINDOWS:
+  - PLAY:
+
+  PLAY:
+    condition: db['state']=='play'
+    size: *dsize
+    items:
+      - sequence:
+          - canvas:
+            - text:
+
+          -
+      - sequence:
+
+
+
+
+#######################
+
+  stopTime:
+    condition: db['state']=='stop'
+
+  cAlert:
+    condition: sys['temp'] >= 100
+    placement: mm
+    duration: 5
+    minDuration: 2
+    coolingPeriod: 10
+    z: *ZVHIGH
 WIDGETS:
 
   # STARTING WIDGET
-  splash: &splash
+  splash:
       type: image
       file: pydPiper_splash.png
 
   ### PLAY WIDGETS ###
 
   # NOW PLAYING
-  nowPlaying: &nowPlaying
+  nowPlaying:
       type: text
-      value: f"NOW PLAYING"
+      format: NOW PLAYING
       font: tiny
-  nowPlayingData: &nowPlayingData
+  nowPlayingData:
       type: text
       font: tiny
-      value: f"{db['plPos']} OF {db['plLen']}"
+      variables: ["db['plPos']", "db['plLen']"]
+      format: "{0} OF {1}"
       size: 50, 5
       just: rt
 
   # ARTIST, TITLE, ALBUM
-  artist: &artist
+  artist:
       type: text
       value: db['artist']
       effect: *scroll
-  album: &album
+  album:
       type: text
       value: db['album']
       effect: *scroll
-  title: &title
+  title:
       type: text
       value: db['title']
       effect: *scroll
 
   # PROGRESS
-  songProgress: &songProgress
+  songProgress:
       type: progressBar
       value: db['elapsed']
       range: 0, db['length']
       size: 100, 1
 
   # TIME
-  time: &time
+  time:
       type: text
       font: large
       just: rt
       value: time.strftime('%-I:%M',time.localtime(sys['time']))
       size: 50, 16
-  amPm: &amPm
+  amPm:
       type: text
       font: tiny
       value: time.strftime('%p',time.localtime(sys['time']))
 
   # ALERT
-  alert: &alert
+  alert:
       type: text
       just: rt
-      value: f'ALERT -- HOT'
+      value: 'ALERT -- HOT'
 
-  rectAlert: &rectAlert
+  rectAlert:
       type: rectangle
       xy: 0, 0, 63, 11
       fill: black
@@ -97,96 +127,86 @@ WIDGETS:
 
 CANVASES:
 
-  playArtist: &playArtist
-    type: canvas
+  playArtist:
     items:
-      - <<: *artist
+      - name: artist
         placement: 0, 6, lt
-      - <<: *nowPlaying
+      - name: nowPlaying
         placement: 0, 0
-      - <<: *nowPlayingData
+      - name: nowPlayingData
         placement: 50, 0
-      - <<: *songProgress
+      - name: songProgress
         placement: 0, 15
     size: *dsize
 
-  playAlbum: &playAlbum
-    type: canvas
+  playAlbum:
     items:
-      - <<: *album
+      - name: album
         placement: 0, 6
-      - <<: *nowPlaying
+      - name: nowPlaying
         placement: 0, 0
-      - <<: *nowPlayingData
+      - name: nowPlayingData
         placement: 50, 0
-      - <<: *songProgress
+      - name: songProgress
         placement: 0, 15
     size: *dsize
 
-  playTitle: &playTitle
-    type: canvas
+  playTitle:
     items:
-      - <<: *title
+      - name: title
         placement: 0, 6
-      - <<: *nowPlaying
+      - name: nowPlaying
         placement: 0, 0
-      - <<: *nowPlayingData
+      - name: nowPlayingData
         placement: 50, 0
-      - <<: *songProgress
+      - name: songProgress
         placement: 0, 15
     size: *dsize
 
-  stopTime: &stopTime
-    type: canvas
+  stopTime:
     items:
-      - <<: *time
+      - name: time
         placement: 16, 1
-      - <<: *amPm
+      - name: amPm
         placement: 70, 2
     size: *dsize
-    activeWhen: db['state']=='stop'
 
-  cAlert: &cAlert
-    type: canvas
+  cAlert:
     items:
-      - <<: *rectAlert
+      - name: rectAlert
         placement: mm
         z: *ZLOW
-      - <<: *alert
+      - name: alert
         placement: mm
         z: *ZHIGH
+
     size: 64, 12
-    activeWhen: sys['temp'] >= 100
 
 
 SEQUENCES:
-  seqPlay: &seqPlay
-    type: sequence
+  seqPlay:
     items:
-      - <<: *playArtist
+      - name: playArtist
         duration: 15
-      - <<: *playAlbum
+      - name: playAlbum
         duration: 15
-      - <<: *playTitle
+      - name: playTitle
         duration: 15
-      - <<: *splash
+      - name: splash
         duration: 5
-    activeWhen: db['state']=='play'
 
 
-DISPLAY:
-  size: *dsize
-  items:
-    - name: PLAY
-      <<: *seqPlay
+WINDOWS:
+  seqPlay:
+    condition: db['state']=='play'
 
-    - name: STOP
-      <<: *stopTime
+  stopTime:
+    condition: db['state']=='stop'
 
-    - name: ALERT
-      <<: *cAlert
-      placement: mm
-      duration: 5
-      minDuration: 2
-      coolingPeriod: 9
-      z: *ZVHIGH
+  cAlert:
+    condition: sys['temp'] >= 100
+    placement: mm
+    duration: 5
+    minDuration: 2
+    coolingPeriod: 10
+    z: *ZVHIGH

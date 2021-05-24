@@ -1,0 +1,141 @@
+# yaml test
+
+WIDGETS:
+  nowPlaying: &tnowPlaying
+    type: text
+    format: NOW PLAYING
+    font: tony
+
+CANVAS:
+  items:
+    - <<: *tnowPlaying
+      placement: 0, 0, lt
+
+
+FONTS:
+  small: hd44780.fnt
+  large: Vintl01_10x16.fnt
+  tiny: upperascii_3x5.fnt
+
+
+DEFAULTS:
+  size: &dsize 100, 16
+
+  scroll: &scroll
+    type: scroll
+    gap: 25%, 0
+    size: 100, 8
+    wait: 'atStart'
+    actions:
+      - pause, 5
+      - rtl
+
+  paths:
+    'images': '../tests/reference/images'
+    'fonts': '../tests/reference/fonts/'
+
+  zorder:
+    low: &ZLOW 10
+    mid: &ZMID 100
+    high: &ZHIGH 1000
+    Vhigh: &ZVHIGH 10000
+
+DISPLAY:
+  - name: PLAY
+    type: sequence
+    activeWhen: db['state'] == 'play'
+    size: *dsize
+    items:
+      - &playArtist
+        type: canvas
+        duration: 15
+        items:
+          - &nowPlaying
+            type: text
+            value: NOW PLAYING
+            font: tiny
+            placement: 0, 0
+          - &nowPlayingData
+            type: text
+            value: "db['plPos'] OF db['plLen']"
+            size: 50, 5
+            just: rt
+            font: tiny
+            placement: 50, 0
+          - &artist
+            type: text
+            value: db['artist']
+            effect: *scroll
+            placement: 0, 6, lt
+          - &songProgress
+            type: progressBar
+            value: db['elapsed']
+            range: 0, db['length']
+            size: 100, 1
+            placement: 0, 15
+      - &playAlbum
+        type: canvas
+        duration: 15
+        items:
+          - *nowPlaying
+          - *nowPlayingData
+          - &album
+            type: text
+            value: db['album']
+            effect: *scroll
+            placement: 0, 6, lt
+          - *songProgress
+      - &playTitle
+        type: canvas
+        duration: 15
+        items:
+          - *nowPlaying
+          - *nowPlayingData
+          - &title
+            type: text
+            value: db['title']
+            effect: *scroll
+            placement: 0, 6, lt
+          - *songProgress
+      - &splash
+        type: image
+        duration: 5
+        file: pydPiper_splash.png
+  - name: STOP
+    type: canvas
+    activeWhen: db['state'] == 'play'
+    size: *dsize
+    items:
+      - type: text
+        font: large
+        just: rt
+        value: time.strftime('%-I:%M',time.localtime(sys['time']))
+        size: 50, 16
+        placement: 16, 1
+      - type: text
+        font: tiny
+        just: rt
+        value: time.strftime('%p',time.localtime(sys['time']))
+        placement: 70, 2
+
+  - name: ALERT
+    type: canvas
+    activeWhen: sys['temp'] >= 100
+    placement: mm
+    duration: 5
+    minDuration: 2
+    coolingPeriod: 10
+    z: *ZVHIGH
+    size: 64, 12
+    items:
+      - type: rectangle
+        xy: 0, 0, 63, 11
+        fill: black
+        outline: white
+        z: *ZLOW
+        placement: mm
+      - type: text
+        just: rt
+        fill: black
+        value: 'ALERT -- HOT'
+        placement: mm

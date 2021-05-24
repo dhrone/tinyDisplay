@@ -15,7 +15,7 @@ from tinyDisplay.render.widget import rectangle
 
 def test_rectangle_widget():
 
-    img = Image.new("1", (10, 8))
+    img = Image.new("RGBA", (10, 8), "black")
     d = ImageDraw.Draw(img)
     d.rectangle((0, 0, 9, 7), outline="white")
 

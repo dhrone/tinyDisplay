@@ -9,12 +9,26 @@ Utility functions to support tinyDisplay.
 """
 
 import builtins
+import logging
+import math
+import os
 import time
+import warnings
 from collections import deque
+from pathlib import Path
 from queue import Empty, Queue
-from threading import Event, RLock, Thread
+from threading import Event, Thread
 
+from PIL import ImageColor
 from simple_pid import PID
+
+from tinyDisplay import globalVars
+from tinyDisplay.exceptions import (
+    CompileError,
+    NoChangeToValue,
+    UpdateError,
+    ValidationError,
+)
 
 
 class animate(Thread):
@@ -254,7 +268,7 @@ class animate(Thread):
             loopTime = time.time() - startLoop
 
 
-class _evaluate:
+class evaluator:
     """
     Class to compile and evaluate values for a dataset.
 
@@ -263,7 +277,7 @@ class _evaluate:
     """
 
     __allowedBuiltIns = {
-        "__import__": builtins.__import__,
+        # "__import__": builtins.__import__,
         "abs": builtins.abs,
         "bin": builtins.bin,
         "bool": builtins.bool,
@@ -274,6 +288,7 @@ class _evaluate:
         "format": builtins.format,
         "hex": builtins.hex,
         "int": builtins.int,
+        "set": builtins.set,
         "len": builtins.len,
         "list": builtins.list,
         "max": builtins.max,
@@ -284,8 +299,13 @@ class _evaluate:
         "str": builtins.str,
         "sum": builtins.sum,
         "tuple": builtins.tuple,
+        "type": builtins.type,
         "time": time,
+        "Path": Path,
     }
+    for m in [i for i in dir(math) if i[0] != "_"]:
+        __allowedBuiltIns[m] = getattr(math, m)
+
     __allowedMethods = [
         "get",
         "lower",
@@ -297,34 +317,66 @@ class _evaluate:
         "gmtime",
         "localtime",
         "timezone",
+        "items",
+        "monotonic",
     ]
 
-    def __init__(self, child):
+    def __init__(self, dataset, localDataset=None, debug=False):
+        self._dataset = dataset
+        self._localDataset = localDataset if localDataset is not None else {}
+        self._debug = debug
+
+        self._logger = logging.getLogger("tinyDisplay")
+
+        # Defines allowable functions for compiled statements
         self._allowedBuiltIns = dict(self.__allowedBuiltIns)
-        self._changed = {}
         self._allowedBuiltIns["changed"] = self._isChanged
         self._allowedBuiltIns["select"] = self._select
-        self._allowedBuiltIns["history"] = child.history
+        self._allowedBuiltIns["history"] = self._dataset.history
+        self._allowedBuiltIns["store"] = self.store
         self._allowedMethods = list(self.__allowedMethods)
-
-        self._child = child
+        self._changed = {}
 
         # Used to support methods that will be called by eval but need to be
         #    able to distinguish which object is calling it (e.g. changed)
-        #    _evalLock protects usage of _currentCodeID if this code is used
-        #    in a multithreaded application.
-        self._currentCodeID = None
-        self._evalLock = RLock()
+        self._changeID = None
+
+        # Holds the collection of statements that this evaluator manages
+        self._statements = {}
+
+    def store(self, dbName=None, key=None, value=None):
+        """
+        Store new value to dataset.
+
+        Updates a database with new data.  If in addition to the dbName, only a
+        single value is provided it updates the entire database with the
+        the provided value.  If two additional arguments are provided, it
+        updates a specific key within the database
+
+        :param dbName: the name of the database within the dataset to update
+        :type dbName: str
+        :param key: (optional) If updating a single key within the database,
+            the value of that key
+        :param value: The data to use for the update
+        :raises NoChangeToValue: To signal that store is not updating the
+            current database value.
+        """
+
+        if key is not None:
+            self._dataset.update(dbName, {key: value})
+        else:
+            self._dataset.update(dbName, key)
+        raise NoChangeToValue()
 
     def _isChanged(self, value):
         ret = (
             False
-            if self._currentCodeID not in self._changed
+            if self._changeID not in self._changed
             else True
-            if self._changed.get(self._currentCodeID) != value
+            if self._changed.get(self._changeID) != value
             else False
         )
-        self._changed[self._currentCodeID] = value
+        self._changed[self._changeID] = value
         return ret
 
     @staticmethod
@@ -338,26 +390,22 @@ class _evaluate:
                 return args[i + 1]
         return ""
 
-    def compile(self, input, dataset=None, data=None):
+    def compile(self, source=None, name=None, default=None, validator=None):
         """
         Compile provided input.
 
-        :param input: The value to convert into compiled code
-        :type input: str
-        :param dataset: The dataset that will be used when compiled code is evaluated
-        :type dataset: `tinyDisplay.utility.dataset`
-        :param dataset: A dataset that will be temporarily merged into the
-            internal dataset during the compile
-        :type dataset: `tinyDisplay.utility.dataset`
-        :param data: A dict that will be temporarily merged with the internal
-            dataset during the compile
-        :type data: dict
-        :returns: A tuple containing the compiled code and the input that was used
-            to create it.
-        :rtype: (code object, str)
-        :raises RuntimeError: if both a dataset and a data argument are provided
-        :raises NameError: if input includes unauthorized function or references
-            a database that is not within the dataset
+        :param source: The value to convert into compiled code
+        :type source: str or `callable`
+        :param name: the name that will be used to reference the resulting
+            code (optional).  If not provided a, a unique name will be created
+            using id(source).
+        :type name: str
+        :param default: A value to use if an evaluation of this code fails
+            (optional)
+        :type validator: A function to call to validate the answer when ever
+            this code gets evaluated (optional)
+        :raises CompileError: if input includes unauthorized functions
+            or references data that is not within the dataset
 
         ..note:
             Compilation is limited to the set of authorized functions and the
@@ -375,131 +423,200 @@ class _evaluate:
                 "bad == True" will not compile
                 "db['value'] == bad" will not compile
         """
-        if data and dataset:
-            raise RuntimeError(
-                "You can provide data or a dataset but not both"
-            )
 
-        dataset = dataset if dataset else data if data else {}
-        code = compile(input, "<string>", "eval")
-        for name in code.co_names:
-            if (
-                name not in self._allowedBuiltIns
-                and name not in self._allowedMethods
-                and name not in self._dataset
-                and name not in dataset
-                and name not in self._child
-            ):
-                raise NameError(
-                    f"While compiling '{input}' discovered {name} which is not a valid function or variable"
+        # If code is string then compile the string, otherwise return code unchanged
+        # as it can also be either be a static value or a function
+        func = None
+        if type(source) is str:
+            warnings.simplefilter("error")
+            try:
+                code = compile(source, "<string>", "eval")
+                for n in code.co_names:
+                    if (
+                        n not in self._allowedBuiltIns
+                        and n not in self._allowedMethods
+                        and n not in self._dataset
+                        and n not in self._localDataset
+                    ):
+                        raise CompileError(
+                            f"Compile Error for {name}: while processing {source}, name '{n}' is not defined"
+                        )
+
+                func = lambda v: eval(
+                    code, {"__builtins__": self._allowedBuiltIns}, v
                 )
-        return (code, input)
+            except (ValueError, SyntaxError) as ex:
+                raise CompileError(
+                    f"Compile Error for {name}: {ex.__class__.__name__} while processing {source}: {ex}"
+                )
+            finally:
+                warnings.simplefilter("default")
+        elif callable(source):
+            func = source
 
-    def eval(
-        self,
-        f,
-        dataset=None,
-        data=None,
-        suppressErrors=None,
-        returnOnError=None,
-    ):
+        # If input is not a function or a evaluatable string that contains
+        # no variables (e.g. always returns the same value) or a syntax error
+        # then no need to calculate the value more than once
+        static = (
+            True
+            if not func
+            or (hasattr(func, "co_names") and len(func.co_names) == 0)
+            else False
+        )
+
+        self._statements[name or id(source)] = {
+            "func": func,
+            "static": static,
+            "default": default,
+            "source": source,
+            "validator": validator,
+        }
+
+    def recompile(self):
+        """Recompile all of the statements."""
+
+        current_statements = self._statements
+        self._statements = {}
+        for k, v in current_statements.items():
+            self.compile(source=v["source"], name=k, default=v["default"])
+
+    def evalAll(self):
+        """
+        Evaluate all of the statements contained within the evaluator.
+
+        :returns: True if any of the values have changed
+        :rtype: bool
+        """
+
+        cd = {**self._dataset, **self._localDataset}
+        changed = False
+        for k, statement in self._statements.items():
+            self.eval(k, cd)
+            if self.changed(k):
+                changed = True
+        return changed
+
+    def eval(self, key, combinedDataset=None):
         """
         (Eval)uate the function and return resulting value.
 
-        :param f: The compiled code (or function) to execute
-        :type f: Either a tuple containing compiled code and the string that was compiled
-            or a function
-        :param dataset: A dataset to be merged with the internal dataset during the
-            processing of this eval
-        :type dataset: `tinyDisplay.utility.dataset`
-        :param data: A dict to be merged with the internal dataset during the
-            processing of this eval
-        :type data: dict
-        :param suppressErrors: Determines whether KeyErrors and TypeErrors in the
-            evaluation should be ignored.  If true, then returnOnError is returned
-            when these two errors occur.
-        :type suppressErrors: bool
-        :param returnOnError: The value to return when a KeyError or TypeError
-            occurs and suppressErrors is True.
-        :type returnOnError: object
-        :returns: The results of the eval.  It can be any valid python object
-            (default is an empty string e.g. '')
+        :param key: The name of the stored evaluation statement to evaluate
+        :type key: str
+        :param combinedDataset: A dataset to use for the evaluation (optional).  If
+            not provided, the dataset (and localDataset) provided when the
+            evaluator was created will be used.
+        :type combinedDataset: dict
+        :returns: The results of the eval.  It can be any valid python object.
         :rtype: object
-        :raises RuntimeError: if both a dataset and a data argument are provided
+        :raises NoChangeToValue: If needed to signal that this evaluation is
+            not intended to produce a new value (used by store function)
+        :raises ValidationError: If the evaluated value failes its validation test
         """
-        if data is not None and dataset is not None:
-            raise RuntimeError(
-                "You can provide data or a dataset but not both"
-            )
-        dataset = (
-            dataset
-            if dataset is not None
-            else data
-            if data is not None
-            else None
+
+        d = (
+            combinedDataset
+            if combinedDataset is not None
+            else {**self._dataset, **self._localDataset}
         )
 
-        # Pull values from object if not included as arguments
-        suppressErrors = suppressErrors or self._suppressErrors
-        returnOnError = returnOnError or self._returnOnError
+        statement = (
+            self._statements[key]
+            if id(key) not in self._statements
+            else self._statements[id(key)]
+        )
 
-        d = {**self._dataset, **dataset} if dataset else self._dataset
+        func, static, source, default = (
+            statement["func"],
+            statement["static"],
+            statement["source"],
+            statement["default"],
+        )
 
-        # If we've receive a tuple it was hopefully produced by _evaluate.compile
-        f, s = f if type(f) == tuple else (f, None)
+        self._changeID = (id(self), id(statement))
 
-        # If we've received a compilation from _evaluate.compile, evaluate it and return the answer
-        if f.__class__.__name__ == "code":
-            retval = self._eval(
-                f,
-                d,
-                s,
-                suppressErrors=suppressErrors,
-                returnOnError=returnOnError,
-            )
-            return retval
-        # If we've received a method or function, execute it and return the answer
-        elif f.__class__.__name__ in ["method", "function"]:
-            return f(d)
+        if func is not None:
+            if not static or "prevValue" not in statement:
+                try:
+                    ans = func(d)
+                except NoChangeToValue:
+                    raise
+                except Exception as ex:
+                    if ex.__class__.__name__ not in [
+                        "KeyError",
+                        "TypeError",
+                        "AttributeError",
+                    ]:
+                        raise ex.__class__(
+                            f'{ex.__class__.__name__} while evaluating {source}: \'{" ".join(ex.args)}\''
+                        )
+                    ans = default
+            else:
+                ans = statement["prevValue"]
         else:
-            # If we've received anything else, it could be from a variable that is only optionally dynamic (e.g. evaluatable)
-            # In this case, the value did not need to be calculated so return it back to the calling method
-            return f
+            ans = statement["source"]
 
-    def _eval(
-        self, code, variables, input, suppressErrors=False, returnOnError=""
-    ):
-
-        # If suppressErrors set
-        #  return returnOnError value when KeyError or TypeError is thrown.
-
-        # This in effect causes widgets to be blank when there is an error in
-        # the evaluated statement (such as a missing key in the dataset)
-
-        # Need to protect evaluation due to shared self._currentCodeID possibility
-        self._evalLock.acquire()
-        self._currentCodeID = id(code)
         try:
-            return eval(
-                code, {"__builtins__": self._allowedBuiltIns}, variables
+            statement["changed"] = (
+                True
+                if "prevValue" in statement and statement["prevValue"] != ans
+                else False
             )
-        except KeyError as e:
-            if suppressErrors:
-                return returnOnError
-            raise KeyError(f"KeyError: {e} while trying to evaluate {input}")
-        except TypeError as e:
-            if suppressErrors:
-                return returnOnError
-            raise TypeError(f"Type Error: {e} while trying to evalute {input}")
-        except AttributeError as e:
-            raise AttributeError(
-                f"Attribute Error: {e} while trying to evalute {input}"
-            )
-        finally:
-            self._evalLock.release()
+        # If objects are not comparible
+        except:
+            statement["changed"] = True
+
+        statement["prevValue"] = ans
+
+        if statement["validator"] is not None:
+            if not statement["validator"](ans):
+                raise ValidationError(f"{ans} is not a valid value for {key}")
+        return ans
+
+    def changed(self, key):
+        """
+        Check if the evaluator statement named `key` has recently changed.
+
+        :param key: The name of the statement
+        :type key: str
+        :returns: True if the value of the statement changed during the last
+            evaluation of it.
+        """
+        return (
+            self._statements[key]["changed"]
+            if key in self._statements and "changed" in self._statements[key]
+            else False
+        )
+
+    def __getitem__(self, key):
+        # Try retrieving using both the key value and an id of the key value
+        if id(key) not in self._statements:
+            if "prevValue" in self._statements[key]:
+                return self._statements[key]["prevValue"]
+
+        if "prevValue" in self._statements[key]:
+            return self._statements[key]["prevValue"]
+
+        return None
+
+    def __len__(self):
+        return len(self._statements)
+
+    def _makeDict(self):
+        return {
+            k: v["prevValue"] if "prevValue" in v else None
+            for k, v in self._statements.items()
+        }
+
+    def __iter__(self):
+        d = self._makeDict()
+        return d.__iter__()
+
+    def __repr__(self):
+        d = self._makeDict()
+        return d.__repr__()
 
 
-class dataset(_evaluate):
+class dataset:
     """
     Class to manage data that tinyDisplay will use to render widgets and test conditions.
 
@@ -524,19 +641,13 @@ class dataset(_evaluate):
     def __init__(
         self,
         dataset=None,
-        data=None,
-        suppressErrors=False,
-        returnOnError="",
         historySize=100,
         lookBack=10,
     ):
 
-        if data is not None and dataset is not None:
-            raise RuntimeError(
-                "You must provide data or a dataset but not both"
-            )
-
-        dataset = data or dataset or {}
+        self._logger = logging.getLogger("tinyDisplay")
+        self._logger.warning("Starting Dataset")
+        dataset = dataset if dataset is not None else {}
         for tk in (
             (False, i) if type(i) is not str else (True, i)
             for i in dataset.keys()
@@ -545,9 +656,6 @@ class dataset(_evaluate):
                 raise ValueError(
                     f"All datasets within a database must use strings as names.  This dataset has a database named {tk[1]}"
                 )
-
-        self._suppressErrors = suppressErrors
-        self._returnOnError = returnOnError
 
         # Set the number updates that the dataset will store
         self._historySize = int(historySize)
@@ -565,6 +673,9 @@ class dataset(_evaluate):
 
         # Initialize empty dataset
         self._dataset = {}
+
+        # Initialize validation / transformation configuration
+        self._validset = {}
 
         # Start the clock
         self._startedAt = time.time()
@@ -588,8 +699,11 @@ class dataset(_evaluate):
             for k in dataset:
                 self.update(k, dataset[k])
 
-        # Initialize evaluate parent to evaluate statements for this dataset
-        super().__init__(self)
+        self._debug = globalVars.__DEBUG__
+        self._localDB = {"_VAL_": None}
+        self._dV = evaluator(
+            self, localDataset=self._localDB, debug=self._debug
+        )
 
     def __getitem__(self, key):
         if key == "prev":
@@ -636,6 +750,335 @@ class dataset(_evaluate):
         """
         return self._dataset.keys()
 
+    @staticmethod
+    def _getType(t):
+        if type(t) is type:
+            return t
+        return {
+            "int": int,
+            "float": float,
+            "complex": complex,
+            "str": str,
+            "bool": bool,
+            "dict": dict,
+            "list": list,
+            "range": range,
+            "set": set,
+        }[t]
+
+    @staticmethod
+    def _getDefaultForType(t):
+        return {
+            int: 0,
+            float: 0.0,
+            complex: complex(),
+            str: "",
+            bool: False,
+            dict: {},
+            list: [],
+            range: (0),
+            set: set(),
+        }[t]
+
+    def _rVKey(self, dbName, key, vtype, onUpdate, default, sample, validate):
+        if key not in self._validset[dbName]:
+            self._validset[dbName][key] = {}
+        self._validset[dbName][key]["type"] = (
+            self._getType(vtype) if vtype is not None else str
+        )
+
+        if default is not None:
+            self._validset[dbName][key]["default"] = default
+        else:
+            self._validset[dbName][key]["default"] = self._getDefaultForType(
+                self._validset[dbName][key]["type"]
+            )
+        self._validset[dbName][key]["sample"] = default
+
+        if sample is not None:
+            self._validset[dbName][key]["sample"] = sample
+
+        if onUpdate is not None:
+            self._validset[dbName][key]["onUpdate"] = onUpdate
+            if type(onUpdate) is list:
+                for i, u in enumerate(onUpdate):
+                    self._dV.compile(
+                        u, name=f"{dbName}.{key}.onUpdate{i}", default=None
+                    )
+            else:
+                self._dV.compile(
+                    onUpdate, name=f"{dbName}.{key}.onUpdate", default=None
+                )
+
+        if validate is not None:
+            self._validset[dbName][key]["validate"] = validate
+            if type(validate) is list:
+                for i, v in enumerate(validate):
+                    self._dV.compile(
+                        v, name=f"{dbName}.{key}.validate{i}", default=False
+                    )
+            else:
+                self._dV.compile(
+                    validate, name=f"{dbName}.{key}.validate", default=False
+                )
+
+    def _rVDB(self, dbName, onUpdate, validate):
+
+        if onUpdate is not None:
+            self._validset[dbName]["onUpdate"] = onUpdate
+            if type(onUpdate) is list:
+                for i, u in enumerate(onUpdate):
+                    self._dV.compile(
+                        u, name=f"{dbName}.onUpdate{i}", default=None
+                    )
+            else:
+                self._dV.compile(
+                    onUpdate, name=f"{dbName}.onUpdate", default=None
+                )
+
+        if validate is not None:
+            self._validset[dbName]["validate"] = validate
+            if type(validate) is list:
+                for i, v in enumerate(validate):
+                    self._dV.compile(
+                        v, name=f"{dbName}.validate{i}", default=False
+                    )
+            else:
+                self._dV.compile(
+                    validate, name=f"{dbName}.validate", default=False
+                )
+
+    def registerValidation(self, dbName=None, key=None, **kwargs):
+        """
+        Add validation data for a database or data element within a database.
+
+        :param dbName:  The name of the database
+        :type dbName: str
+        :param key: The value of the key (optional).  If not provided, the
+            validation data will be for the whole database
+        :type key: str
+        :param **kwargs:  The set of validation to add to the database
+
+        ..note:
+            There are five validation capabilities that can be added.
+            * onUpdate: A function (or list of functions) that can take
+                actions on received data including storing new values in any
+                database contained within the dataset
+            * validate: A function to evaluate when new data is received by
+                the database
+            * type: Sets the variable type of the data element.  If type is
+            provided for a key, when new data arrives it will be type checked
+                using this value.  If it fails, an attempt will be made to
+                convert it to the correct value.
+            * default:  Provides a default value to use when bad data is received
+            * sample: A value to use when dataset is in 'Demo' mode
+        """
+
+        # Extract arguments
+        vtype = kwargs.get("type")
+        onUpdate = kwargs.get("onUpdate")
+        default = kwargs.get("default")
+        sample = kwargs.get("sample")
+        validate = kwargs.get("validate")
+
+        if dbName not in self._validset:
+            self._validset[dbName] = {}
+
+        if key is not None:
+            self._rVKey(
+                dbName, key, vtype, onUpdate, default, sample, validate
+            )
+        else:
+            self._rVDB(dbName, key, onUpdate, validate)
+
+    def setDefaults(self):
+        """
+        Initialize dataset to its default values.
+
+        If the default values for the datasets have been defined through calls
+        to registerValidation, this method will initialize the dataset to those
+        defaults
+        """
+        for db, data in self._validset.items():
+            defaults = {k: v["default"] for k, v in data.items()}
+            self.update(db, defaults)
+
+    def setDemo(self):
+        """
+        Initialize dataset to its sample values.
+
+        To make testing the use of a dataset easier, this method will initialize
+        a sample version of the dataset as defined by previous calls to the
+        registerValidation method
+        """
+        self.setDefaults()
+        for db, data in self._validset.items():
+            samples = {k: v["sample"] for k, v in data.items()}
+            self.update(db, samples)
+
+    def _onUpdate(self, dbName, key, value):
+        try:
+            cfg = self._validset[dbName][key]
+        except KeyError:
+            # No validation record for this database/key combination
+            raise NoChangeToValue()
+
+        if "onUpdate" not in cfg:
+            # If no onUpdate statement(s)
+            raise NoChangeToValue()
+
+        self._localDB["_VAL_"] = value
+
+        ul = (
+            ["onUpdate"]
+            if type(cfg["onUpdate"]) is not list
+            else [f"onUpdate{i}" for i in range(len(cfg["onUpdate"]))]
+        )
+        for i, ui in enumerate(ul):
+            try:
+                ue = (
+                    cfg["onUpdate"]
+                    if type(cfg["onUpdate"]) is not list
+                    else cfg["onUpdate"][i]
+                )
+                try:
+                    self._localDB["_VAL_"] = self._dV.eval(
+                        f"{dbName}.{key}.{ui}"
+                    )
+                except NoChangeToValue:
+                    pass
+            except Exception as ex:
+                raise UpdateError(
+                    f"Attempt to update '{dbName}[{key}]' failed using \"{ue}\" with _VAL_ = '{self._localDB['_VAL_']}': {ex}"
+                )
+
+        if value == self._localDB["_VAL_"]:
+            raise NoChangeToValue()
+        return self._localDB["_VAL_"]
+
+    def _onUpdateDB(self, dbName, value):
+        try:
+            cfg = self._validset[dbName]
+        except KeyError:
+            # No validation record for this database/key combination
+            raise NoChangeToValue()
+
+        if "onUpdate" not in cfg:
+            # If no onUpdate statement(s)
+            raise NoChangeToValue()
+
+        self._localDB["_VAL_"] = value
+
+        ul = (
+            ["onUpdate"]
+            if type(cfg["onUpdate"]) is not list
+            else [f"onUpdate{i}" for i in range(len(cfg["onUpdate"]))]
+        )
+        for i, ui in enumerate(ul):
+            try:
+                ue = (
+                    cfg["onUpdate"]
+                    if type(cfg["onUpdate"]) is not list
+                    else cfg["onUpdate"][i]
+                )
+                try:
+                    self._localDB["_VAL_"] = self._dV.eval(f"{dbName}.{ui}")
+                except NoChangeToValue:
+                    pass
+            except Exception as ex:
+                raise UpdateError(
+                    f"Attempt to update '{dbName}' failed using \"{ue}\" with _VAL_ = '{self._localDB['_VAL_']}': {ex}"
+                )
+
+        if value == self._localDB["_VAL_"]:
+            raise NoChangeToValue()
+        return self._localDB["_VAL_"]
+
+    def _validate(self, dbName, key, value):
+        try:
+            cfg = self._validset[dbName][key]
+        except KeyError:
+            # No validation record for this database/key combination
+            return
+
+        # TYPE VALIDATION
+        # Validate the type of the value.
+        # If value not the right type attempt too convert it
+        try:
+            # Get type or return default (e.g. str)
+            t = cfg.get("type", str)
+            if type(value) != t:
+                # Attempt to convert
+                value = t(value)
+        except (ValueError, TypeError):
+            # Attempt to convert value to correct type failed
+            raise ValidationError(f"{value} is not a valid {t}")
+
+        # PROCESS VALIDATE STATEMENTS
+        if "validate" not in cfg:
+            # If no validate eval statement exists, validation (by default) succeeds
+            return
+
+        self._localDB["_VAL_"] = value
+        vl = (
+            ["validate"]
+            if type(cfg["validate"]) is not list
+            else [f"validate{i}" for i in range(len(cfg["validate"]))]
+        )
+        for i, vi in enumerate(vl):
+            try:
+                ve = (
+                    cfg["validate"]
+                    if type(cfg["validate"]) is not list
+                    else cfg["validate"][i]
+                )
+                if not self._dV.eval(f"{dbName}.{key}.{vi}"):
+                    raise ValidationError(
+                        f"'{value}' failed validation using \"{ve}\""
+                    )
+            except ValidationError:
+                raise
+            except Exception as ex:
+                raise ValidationError(
+                    f"Attempt to validate '{value}' failed using \"{ve}\": {ex}"
+                )
+
+    def _validateDB(self, dbName, value):
+        try:
+            cfg = self._validset[dbName]
+        except KeyError:
+            # No validation record for this database
+            return
+
+        # PROCESS VALIDATE STATEMENTS
+        if "validate" not in cfg:
+            # If no validate eval statement exists, validation (by default) succeeds
+            return
+
+        self._localDB["_VAL_"] = value
+        vl = (
+            ["validate"]
+            if type(cfg["validate"]) is not list
+            else [f"validate{i}" for i in range(len(cfg["validate"]))]
+        )
+        for i, vi in enumerate(vl):
+            try:
+                ve = (
+                    cfg["validate"]
+                    if type(cfg["validate"]) is not list
+                    else cfg["validate"][i]
+                )
+                if not self._dV.eval(f"{dbName}.{vi}"):
+                    raise ValidationError(
+                        f"'{value}' failed validation using \"{ve}\""
+                    )
+            except ValidationError:
+                raise
+            except Exception as ex:
+                raise ValidationError(
+                    f"Attempt to validate '{value}' failed using \"{ve}\": {ex}"
+                )
+
     def add(self, dbName, db):
         """
         Add a new database to the dataset.
@@ -662,6 +1105,42 @@ class dataset(_evaluate):
 
         # Add timestamp to update
         update["__timestamp__"] = time.time() - self._startedAt
+
+        # Check for full DB validation
+        try:
+            self._validateDB(dbName, update)
+        except ValidationError as ex:
+            if self._debug:
+                raise
+            self._logger.debug(ex)
+
+        # VALIDATE individual items
+        try:
+            for k, v in update.items():
+                self._validate(dbName, k, v)
+        except ValidationError as ex:
+            if self._debug:
+                raise
+            self._logger.debug(ex)
+
+        try:
+            self._onUpdateDB(dbName, update)
+        except NoChangeToValue:
+            pass
+        except UpdateError as ex:
+            if self._debug:
+                raise
+            self._logger.debug(ex)
+
+        for k, v in update.items():
+            try:
+                update[k] = self._onUpdate(dbName, k, v)
+            except NoChangeToValue:
+                pass
+            except UpdateError as ex:
+                if self._debug:
+                    raise
+                self._logger.debug(ex)
 
         if dbName not in self._dataset:
             self._checkForReserved(dbName)
@@ -779,20 +1258,71 @@ class dataset(_evaluate):
         return self._PrevData(self._prevDS)
 
 
-def image2Text(img):
+def image2Text(img, background="black"):
     """
     Convert PIL.Image to a character representation.
 
     :param img: The image to convert
     :type img: `PIL.Image`
+    :param background: The background color for the image
+    :type background: str, int or tuple
     :returns: A printable string that renders the provided image as text
     :rtype: str
     """
+    if type(background) is str:
+        background = ImageColor.getcolor(background, img.mode)
+
+    # If present, strip alpha channel
+    if type(background) is not int and len(background) in [2, 4]:
+        background = background[0:-1]
+
     retval = "-" * (img.size[0] + 2)
     for j in range(img.size[1]):
         s = ""
-        for i in list(img.crop((0, j, img.size[0], j + 1)).tobytes()):
-            s += f"{i:>08b}".replace("0", " ").replace("1", "*")
+        for i in range(img.size[0]):
+            pixel = img.getpixel((i, j))
+            if type(pixel) is not int and len(pixel) in [2, 4]:
+                v = " " if pixel[0:-1] == background else "*"
+            else:
+                v = " " if pixel == background else "*"
+            s += v
         retval += f"\n|{s[0:img.size[0]]}|"
     retval += "\n" + ("-" * (img.size[0] + 2))
     return retval
+
+
+def compareImage(i1, i2):
+    """
+    Compare if two images are the same or different.
+
+    :param i1: First image to compare
+    :type i1: `PIL.Image`
+    :param i2: Second image to compare
+    :type i2: `PIL.Image`
+    :returns: True if they are identical
+    """
+
+    if i1.size != i2.size:
+        return False
+    for j in range(i1.size[1]):
+        for i in range(i1.size[0]):
+            if i1.getpixel((i, j)) != i2.getpixel((i, j)):
+                return False
+    return True
+
+
+def okPath(dirs, path):
+    """
+    Determine if the path is safe.
+
+    :param dirs: A list of safe paths
+    :type dirs: list
+    :param path: The path to be tested
+    :type path: str
+    :returns: True if safe
+    :rtype: bool
+    """
+    for d in dirs:
+        if os.path.commonpath((os.path.realpath(path), d)) == d:
+            return True
+    return False
