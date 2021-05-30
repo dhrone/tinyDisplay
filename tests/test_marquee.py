@@ -56,15 +56,13 @@ def makeScroll(request):
     [
         (10, 3),
         (30, 3),
+        (30, 6),
         (60, 6),
         (60, 1),
     ],
 )
 def test_scroll_widget_performance(speed, duration, animator, makeScroll):
     """Test whether scroll animation is smoothly rendered at the requested speed."""
-    # Run renders for 2 seconds at 60hz and a scroll speed of 1.
-    # Poll for results at 120hz
-    # Should produce around 120 renders
 
     scrollHigh = makeScroll("'High'", (19, 8))
 
@@ -88,7 +86,7 @@ def test_scroll_widget_performance(speed, duration, animator, makeScroll):
     received = p
 
     assert (
-        abs(received - expected) <= 0.05 * expected
+        abs(received - expected) <= 0.1 * expected
     ), f"Received {received} renders.  Expected {expected}.  [{received/expected:0.3f}]\nActual Time was {t1-t0:0.2f}"
 
 
