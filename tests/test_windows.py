@@ -28,14 +28,14 @@ def makeSetup():
     artist = text(value="f\"Artist {db['artist']}\"", dataset=ds)
     title = text(value="f\"Title {db['title']}\"", dataset=ds)
     album = text(value="f\"Album {db['album']}\"", dataset=ds)
-    alert = text(value="ALERT -- HOT")
+    alert = text(value="'ALERT -- HOT'")
     rectAlert = rectangle(
         (0, 0, alert.size[0] + 3, alert.size[1] + 3),
-        outline="white",
-        fill="black",
+        outline="'white'",
+        fill="'black'",
     )
 
-    time = text("12:32p")
+    time = text("'12:32p'")
 
     # Canvases
     cAT = canvas(size=(80, 16), duration=2)

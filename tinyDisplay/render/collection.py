@@ -8,10 +8,13 @@ Collection widgets to present, and animate the display canvases.
 .. versionadded:: 0.0.1
 """
 import bisect
+from inspect import isclass
 
 from PIL import Image
 
+from tinyDisplay.render import collection
 from tinyDisplay.render.widget import image, widget
+from tinyDisplay.utility import getArgDecendents
 
 
 class canvas(widget):
@@ -446,3 +449,10 @@ class sequence(canvas):  # noqa: D101
 
         # No active canvas found
         return (None, False)
+
+
+PARAMS = {
+    k: getArgDecendents(v)
+    for k, v in collection.__dict__.items()
+    if isclass(v) and issubclass(v, canvas)
+}

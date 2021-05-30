@@ -92,6 +92,7 @@ def test_load(make_dataset, yaml, ref, ticks, db, update, utick):
         Path(__file__).parent / "reference/images/" / ref
     ).convert("1")
     main = load(path, dataset=ds)
+    ds = main._dataset
 
     first = True
     for i in range(ticks):
@@ -106,10 +107,9 @@ def test_load(make_dataset, yaml, ref, ticks, db, update, utick):
     ), f"tick {ticks}: Images should have matched\n{print(main)}\n{print(image2Text(refImg))}"
 
 
-def test_yaml_include(make_dataset):
-    ds = make_dataset
+def test_yaml_include():
     path = Path(__file__).parent / "reference/pageFiles" / "basicMedia.yaml"
-    tdl = _tdLoader(pageFile=path, dataset=ds)
+    tdl = _tdLoader(pageFile=path)
 
     assert (
         tdl._pf["DEFAULTS"]["display"]["type"] == "weh001602a"

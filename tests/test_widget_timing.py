@@ -22,7 +22,7 @@ def test_duration():
       Does active return to True when render after active went to False
       Does active remain True when duration not specified
     """
-    w = text(value="abc", duration=3)
+    w = text(value="'abc'", duration=3)
     for i in range(3):
         w.render()
     assert (
@@ -34,7 +34,7 @@ def test_duration():
         w.active
     ), "After going inactive, the next render should have made it active again"
 
-    w = text(value="abc")
+    w = text(value="'abc'")
     active = True
     for i in range(100):
         w.render()
@@ -54,7 +54,7 @@ def test_minDuration():
     """
     ds = {"db": {"f": True}}
     w = text(
-        value="abc",
+        value="'abc'",
         duration=5,
         minDuration=2,
         activeWhen='db["f"]',
@@ -66,7 +66,7 @@ def test_minDuration():
 
     ds = {"db": {"f": True}}
     w = text(
-        value="abc",
+        value="'abc'",
         duration=5,
         minDuration=2,
         activeWhen='db["f"]',
@@ -78,7 +78,7 @@ def test_minDuration():
         w.active
     ), "Even when activeWhen goes False, widget should be active if minDuration has not expired"
 
-    w = text(value="abc", minDuration=3, activeWhen='db["f"]', dataset=ds)
+    w = text(value="'abc'", minDuration=3, activeWhen='db["f"]', dataset=ds)
     for _ in range(5):
         w.render()
 
@@ -106,7 +106,7 @@ def test_coolingPeriod():
     """
     ds = {"db": {"f": False}}
     w = text(
-        value="abc",
+        value="'abc'",
         duration=5,
         coolingPeriod=10,
         activeWhen='db["f"]',

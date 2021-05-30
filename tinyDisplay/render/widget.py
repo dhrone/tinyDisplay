@@ -11,6 +11,7 @@ import abc
 import logging
 import os
 import pathlib
+from inspect import isclass
 from urllib.request import urlopen
 
 from PIL import Image, ImageColor, ImageDraw
@@ -18,9 +19,11 @@ from PIL import Image, ImageColor, ImageDraw
 from tinyDisplay import globalVars
 from tinyDisplay.exceptions import DataError
 from tinyDisplay.font import bmImageFont
+from tinyDisplay.render import widget as Widgets
 from tinyDisplay.utility import (
     dataset as Dataset,
     evaluator,
+    getArgDecendents,
     image2Text,
     okPath,
 )
@@ -59,10 +62,16 @@ class widget(metaclass=abc.ABCMeta):
         just="lt",
     ):
 
-        self.name = name
+        self._debug = globalVars.__DEBUG__
+        self._localDB = {"__self__": {}, "__parent__": {}}
         self._dataset = (
             dataset if isinstance(dataset, Dataset) else Dataset(dataset)
         )
+        self._dV = evaluator(
+            self._dataset, localDataset=self._localDB, debug=self._debug
+        )
+
+        self.name = name
         self.just = just.lower()
         self.type = self.__class__.__name__
         self.current = None
@@ -90,13 +99,8 @@ class widget(metaclass=abc.ABCMeta):
         ), "TinyDisplay only supports PIL modes 1, L, LA, RGB, and RGBA"
         self._mode = mode
 
-        bgDefault = (0, 0, 0, 0) if self._mode == "RGBA" else "black"
+        bgDefault = (0, 0, 0, 0) if self._mode == "RGBA" else "'black'"
 
-        self._debug = globalVars.__DEBUG__
-        self._localDB = {"__self__": {}, "__parent__": {}}
-        self._dV = evaluator(
-            self._dataset, localDataset=self._localDB, debug=self._debug
-        )
         self._dV.compile(size, name="requestedSize", default=None)
         self._dV.compile(activeWhen, name="activeWhen", default=True)
         self._dV.compile(foreground, name="foreground", default="white")
@@ -110,7 +114,13 @@ class widget(metaclass=abc.ABCMeta):
         self._computeLocalDB()
 
     def __getattr__(self, name):
-        return self.image.__getattribute__(name)
+        msg = f"{self.__class__.__name__} object has no attribute {name}"
+        if "image" not in self.__dict__:
+            raise AttributeError(msg)
+        if name in dir(self.image):
+            return getattr(self.image, name)
+        else:
+            raise AttributeError(msg)
 
     def __repr__(self):
         cw = ""
@@ -329,7 +339,6 @@ class widget(metaclass=abc.ABCMeta):
         self._computeLocalDB()
 
         if reset:
-            self._dV.recompile()
             force = True
 
         try:
@@ -897,7 +906,7 @@ class slide(marquee):
 
     def _paintScrolledWidget(self):
         self.clear()
-        self.image.paste(self._aWI, self._curPos)
+        self.image.paste(self._aWI, self._curPos, self._aWI)
         return self.image
 
 
@@ -1076,7 +1085,7 @@ class scroll(marquee):
         self.clear()
         pasteList = self._computeShadowPlacements()
         for p in pasteList:
-            self.image.paste(self._aWI, p)
+            self.image.paste(self._aWI, p, self._aWI)
         return self.image
 
 
@@ -1268,3 +1277,10 @@ class rectangle(shape):
     def __init__(self, xy=[], *args, **kwargs):
         super().__init__(shape="rectangle", xy=xy, *args, **kwargs)
         self.render(reset=True)
+
+
+PARAMS = {
+    k: getArgDecendents(v)
+    for k, v in Widgets.__dict__.items()
+    if isclass(v) and issubclass(v, widget) and k != "widget"
+}

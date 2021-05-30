@@ -19,12 +19,12 @@ def test_line_widget():
     img = Image.new("1", (50, 50), "black")
     d = ImageDraw.Draw(img)
     d.line([(0, 0), (49, 49)], fill="white")
-    w = line(xy=[(0, 0), (49, 49)], fill="white", mode="1")
+    w = line(xy=[(0, 0), (49, 49)], fill="'white'", mode="1")
     assert compareImage(
         img, w.render()[0]
     ), f"Rectangles did not match (two tuple test)"
 
-    w = line(xy=(0, 0, 49, 49), fill="white", mode="1")
+    w = line(xy=(0, 0, 49, 49), fill="'white'", mode="1")
     assert compareImage(
         img, w.render()[0]
     ), f"Rectangles did not match (one tuple test)"
@@ -32,7 +32,7 @@ def test_line_widget():
     img = Image.new("1", (10, 8), "black")
     d = ImageDraw.Draw(img)
     d.line([(0, 0), (49, 49)], fill="white")
-    w = line(xy=(0, 0, 49, 49), fill="white", mode="1", size=(10, 8))
+    w = line(xy=(0, 0, 49, 49), fill="'white'", mode="1", size=(10, 8))
     assert compareImage(
         img, w.render()[0]
     ), f"Rectangles did not match (small image test)"

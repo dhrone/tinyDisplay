@@ -91,8 +91,8 @@ WIDGETS:
   rectAlert: &rectAlert
       type: rectangle
       xy: 0, 0, 63, 11
-      fill: black
-      outline: white
+      fill: f'black'
+      outline: f'white'
 
 
 CANVASES:

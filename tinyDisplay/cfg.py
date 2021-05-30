@@ -12,7 +12,7 @@ import logging
 import os
 import pathlib
 from copy import deepcopy
-from inspect import getfullargspec, getmro, isclass
+from inspect import getfullargspec
 
 import yaml
 from PIL import ImageFont
@@ -46,29 +46,12 @@ class _tdLoader:
         self._display = None
 
         # Load valid parameters for each widget type
-        self._wParams = {
-            k: self._getArgDecendents(v)
-            for k, v in widget.__dict__.items()
-            if isclass(v) and issubclass(v, widget.widget) and k != "widget"
-        }
+        self._wParams = widget.PARAMS
 
         # Load valid parameters for each collection type
-        self._cParams = {
-            k: self._getArgDecendents(v)
-            for k, v in collection.__dict__.items()
-            if isclass(v) and issubclass(v, collection.canvas)
-        }
+        self._cParams = collection.PARAMS
 
         self._loadPageFile(pageFile)
-
-    @staticmethod
-    def _getArgDecendents(c):
-        args = []
-        for i in getmro(c):
-            for arg in getfullargspec(i)[0][1:]:
-                if arg not in args:
-                    args.append(arg)
-        return args
 
     def _loadPageFile(self, filename):
         """

@@ -21,8 +21,8 @@ def makeSetup():
     ds = dataset({"db": db, "sys": system})
     artist = text(value="f\"Artist {db['artist']}\"", dataset=ds)
     title = text(value="f\"Title {db['title']}\"", dataset=ds)
-    alert = text(value="ALERT -- HOT")
-    time = text("12:32p")
+    alert = text(value="'ALERT -- HOT'")
+    time = text("'12:32p'")
     cArt = canvas(
         size=(80, 16),
         duration=2,

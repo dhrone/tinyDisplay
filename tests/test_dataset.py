@@ -69,7 +69,6 @@ conditions = [
     "history('sys', 0)['temp']==92.6",
     "db['state']!=prev.db['state']",
     "time.strftime('%H:%M',db['time']) == '18:07'",
-    "select(db['state'], 'play', True, 'stop', False) == False",
 ]
 
 
@@ -89,7 +88,6 @@ conditions = [
         (updates[0:9], conditions[10]),
         (updates[0:10], conditions[11]),
         (updates[0:11], conditions[12]),
-        (updates[0:11], conditions[13]),
     ],
 )
 def test_dsEval(updates, condition):
@@ -197,18 +195,3 @@ def test_get():
     assert ds.get("bad", {"val": "a"}) == {
         "val": "a"
     }, "Get returned unexpected default value"
-
-
-def test_recompile():
-    ds = dataset()
-    ds.add("db", {"val": "a"})
-    e = evaluator(ds)
-    e.compile("db['val']=='a'", "t1")
-    e.compile("__self__['val']=='a'", "t2")
-    assert e.eval("t1"), "db['val']=='a' should have been true"
-    assert (
-        e.eval("t2") == "__self__['val']=='a'"
-    ), "Should have been treated as string"
-    ds.add("__self__", {"val": "a"})
-    e.recompile()
-    assert e.eval("t2"), "__self__['val']=='a' should now have been true"

@@ -51,49 +51,64 @@ def makeScroll(request):
     yield _make_scroll
 
 
-def test_scroll_widget_performance(animator, makeScroll):
+@pytest.mark.parametrize(
+    "speed, duration",
+    [
+        (10, 3),
+        (30, 3),
+        (60, 6),
+        (60, 1),
+    ],
+)
+def test_scroll_widget_performance(speed, duration, animator, makeScroll):
     """Test whether scroll animation is smoothly rendered at the requested speed."""
     # Run renders for 2 seconds at 60hz and a scroll speed of 1.
     # Poll for results at 120hz
     # Should produce around 120 renders
 
-    scrollHigh = makeScroll("High", (19, 8))
-    a = animator(function=scrollHigh.render, cps=60)
-    a.start()
-    t = time.time()
-    s = 60
-    d = 2
+    scrollHigh = makeScroll("'High'", (19, 8))
+
+    s = speed
+    d = duration
     p = 0
-    while t + d >= time.time():
-        retval = a.get()
-        p = p + 1 if retval and retval[1] else p
-        time.sleep(1 / 120)
+    # Initiate animator with queue large enough to hold all responses
+    a = animator(function=scrollHigh.render, cps=s, queueSize=(d + 1) * s)
+    a.start()
+    t0 = time.time()
+    time.sleep(d)
+    a.stop()
+    t1 = time.time()
+
+    while True:
+        if a.get() is None:
+            break
+        p += 1
 
     expected = s * d
     received = p
 
     assert (
-        abs(received - expected) < 0.05 * expected
-    ), f"Received {received} renders.  Expected {expected}"
+        abs(received - expected) <= 0.05 * expected
+    ), f"Received {received} renders.  Expected {expected}.  [{received/expected:0.3f}]\nAnimator reports {a.fpsList} fps. \nActual Time was {t1-t0:0.2f}"
 
 
 def test_scroll_wrap_move(makeScroll):
     """Test the shouldIMove detected change in variable value."""
-    sw = makeScroll("High", (19, 8))
+    sw = makeScroll("'High'", (19, 8))
     startImg = sw.render()[0]
     img = sw.render()[0]
     assert (
         img != startImg
     ), f"scroll should have moved but didn't\n{image2Text(img)}\nand\n{image2Text(startImg)}"
 
-    sw = makeScroll("Hig", (19, 8))
+    sw = makeScroll("'Hig'", (19, 8))
     startImg = sw.render()[0]
     assert sw.render()[0] == startImg, "scroll shouldn't have moved but did"
 
 
 def test_scroll_wrap_return_to_start(makeScroll):
     """Test that scroll loops back to starting position."""
-    sw = makeScroll("High", (19, 8))
+    sw = makeScroll("'High'", (19, 8))
     startImg = sw.render()[0]
 
     images = []
@@ -113,20 +128,20 @@ def test_scroll_wrap_return_to_start(makeScroll):
 @pytest.mark.parametrize(
     "value, size, distance",
     [
-        ("Five!", (20, 8), 1),
-        ("Five!", (20, 8), 2),
-        ("Five!", (20, 8), 3),
-        ("Five!", (20, 8), 4),
-        ("Five!", (20, 8), 5),
-        ("Five!", (20, 8), 6),
-        ("Five!", (19, 8), 1),
-        ("Five!", (19, 8), 2),
-        ("Five!", (19, 8), 3),
-        ("Five!", (19, 8), 4),
-        ("Five!", (19, 8), 5),
-        ("Five!", (19, 8), 6),
-        ("Hello World", (25, 7), 1),
-        ("Hello World", (25, 7), 2),
+        ("'Five!'", (20, 8), 1),
+        ("'Five!'", (20, 8), 2),
+        ("'Five!'", (20, 8), 3),
+        ("'Five!'", (20, 8), 4),
+        ("'Five!'", (20, 8), 5),
+        ("'Five!'", (20, 8), 6),
+        ("'Five!'", (19, 8), 1),
+        ("'Five!'", (19, 8), 2),
+        ("'Five!'", (19, 8), 3),
+        ("'Five!'", (19, 8), 4),
+        ("'Five!'", (19, 8), 5),
+        ("'Five!'", (19, 8), 6),
+        ("'Hello World'", (25, 7), 1),
+        ("'Hello World'", (25, 7), 2),
     ],
 )
 def test_scroll_distance(value, size, distance, makeScroll):
@@ -146,14 +161,14 @@ def test_scroll_distance(value, size, distance, makeScroll):
 def test_wait(makeScroll):
     """Test that pause action is working correctly."""
     pause = 5
-    w1 = text("Five!")
+    w1 = text("'Five!'")
     swL = scroll(
         size=(19, 8),
         widget=w1,
         actions=[("pause", pause), ("rtl")],
         wait="atStart",
     )
-    w2 = text("Four")
+    w2 = text("'Four'")
     swS = scroll(
         size=(19, 8),
         widget=w2,
@@ -195,14 +210,14 @@ def test_should_scroll_move(makeScroll):
     sMoved = "scroll moved when it shouldn't have"
     sNotMoved = "scroll didn't move when it should have"
 
-    sw = makeScroll("High", (20, 8), 1)
+    sw = makeScroll("'High'", (20, 8), 1)
     w = sw._widget
 
     startImg = sw.render()[0]
     img = sw.render()[0]
     assert img == startImg, sMoved
 
-    sw = makeScroll("High", (19, 8), 1)
+    sw = makeScroll("'High'", (19, 8), 1)
     w = sw._widget
 
     startImg = sw.render()[0]
@@ -223,7 +238,7 @@ def test_should_scroll_move(makeScroll):
 @pytest.mark.parametrize("gap", [("25"), ("4.6"), ("4")])
 def test_scroll_gap(gap):
     """Test that gaps are being computed correctly."""
-    w = text("Hello")
+    w = text("'Hello'")
     sw = scroll(widget=w, size=(20, 8), gap=gap)
     img = sw.render()[0]
     img2 = Image.new("RGBA", (0, 0), "black")
@@ -238,12 +253,13 @@ def test_scroll_gap(gap):
 
 def test_slide1():
     """Test sliding from left to right to left and test if back to starting position."""
-    w = text(value="This is a test!")
+    w = text(value="'This is a test!'")
     sw = slide(
         size=(100, 16),
         widget=w,
         actions=[("pause", 60), ("ltr"), ("pause", 2), ("rtl")],
         speed=1,
+        background="'black'",
     )
     startImg = sw.render()[0]
 
@@ -265,13 +281,13 @@ def test_slide1():
     "value, size, moved",
     [
         (
-            "High",
+            "'High'",
             (20, 8),
             False,
         ),
-        ("High", (25, 8), True),
-        ("12345", (20, 8), False),
-        ("12345", (26, 8), True),
+        ("'High'", (25, 8), True),
+        ("'12345'", (20, 8), False),
+        ("'12345'", (26, 8), True),
     ],
 )
 def test_should_slide_move(value, size, moved):
@@ -292,7 +308,7 @@ def test_should_slide_move(value, size, moved):
 @pytest.fixture(scope="function")
 def _slide23(request):
     def _slide(actions):
-        w = text(value="This is a test!")
+        w = text(value="'This is a test!'")
         sw = slide(
             size=(100, 16), widget=w, just="mm", actions=actions, speed=1
         )
@@ -339,7 +355,7 @@ def test_slider_return_to_start(_slide23):
 
 def test_popup():
     """Test animation of a window popUp widget."""
-    w = text(value="1\n2")
+    w = text(value="'''1\n2'''")
     pu = popUp(size=(5, 8), widget=w, delay=(6, 6))
     top = w.image.crop((0, 0, 5, 8))
     btm = w.image.crop((0, 8, 5, 16))

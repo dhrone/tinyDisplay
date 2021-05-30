@@ -15,8 +15,9 @@ import os
 import time
 import warnings
 from collections import deque
+from inspect import getfullargspec, getmro
 from pathlib import Path
-from queue import Empty, Queue
+from queue import Empty, Full, Queue
 from threading import Event, Thread
 
 from PIL import ImageColor
@@ -62,13 +63,18 @@ class animate(Thread):
     def __init__(self, function=None, cps=1, queueSize=100, *args, **kwargs):
         Thread.__init__(self)
         assert function, "You must supply a function to animate"
-        self._speed = 1 / cps
+        self._speed = cps
 
-        Kp = 1
-        Ki = 0.1
+        Kp = 5
+        Ki = 0.2
         Kd = 0.05
         self._pid = PID(
-            Kp, Ki, Kd, setpoint=self._speed, sample_time=self._speed
+            Kp,
+            Ki,
+            Kd,
+            setpoint=self._speed,
+            sample_time=0.1,
+            output_limits=(cps * 0.1, None),
         )
 
         self._function = function
@@ -218,7 +224,8 @@ class animate(Thread):
         Main loop for the animate thread
         """
         correction = 0
-        loopTime = self._speed
+        loopTime = 1 / self._speed
+        tpf = 1 / self._speed
 
         renderTimer = time.time()
         renderCounter = 0
@@ -229,24 +236,29 @@ class animate(Thread):
 
             # Compute current FPS every 5 seconds
             renderCounter += 1
-            if renderTimer + 5 < time.time():
-                self.fps = renderCounter / 5
+            if renderTimer + 0.1 < time.time():
+                self.fps = renderCounter / 0.1
                 renderCounter = 0
                 renderTimer = time.time()
 
-            # Disable pid while waiting to be activated
-            self._pid.set_auto_mode(False)
-            self._event.wait()
+            if not self._event.isSet():
+                # Disable pid while waiting to be activated
+                self._pid.set_auto_mode(False)
+                self._event.wait()
+                # Activated!  Re-enable PID, begin processing
+                self._pid.set_auto_mode(True, last_output=correction)
 
-            # Activated!  Re-enable PID, begin processing
-            self._pid.set_auto_mode(True, last_output=correction)
-            correction = self._pid(loopTime)
+            fps = 1 / loopTime  # Time per frame
+            correction = self._pid(fps)
             startLoop = time.time()
-            if self._speed + correction > 0:
-                time.sleep(self._speed + correction)
+            tpf = (
+                1 / (self._speed + correction)
+                if self._speed + correction > 0
+                else 0
+            )
+            time.sleep(tpf)
 
             # Disable PID while trying to place new render in queue
-            self._pid.set_auto_mode(False)
             putStart = time.time()
             if self._Force:
                 self._Force = False
@@ -259,11 +271,15 @@ class animate(Thread):
                 self._forceEvent.set()
             else:
                 retval = self._invoke(*self._args, **self._kwargs)
-                self._queue.put(retval)
+                try:
+                    self._queue.put_nowait(retval)
+                except Full:
+                    self._pid.set_auto_mode(False)
+                    self._queue.put(retval)
+                    self._pid.set_auto_mode(True, last_output=correction)
 
-            # Correct the loop timer if queue was blocked and restart the PID
+            # Correct startLoop to account for time blocked by full queue
             startLoop = startLoop + (time.time() - putStart)
-            self._pid.set_auto_mode(True, last_output=correction)
 
             loopTime = time.time() - startLoop
 
@@ -276,51 +292,6 @@ class evaluator:
     :type dataset: `tinyDisplay.utility.dataset`
     """
 
-    __allowedBuiltIns = {
-        # "__import__": builtins.__import__,
-        "abs": builtins.abs,
-        "bin": builtins.bin,
-        "bool": builtins.bool,
-        "bytes": builtins.bytes,
-        "chr": builtins.chr,
-        "dict": builtins.dict,
-        "float": builtins.float,
-        "format": builtins.format,
-        "hex": builtins.hex,
-        "int": builtins.int,
-        "set": builtins.set,
-        "len": builtins.len,
-        "list": builtins.list,
-        "max": builtins.max,
-        "min": builtins.min,
-        "oct": builtins.oct,
-        "ord": builtins.ord,
-        "round": builtins.round,
-        "str": builtins.str,
-        "sum": builtins.sum,
-        "tuple": builtins.tuple,
-        "type": builtins.type,
-        "time": time,
-        "Path": Path,
-    }
-    for m in [i for i in dir(math) if i[0] != "_"]:
-        __allowedBuiltIns[m] = getattr(math, m)
-
-    __allowedMethods = [
-        "get",
-        "lower",
-        "upper",
-        "capitalize",
-        "title",
-        "find",
-        "strftime",
-        "gmtime",
-        "localtime",
-        "timezone",
-        "items",
-        "monotonic",
-    ]
-
     def __init__(self, dataset, localDataset=None, debug=False):
         self._dataset = dataset
         self._localDataset = localDataset if localDataset is not None else {}
@@ -328,157 +299,54 @@ class evaluator:
 
         self._logger = logging.getLogger("tinyDisplay")
 
-        # Defines allowable functions for compiled statements
-        self._allowedBuiltIns = dict(self.__allowedBuiltIns)
-        self._allowedBuiltIns["changed"] = self._isChanged
-        self._allowedBuiltIns["select"] = self._select
-        self._allowedBuiltIns["history"] = self._dataset.history
-        self._allowedBuiltIns["store"] = self.store
-        self._allowedMethods = list(self.__allowedMethods)
-        self._changed = {}
-
-        # Used to support methods that will be called by eval but need to be
-        #    able to distinguish which object is calling it (e.g. changed)
-        self._changeID = None
-
         # Holds the collection of statements that this evaluator manages
         self._statements = {}
 
-    def store(self, dbName=None, key=None, value=None):
+    def compile(
+        self,
+        source=None,
+        name=None,
+        default=None,
+        validator=None,
+        dynamic=True,
+    ):
         """
-        Store new value to dataset.
+        Compile and return a dynamic Value.
 
-        Updates a database with new data.  If in addition to the dbName, only a
-        single value is provided it updates the entire database with the
-        the provided value.  If two additional arguments are provided, it
-        updates a specific key within the database
-
-        :param dbName: the name of the database within the dataset to update
-        :type dbName: str
-        :param key: (optional) If updating a single key within the database,
-            the value of that key
-        :param value: The data to use for the update
-        :raises NoChangeToValue: To signal that store is not updating the
-            current database value.
-        """
-
-        if key is not None:
-            self._dataset.update(dbName, {key: value})
-        else:
-            self._dataset.update(dbName, key)
-        raise NoChangeToValue()
-
-    def _isChanged(self, value):
-        ret = (
-            False
-            if self._changeID not in self._changed
-            else True
-            if self._changed.get(self._changeID) != value
-            else False
-        )
-        self._changed[self._changeID] = value
-        return ret
-
-    @staticmethod
-    def _select(value, *args, **kwargs):
-        if len(args) % 2 != 0:
-            raise TypeError(
-                "TypeError: {args} is not an even number of arguments which is required for select transformations"
-            )
-        for i in range(0, len(args), 1):
-            if value == args[i]:
-                return args[i + 1]
-        return ""
-
-    def compile(self, source=None, name=None, default=None, validator=None):
-        """
-        Compile provided input.
-
-        :param source: The value to convert into compiled code
-        :type source: str or `callable`
-        :param name: the name that will be used to reference the resulting
-            code (optional).  If not provided a, a unique name will be created
-            using id(source).
+        :param source: The source to compile (if dynamic)
+        :param name: The name to associate with the dynamieValue
         :type name: str
-        :param default: A value to use if an evaluation of this code fails
-            (optional)
-        :type validator: A function to call to validate the answer when ever
-            this code gets evaluated (optional)
-        :raises CompileError: if input includes unauthorized functions
-            or references data that is not within the dataset
-
-        ..note:
-            Compilation is limited to the set of authorized functions and the
-            variables contained within the available datasets.  You will raise
-            a NameError if you use any other terms.  So, make sure that your
-            dataset has a database for any variable you need to reference.
-
-            example::
-                Assuming a dataset with a database named 'db' containing
-                    {'value': False}
-
-                "db['value'] == True" will compile fine and eval fine
-                "db['xyz'] == True" will compile fine but not eval successfully
-                "bad['value'] == True" will not compile
-                "bad == True" will not compile
-                "db['value'] == bad" will not compile
+        :param default: A value to use if evaluation fails
+        :param validator: Function used to test if evaluation produced a valid answer
+        :type validator: `callable` that returns a bool
+        :param dynamic: Enables dynamic evaluation
+        :type dynamic: bool
+        :returns: a new dynamicValue
+        :rtype: `tinyDisplay.utility.dynamicValue`
         """
-
-        # If code is string then compile the string, otherwise return code unchanged
-        # as it can also be either be a static value or a function
-        func = None
-        if type(source) is str:
-            warnings.simplefilter("error")
-            try:
-                code = compile(source, "<string>", "eval")
-                for n in code.co_names:
-                    if (
-                        n not in self._allowedBuiltIns
-                        and n not in self._allowedMethods
-                        and n not in self._dataset
-                        and n not in self._localDataset
-                    ):
-                        raise CompileError(
-                            f"Compile Error for {name}: while processing {source}, name '{n}' is not defined"
-                        )
-
-                func = lambda v: eval(
-                    code, {"__builtins__": self._allowedBuiltIns}, v
-                )
-            except (ValueError, SyntaxError) as ex:
-                raise CompileError(
-                    f"Compile Error for {name}: {ex.__class__.__name__} while processing {source}: {ex}"
-                )
-            finally:
-                warnings.simplefilter("default")
-        elif callable(source):
-            func = source
-
-        # If input is not a function or a evaluatable string that contains
-        # no variables (e.g. always returns the same value) or a syntax error
-        # then no need to calculate the value more than once
-        static = (
-            True
-            if not func
-            or (hasattr(func, "co_names") and len(func.co_names) == 0)
-            else False
+        # create dynamic value
+        # compile dynamic value
+        # store dynamic value in _statements list
+        ds = dynamicValue(
+            name or id(source), self._dataset, self._localDataset, self._debug
         )
+        ds.compile(source, default, validator, dynamic)
+        self._statements[name or id(source)] = ds
+        return ds
 
-        self._statements[name or id(source)] = {
-            "func": func,
-            "static": static,
-            "default": default,
-            "source": source,
-            "validator": validator,
-        }
+    def eval(self, name):
+        """
+        Evaluate dynamicValue with provide name.
 
-    def recompile(self):
-        """Recompile all of the statements."""
-
-        current_statements = self._statements
-        self._statements = {}
-        for k, v in current_statements.items():
-            self.compile(source=v["source"], name=k, default=v["default"])
+        :param name: The name of the dynamicValue
+        :type name: str
+        :returns: the resulting value
+        """
+        if name in self._statements:
+            return self._statements[name].eval()
+        if id(name) in self._statements:
+            return self._statements[id(name)].eval()
+        raise KeyError(f"{name} not found in evaluator")
 
     def evalAll(self):
         """
@@ -488,89 +356,12 @@ class evaluator:
         :rtype: bool
         """
 
-        cd = {**self._dataset, **self._localDataset}
         changed = False
-        for k, statement in self._statements.items():
-            self.eval(k, cd)
-            if self.changed(k):
+        for dv in self._statements.values():
+            dv.eval()
+            if dv.changed:
                 changed = True
         return changed
-
-    def eval(self, key, combinedDataset=None):
-        """
-        (Eval)uate the function and return resulting value.
-
-        :param key: The name of the stored evaluation statement to evaluate
-        :type key: str
-        :param combinedDataset: A dataset to use for the evaluation (optional).  If
-            not provided, the dataset (and localDataset) provided when the
-            evaluator was created will be used.
-        :type combinedDataset: dict
-        :returns: The results of the eval.  It can be any valid python object.
-        :rtype: object
-        :raises NoChangeToValue: If needed to signal that this evaluation is
-            not intended to produce a new value (used by store function)
-        :raises ValidationError: If the evaluated value failes its validation test
-        """
-
-        d = (
-            combinedDataset
-            if combinedDataset is not None
-            else {**self._dataset, **self._localDataset}
-        )
-
-        statement = (
-            self._statements[key]
-            if id(key) not in self._statements
-            else self._statements[id(key)]
-        )
-
-        func, static, source, default = (
-            statement["func"],
-            statement["static"],
-            statement["source"],
-            statement["default"],
-        )
-
-        self._changeID = (id(self), id(statement))
-
-        if func is not None:
-            if not static or "prevValue" not in statement:
-                try:
-                    ans = func(d)
-                except NoChangeToValue:
-                    raise
-                except Exception as ex:
-                    if ex.__class__.__name__ not in [
-                        "KeyError",
-                        "TypeError",
-                        "AttributeError",
-                    ]:
-                        raise ex.__class__(
-                            f'{ex.__class__.__name__} while evaluating {source}: \'{" ".join(ex.args)}\''
-                        )
-                    ans = default
-            else:
-                ans = statement["prevValue"]
-        else:
-            ans = statement["source"]
-
-        try:
-            statement["changed"] = (
-                True
-                if "prevValue" in statement and statement["prevValue"] != ans
-                else False
-            )
-        # If objects are not comparible
-        except:
-            statement["changed"] = True
-
-        statement["prevValue"] = ans
-
-        if statement["validator"] is not None:
-            if not statement["validator"](ans):
-                raise ValidationError(f"{ans} is not a valid value for {key}")
-        return ans
 
     def changed(self, key):
         """
@@ -582,20 +373,19 @@ class evaluator:
             evaluation of it.
         """
         return (
-            self._statements[key]["changed"]
-            if key in self._statements and "changed" in self._statements[key]
-            else False
+            self._statements[key].changed if key in self._statements else False
         )
 
     def __getitem__(self, key):
         # Try retrieving using both the key value and an id of the key value
         if id(key) not in self._statements:
-            if "prevValue" in self._statements[key]:
-                return self._statements[key]["prevValue"]
+            if hasattr(self._statements[key], "prevValue"):
+                return self._statements[key].prevValue
 
-        if "prevValue" in self._statements[key]:
-            return self._statements[key]["prevValue"]
+        if hasattr(self._statements[id(key)], "prevValue"):
+            return self._statements[id(key)]["prevValue"]
 
+        # If no previous value recorded, return None
         return None
 
     def __len__(self):
@@ -603,7 +393,7 @@ class evaluator:
 
     def _makeDict(self):
         return {
-            k: v["prevValue"] if "prevValue" in v else None
+            k: v.prevValue if hasattr(v, "prevValue") else None
             for k, v in self._statements.items()
         }
 
@@ -646,7 +436,6 @@ class dataset:
     ):
 
         self._logger = logging.getLogger("tinyDisplay")
-        self._logger.warning("Starting Dataset")
         dataset = dataset if dataset is not None else {}
         for tk in (
             (False, i) if type(i) is not str else (True, i)
@@ -1258,6 +1047,286 @@ class dataset:
         return self._PrevData(self._prevDS)
 
 
+Dataset = dataset  # Rename class due to parameter convlict in dynamicValue
+
+
+class dynamicValue:
+    """
+    Dynamic value that automatically updates when its data sources change.
+
+    :param name: The name of the dynamicValue (optional)
+    :type name: str
+    :param dataset: The main dataset to use when calculating the dynamicValue
+    :type dataset: `tinyDisplay.utility.dataset`
+    :param localDataset: An additional dict or dataset to use when calculating
+        the dynamicValue.  (optional)
+    :type localDataset: dict or `tinyDisplay.utility.dataset`
+    :param debug: Set debug mode
+    :type debug: bool
+
+    ..note:
+        Debug mode will cause any evaluation failures to result in
+    """
+
+    _allowedBuiltIns = {
+        k: getattr(builtins, k)
+        for k in [
+            "abs",
+            "bin",
+            "bool",
+            "bytes",
+            "chr",
+            "dict",
+            "float",
+            "hex",
+            "int",
+            "set",
+            "len",
+            "list",
+            "max",
+            "min",
+            "oct",
+            "ord",
+            "round",
+            "str",
+            "sum",
+            "tuple",
+            "type",
+        ]
+    }
+    for m in [i for i in dir(math) if i[0] != "_"]:
+        _allowedBuiltIns[m] = getattr(math, m)
+
+    _allowedBuiltIns["time"] = time
+    _allowedBuiltIns["Path"] = Path
+
+    _allowedMethods = [
+        "get",
+        "lower",
+        "upper",
+        "capitalize",
+        "title",
+        "find",
+        "strftime",
+        "gmtime",
+        "localtime",
+        "timezone",
+        "items",
+        "monotonic",
+    ]
+
+    def __init__(
+        self, name=None, dataset=None, localDataset=None, debug=False
+    ):
+
+        self.name = name
+        self._dataset = dataset or Dataset({})
+        self._localDataset = localDataset if localDataset is not None else {}
+        self._debug = debug
+
+        self._logger = logging.getLogger("tinyDisplay")
+
+        # Used to support methods that will be called by eval but need to be
+        # able to distinguish which object is calling it (e.g. changed)
+        self._holdForIsChanged = {}
+        self._changeID = id(self)
+
+        # Defines allowable functions for compiled statements
+        self._allowedBuiltIns["changed"] = self._isChanged
+        self._allowedBuiltIns["history"] = self._dataset.history
+        self._allowedBuiltIns["store"] = self.store
+
+    def store(self, dbName=None, key=None, value=None):
+        """
+        Store new value to dataset.
+
+        Updates a database with new data.  If in addition to the dbName, only a
+        single value is provided it updates the entire database with the
+        the provided value.  If two additional arguments are provided, it
+        updates a specific key within the database
+
+        :param dbName: the name of the database within the dataset to update
+        :type dbName: str
+        :param key: (optional) If updating a single key within the database,
+            the value of that key
+        :param value: The data to use for the update
+        :raises NoChangeToValue: To signal that store is not updating the
+            current database value.
+        """
+
+        if key is not None:
+            self._dataset.update(dbName, {key: value})
+        else:
+            self._dataset.update(dbName, key)
+        raise NoChangeToValue()
+
+    def _isChanged(self, value):
+        ret = (
+            False
+            if self._changeID not in self._holdForIsChanged
+            else True
+            if self._holdForIsChanged.get(self._changeID) != value
+            else False
+        )
+        self._holdForIsChanged[self._changeID] = value
+        return ret
+
+    def compile(self, source=None, default=None, validator=None, dynamic=True):
+        """
+        Compile provided input.
+
+        :param source: The value to convert into compiled code
+        :type source: str or `callable`
+        :param default: A value to use if an evaluation of this code fails
+            (optional)
+        :param validator: A function to call to validate the answer when
+            the code gets evaluated (optional)
+        :param dynamic: Enables dynamic evaluation
+        :type dynamic: bool
+        :raises CompileError: if input includes unauthorized functions
+            or references data that is not within the dataset
+
+        ..note:
+            Compilation is limited to the set of authorized functions and the
+            variables contained within the available datasets.  You will raise
+            a NameError if you use any other terms.  So, make sure that your
+            dataset has a database for any variable you need to reference.
+
+            example::
+                Assuming a dataset with a database named 'db' containing
+                    {'value': False}
+
+                "db['value'] == True" will compile fine and eval fine
+                "db['xyz'] == True" will compile fine but not eval successfully
+                "bad['value'] == True" will not compile
+                "bad == True" will not compile
+                "db['value'] == bad" will not compile
+        """
+
+        self.source = source
+        self.default = default
+        self.validator = validator
+        self.dynamic = dynamic
+
+        name = self.name or id(source)
+
+        # If code is string then compile the string, otherwise return code unchanged
+        # as it can also be either be a static value or a function
+        self.func = None
+        if dynamic is True:
+            if type(source) is str:
+                warnings.simplefilter("error")
+                try:
+                    code = compile(source, "<string>", "eval")
+                    for n in code.co_names:
+                        if (
+                            n not in self._allowedBuiltIns
+                            and n not in self._allowedMethods
+                            and n not in self._dataset
+                            and n not in self._localDataset
+                        ):
+                            raise CompileError(
+                                f"While compiling {name} with '{source}': '{n}' is not defined"
+                            )
+
+                    self.func = lambda v: eval(
+                        code, {"__builtins__": self._allowedBuiltIns}, v
+                    )
+                except (ValueError, SyntaxError) as ex:
+                    raise CompileError(
+                        f"While compiling {name} with '{source}' a {ex.__class__.__name__} error occured: {ex}"
+                    )
+                finally:
+                    warnings.simplefilter("default")
+            elif callable(source):
+                self.func = source
+        else:
+            # If not dynamic the source will be returned
+            # whenever this dynamicValue is evaluated
+            self.source = source
+
+        # If input is not a function or a evaluatable string that contains
+        # no variables (e.g. always returns the same value) or a syntax error
+        # then no need to calculate the value more than once
+        self.static = (
+            True
+            if not self.func
+            or (
+                hasattr(self.func, "co_names") and len(self.func.co_names) == 0
+            )
+            else False
+        )
+
+    def eval(self):
+        """
+        (Eval)uate the function and return resulting value.
+
+        :returns: The results of the eval.  It can be any valid python object.
+        :rtype: object
+        :raises NoChangeToValue: If needed to signal that this evaluation is
+            not intended to produce a new value (used by store function)
+        :raises ValidationError: If the evaluated value failes its validation test
+        """
+
+        d = {**self._dataset, **self._localDataset}
+
+        if self.func is not None:
+            errMsg = (
+                f"While evaluating {self.name} with '{self.source}'"
+                if self.name is not None
+                else f"While evaluating '{self.source}'"
+            )
+
+            if not self.static or not hasattr(self, "prevValue"):
+                try:
+                    ans = self.func(d)
+                except NoChangeToValue:
+                    raise
+                except (KeyError, TypeError, AttributeError) as ex:
+                    if self._debug:
+                        raise ex.__class__(
+                            f"{errMsg} a {ex.__class__.__name__} error occured: {' '.join(ex.args)}"
+                        )
+                    ans = self.default
+                except Exception as ex:
+                    raise ex.__class__(
+                        f"{errMsg} a {ex.__class__.__name__} error occured: {' '.join(ex.args)}"
+                    )
+            else:
+                ans = self.prevValue
+        else:
+            ans = self.source
+
+        try:
+            self._changed = (
+                True
+                if hasattr(self, "prevValue") and self.prevValue != ans
+                else False
+            )
+        # If objects are not comparible
+        except:
+            self._changed = True
+
+        if self.validator is not None:
+            if not self._validator(ans):
+                raise ValidationError(
+                    f"While evaluating {self.name} with '{self.source}': {ans} is not a valid result"
+                )
+
+        self.prevValue = ans
+        return ans
+
+    @property
+    def changed(self):
+        """
+        Check if the evaluator statement named `key` has recently changed.
+
+        :returns: True if the value of the statement changed during the last
+            evaluation of it.
+        """
+        return self._changed if hasattr(self, "_changed") else False
+
+
 def image2Text(img, background="black"):
     """
     Convert PIL.Image to a character representation.
@@ -1291,7 +1360,7 @@ def image2Text(img, background="black"):
     return retval
 
 
-def compareImage(i1, i2):
+def compareImage(i1, i2, debug=False):
     """
     Compare if two images are the same or different.
 
@@ -1300,13 +1369,27 @@ def compareImage(i1, i2):
     :param i2: Second image to compare
     :type i2: `PIL.Image`
     :returns: True if they are identical
+    :param debug: If true prints the location of the first failed match to stdout
+    :type debug: bool
     """
 
     if i1.size != i2.size:
         return False
+    if i1.mode != i2.mode:
+        return False
     for j in range(i1.size[1]):
         for i in range(i1.size[0]):
             if i1.getpixel((i, j)) != i2.getpixel((i, j)):
+                if i1.mode in ["L", "RGBA"]:
+                    if (
+                        i1.getpixel((i, j))[-1] == 0
+                        and i2.getpixel((i, j))[-1] == 0
+                    ):
+                        continue
+                if debug:
+                    print(
+                        f"Match failed at ({i}, {j}) i1 = {i1.getpixel((i, j))}, i2 = {i2.getpixel((i, j))}"
+                    )
                 return False
     return True
 
@@ -1326,3 +1409,19 @@ def okPath(dirs, path):
         if os.path.commonpath((os.path.realpath(path), d)) == d:
             return True
     return False
+
+
+def getArgDecendents(c):
+    """
+    Retrieve arguments for a class including args from parent classes.
+
+    :param c: The class to search
+    :type c: `class`
+    :returns: A list of arguments
+    """
+    args = []
+    for i in getmro(c):
+        for arg in getfullargspec(i)[0][1:]:
+            if arg not in args:
+                args.append(arg)
+    return args
