@@ -89,7 +89,7 @@ def test_scroll_widget_performance(speed, duration, animator, makeScroll):
 
     assert (
         abs(received - expected) <= 0.05 * expected
-    ), f"Received {received} renders.  Expected {expected}.  [{received/expected:0.3f}]\nAnimator reports {a.fpsList} fps. \nActual Time was {t1-t0:0.2f}"
+    ), f"Received {received} renders.  Expected {expected}.  [{received/expected:0.3f}]\nActual Time was {t1-t0:0.2f}"
 
 
 def test_scroll_wrap_move(makeScroll):
