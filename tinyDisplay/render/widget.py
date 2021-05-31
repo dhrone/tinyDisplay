@@ -118,7 +118,7 @@ class widget(metaclass=abc.ABCMeta):
             self._compile(
                 activeWhen, "_activeWhen", default=True, dynamic=True
             )
-
+        self._fixColors()
         self.clear()  # Create initial canvas
 
         # Establish initial values for local DB
@@ -220,6 +220,17 @@ class widget(metaclass=abc.ABCMeta):
                 changed = True
         return changed
 
+    def _fixColors(self):
+        # When reaching from Yaml need to accept lists because tuples are not
+        # possible.  Colors require tuples (if numeric) so thie function
+        # converts list entries into tuples.
+        colorArgs = ["_background", "_foreground", "_fill", "_outline"]
+        for c in colorArgs:
+            if c in dir(self):
+                a = getattr(self, c)
+                if type(a) is list:
+                    setattr(self, c, tuple(a))
+
     def __getattr__(self, name):
         msg = f"{self.__class__.__name__} object has no attribute {name}"
         if "image" not in self.__dict__:
@@ -286,7 +297,6 @@ class widget(metaclass=abc.ABCMeta):
         self.image = None
         # size = self._dV["requestedSize"] or size
         size = self._size or size
-        # self.image = Image.new(self._mode, size, self._dV["background"])
         self.image = Image.new(self._mode, size, self._background)
 
     @property
@@ -460,6 +470,7 @@ class widget(metaclass=abc.ABCMeta):
 
         try:
             nd = self._evalAll()
+            self._fixColors()  # Refix colors if they have changed because of eval
         except DataError as ex:
             if self._debug:
                 raise
@@ -513,9 +524,14 @@ class text(widget):
     :type font: `PIL.ImageFont`
     :param lineSpacing: The number of pixels to add between lines of text (default 0)
     :type lineSpacing: int
+    :param wrap: Wrap text if true
+    :type wrap: bool
+
+    ..note:
+        If wrap is True, you must provide a size.  Otherwise wrap is ignored.
     """
 
-    NOTDYNAMIC = ["font", "antiAlias", "lineSpacing"]
+    NOTDYNAMIC = ["font", "antiAlias", "lineSpacing", "wrap"]
 
     def __init__(
         self,
@@ -523,15 +539,12 @@ class text(widget):
         font=None,
         antiAlias=False,
         lineSpacing=0,
+        wrap=False,
         *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
 
-        print(f"\n====KWARGS [{self.name}][{kwargs}] ====")
-        print(
-            f"====GETARGS [{self.name}][{getargvalues(currentframe())}] ====\n"
-        )
         self._initArguments(
             getfullargspec(text.__init__),
             getargvalues(currentframe()),
@@ -542,6 +555,7 @@ class text(widget):
         self._font = font or _textDefaultFont
         self._lineSpacing = lineSpacing
         self._antiAlias = antiAlias
+        self._wrap = wrap
 
         self._tsDraw = ImageDraw.Draw(Image.new("1", (0, 0), 0))
         self._tsDraw.fontmode = self._fontMode
@@ -565,6 +579,32 @@ class text(widget):
             return "L" if self._antiAlias else "1"
         return "1"
 
+    def _makeWrapped(self, value, width):
+        vl = value.split(" ")
+        lines = []
+        line = ""
+        for w in vl:
+            tl = line + " " + w if len(line) > 0 else w
+            if self._sizeLine(tl)[0] <= width:
+                line = tl
+            else:
+                if len(line) == 0:
+                    lines.append(tl)
+                else:
+                    lines.append(line)
+                    line = w
+        if len(line) > 0:
+            lines.append(line)
+
+        return "\n".join(lines)
+
+    def _sizeLine(self, value):
+        tSize = self._tsDraw.textsize(
+            value, font=self.font, spacing=self._lineSpacing
+        )
+        tSize = (0, 0) if tSize[0] == 0 else tSize
+        return tSize
+
     def _render(self, force=False, newData=False, *args, **kwargs):
 
         # If the string to render has not changed then return current image
@@ -575,12 +615,12 @@ class text(widget):
         value = self._value
         self._reprVal = f"'{value}'"
 
-        tSize = self._tsDraw.textsize(
-            value, font=self.font, spacing=self._lineSpacing
-        )
-        tSize = (0, 0) if tSize[0] == 0 else tSize
+        if self._wrap and self._size is not None:
+            # Wrap only if a specific size was requested, otherwise ignore
+            value = self._makeWrapped(value, self._size[0])
 
-        # img = Image.new(self._mode, tSize, self._dV["background"])
+        tSize = self._sizeLine(value)
+
         img = Image.new(self._mode, tSize, self._background)
         if img.size[0] != 0:
             d = ImageDraw.Draw(img)

@@ -110,13 +110,13 @@ PATHS:
   fonts: 'tests/reference/fonts/'
 
 COLORS:
-  background: &bg 0x7, 0x37, 0x63, 0xff
-  foreground: &fg 0, 0, 0, 0xff
-  transparent: &transparent 0, 0, 0, 0
+  background: &bg [0x7, 0x37, 0x63, 0xff]
+  foreground: &fg [0, 0, 0, 0xff]
+  transparent: &transparent [0, 0, 0, 0]
 
 DEFAULTS:
   display:
-    size: &dsize 320, 240
+    size: &dsize [320, 240]
     type: &dtype ili9341
 
   zorder:
@@ -128,11 +128,11 @@ DEFAULTS:
   widgets:
     scroll: &scroll
       type: scroll
-      gap: int(__self__['size'][0]/4), 0
-      size: 100, 8
+      dgap: int(__self__['size'][0]/4), 0
+      size: [100, 8]
       wait: 'atStart'
       actions:
-        - pause, 5
+        - [pause, 5]
         - rtl
 
 DISPLAY:
@@ -146,20 +146,20 @@ DISPLAY:
     items:
       - name: topBar
         type: canvas
-        size: 320, 20
+        size: [320, 20]
         items:
 
           - name: service
             type: text
-            value: db['service']
-            placement: 2, -1, lm
+            dvalue: db['service']
+            placement: [2, -1, lm]
             font: small
 
           - name: topBarRightIcons
             type: stack
-            size: int(320 * 0.75), 20
+            dsize: int(320 * 0.75), 20
             just: rm
-            placement: -2, 0, rm
+            placement: [-2, 0, rm]
             items:
               - name: volumeIcon
                 type: index
@@ -177,86 +177,87 @@ DISPLAY:
                     file: Volume_On_100_16x16.png
               - name: volume
                 type: text
-                value: db['volume']
+                dvalue: db['volume']
                 font: small
-                foreground: "'white' if db['volume'] > 0 else 'grey'"
+                dforeground: "'white' if db['volume'] > 0 else 'grey'"
 
 
       - name: middleRegion
         type: canvas
-        size: 320, 200
-        placement: 0, 20
+        size: [320, 200]
+        placement: [0, 20]
         items:
           - name: left
             type: canvas
-            size: 160, 200
+            size: [160, 200]
             items:
               - name: albumart
                 type: image
-                url: db['albumart']
-                size: 150, 150
+                durl: db['albumart']
+                size: [150, 150]
                 placement: mm
 
           - name: right
             type: canvas
-            size: 160, 200
-            placement: 160, 0
+            size: [160, 200]
+            placement: [160, 0]
             items:
               - name: album
                 type: text
                 font: large
-                value: db['album']
-                placement: 0, 20, mt
+                dvalue: db['album']
+                placement: [0, 20, mt]
               - name: artist
                 type: text
                 font: small
-                value: db['artist']
-                placement: 0, 36, mt
+                dvalue: db['artist']
+                placement: [0, 36, mt]
               - name: title
                 type: text
                 font: small
-                value: db['title']
-                placement: 0, 60, mt
+                dvalue: db['title']
+                wrap: True
+                placement: [0, 60, mt]
               - name: encoding
                 type: text
                 font: small
-                value: f"{db['channelDescription'].upper()} {db['samplerate']} / {db['bitdepth']}"
-                placement: 0, -4, lb
+                dvalue: f"{db['channelDescription'].upper()} {db['samplerate']} / {db['bitdepth']}"
+                placement: [0, -4, lb]
               - name: playListState
                 type: text
                 font: small
-                value: f"{db['position']+1} of {db['playlistLength']}"
+                dvalue: f"{db['position']+1} of {db['playlistLength']}"
                 just: rt
-                placement: -2, -4, rb
+                placement: [-2, -4, rb]
 
       - name: bottomBar
         type: canvas
-        size: 320, 20
+        size: [320, 20]
         placement: lb
         items:
           - name: position
             type: text
             font: small
-            value: time.strftime('%M:%S', time.gmtime(int(db['elapsed'])))
-            placement: 2, 0, lm
+            dvalue: time.strftime('%M:%S', time.gmtime(int(db['elapsed'])))
+            placement: [2, 0, lm]
           - name: duration
             type: text
             font: small
-            value: time.strftime('%M:%S', time.gmtime(int(db['duration'])))
-            placement: -2, 0, rm
+            dvalue: time.strftime('%M:%S', time.gmtime(int(db['duration'])))
+            placement: [-2, 0, rm]
           - name: progress
             type: progressBar
-            value: db['elapsed']
-            range: 0, db['duration']
-            foreground: f'white'
-            background: 0x3d, 0x85, 0xc6
-            fill: f'white'
-            size: (316, 2)
+            dvalue: db['elapsed']
+            drange: 0, db['duration']
+            foreground: white
+            background: [0x3d, 0x85, 0xc6]
+            fill: white
+            size: [316, 2]
             placement: mt
           - name: playerStateIcon
             type: index
             placement: mm
-            value: 0 if db['status'] == 'play' else 1 if db['status'] == 'pause' else 2
+            dvalue: 0 if db['status'] == 'play' else 1 if db['status'] == 'pause' else 2
             items:
               - type: image
                 file: play_16x16.png
