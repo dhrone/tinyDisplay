@@ -8,13 +8,13 @@ Collection widgets to present, and animate the display canvases.
 .. versionadded:: 0.0.1
 """
 import bisect
-from inspect import isclass
+from inspect import currentframe, getargvalues, getfullargspec, isclass
 
 from PIL import Image
 
 from tinyDisplay.render import collection
 from tinyDisplay.render.widget import image, widget
-from tinyDisplay.utility import getArgDecendents
+from tinyDisplay.utility import getArgDecendents, getNotDynamicDecendents
 
 
 class canvas(widget):
@@ -112,7 +112,7 @@ class canvas(widget):
         # Check wait status for any widgets that have wait settings
         for i in self._placements:
             wid, off, anc = i
-            if hasattr(wid, "_wait"):
+            if hasattr(wid, "_wait") and wid._wait is not None:
                 waiting = {
                     "atStart": wid.atStart,
                     "atPause": wid.atPause,
@@ -247,7 +247,7 @@ class stack(canvas):
 
         if changed or newData:
             x, y = self._computeSize()
-            img = Image.new(self._mode, (x, y), self._dV["background"])
+            img = Image.new(self._mode, (x, y), self._background)
             if self._orientation == "horizontal":
                 o = 0
                 for w in self._widgets:
@@ -284,7 +284,11 @@ class index(canvas):
 
         super().__init__(*args, **kwargs)
 
-        self._dV.compile(value, name="value", default=0)
+        self._initArguments(
+            getfullargspec(index.__init__), getargvalues(currentframe())
+        )
+        self._evalAll()
+
         self._widgets = []
         self._max = (0, 0)
 
@@ -306,14 +310,14 @@ class index(canvas):
         self.render(force=True)
 
     def _calculateSize(self):
-        if self._dV["requestedSize"] is None:
+        if self._size is None:
             x, y = 0, 0
             for w in self._widgets:
                 x = max(x, w.size[0])
                 y = max(y, w.size[1])
             return (x, y)
         else:
-            return self._dV["requestedSize"]
+            return self._size
 
     def _render(self, force=False, newData=None, *args, **kwargs):
         img = None
@@ -358,9 +362,9 @@ class sequence(canvas):  # noqa: D101
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        size = self._dV["requestedSize"] or (0, 0)
+        size = self._size or (0, 0)
         self._defaultCanvas = defaultCanvas or image(
-            image=Image.new(self._mode, size, self._dV["background"])
+            image=Image.new(self._mode, size, self._background)
         )  # Set an empty image if no defaultCanvas provided
 
         self._canvases = []
@@ -386,12 +390,22 @@ class sequence(canvas):  # noqa: D101
         item.render(force=True)
 
         # Resize sequence's canvas as needed to fit any appended canvas
-        rs = self._dV["requestedSize"] or (0, 0)
+        rs = self._size or (0, 0)
         mx = max(item.size[0], rs[0])
         my = max(item.size[1], rs[1])
-        self._requestedSize = (mx, my)
+        self._size = (mx, my)
         self._currentCanvas = 0
         self.render(force=True)
+
+    def _computeSize(self):
+        mx, my = self._size or (0, 0)
+        if len(self._canvases) == 0:
+            dcs = self._defaultCanvas.size
+            mx, my = max(dcs[0], mx), max(dcs[1], my)
+        else:
+            for item in self._canvases:
+                mx, my = max(item.size[0], mx), max(item.size[1], my)
+        return (mx, my)
 
     def _render(self, force=False, newData=None, *args, **kwargs):
         if force:
@@ -402,7 +416,7 @@ class sequence(canvas):  # noqa: D101
         if not img:
             img, new = self._defaultCanvas.render()
         if new or newData:
-            self.clear(img.size)
+            self.clear(self._computeSize())
             self._place(wImage=img, just=self.just)
         return (self.image, new or force)
 
@@ -456,3 +470,11 @@ PARAMS = {
     for k, v in collection.__dict__.items()
     if isclass(v) and issubclass(v, canvas)
 }
+
+for k, v in PARAMS.items():
+    nv = list(v)
+    NDD = getNotDynamicDecendents(collection.__dict__[k])
+    for arg in v:
+        if arg not in NDD:
+            nv.append(f"d{arg}")
+    PARAMS[k] = nv

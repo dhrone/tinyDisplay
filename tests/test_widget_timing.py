@@ -106,7 +106,7 @@ def test_coolingPeriod():
     """
     ds = {"db": {"f": False}}
     w = text(
-        value="'abc'",
+        value="abc",
         duration=5,
         coolingPeriod=10,
         activeWhen='db["f"]',

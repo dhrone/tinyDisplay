@@ -26,7 +26,13 @@ class UpdateError(DataError):
 
 
 class CompileError(DataError):
-    """Error when compiling a dynamic variable."""
+    """Error when compiling a dynamicValue."""
+
+    pass
+
+
+class EvaluationError(DataError):
+    """Error when evaluating a dynamicValue."""
 
     pass
 

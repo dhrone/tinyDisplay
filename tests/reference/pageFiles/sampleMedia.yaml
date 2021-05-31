@@ -163,7 +163,7 @@ DISPLAY:
             items:
               - name: volumeIcon
                 type: index
-                value: ceil(db['volume']/25)
+                dvalue: ceil(db['volume']/25)
                 items:
                   - type: image
                     file: Volume_Off_16x16.png

@@ -117,15 +117,16 @@ class _tdLoader:
             cfg = None
             size = None
             cfg = deepcopy(self._pf["DISPLAY"])
-            size = cfg["size"]
+            size = cfg.get("size")
+            dsize = cfg.get("dsize")
         except KeyError:
             if cfg is None:
                 raise RuntimeError(
                     "No Display configuration found in page file"
                 )
-            if size is None:
-                raise RuntimeError("No size provided for Display in page file")
             raise RuntimeError("No items provided for Display in page file")
+        if not (size or dsize):
+            raise RuntimeError("No size provided for Display in page file")
 
         if "type" not in cfg:
             cfg["type"] = "canvas"

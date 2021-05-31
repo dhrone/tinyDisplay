@@ -11,7 +11,7 @@ import abc
 import logging
 import os
 import pathlib
-from inspect import isclass
+from inspect import currentframe, getargvalues, getfullargspec, isclass
 from urllib.request import urlopen
 
 from PIL import Image, ImageColor, ImageDraw
@@ -24,6 +24,7 @@ from tinyDisplay.utility import (
     dataset as Dataset,
     evaluator,
     getArgDecendents,
+    getNotDynamicDecendents,
     image2Text,
     okPath,
 )
@@ -47,6 +48,8 @@ class widget(metaclass=abc.ABCMeta):
     :type just: str
     """
 
+    NOTDYNAMIC = ["name", "dataset"]
+
     def __init__(
         self,
         name=None,
@@ -57,9 +60,10 @@ class widget(metaclass=abc.ABCMeta):
         coolingPeriod=None,
         dataset=None,
         mode="RGBA",
-        foreground="'white'",
+        foreground="white",
         background=None,
         just="lt",
+        **kwargs,
     ):
 
         self._debug = globalVars.__DEBUG__
@@ -97,21 +101,124 @@ class widget(metaclass=abc.ABCMeta):
             "RGB",
             "RGBA",
         ), "TinyDisplay only supports PIL modes 1, L, LA, RGB, and RGBA"
-        self._mode = mode
 
-        bgDefault = (0, 0, 0, 0) if self._mode == "RGBA" else "'black'"
-
-        self._dV.compile(size, name="requestedSize", default=None)
-        self._dV.compile(activeWhen, name="activeWhen", default=True)
-        self._dV.compile(foreground, name="foreground", default="white")
-        self._dV.compile(
-            background or bgDefault, name="background", default=bgDefault
+        self._initArguments(
+            getfullargspec(widget.__init__),
+            getargvalues(currentframe()),
+            widget.NOTDYNAMIC,
         )
-        self._dV.evalAll()
+        self._evalAll()
+
+        # Override dynamicValue for background if it is not dynamic
+        if not self._dV._statements["_background"].dynamic:
+            bgDefault = (0, 0, 0, 0) if self._mode == "RGBA" else "black"
+            self._background = background or bgDefault
+
+        if not self._dV._statements["_activeWhen"].dynamic:
+            self._compile(
+                activeWhen, "_activeWhen", default=True, dynamic=True
+            )
+
         self.clear()  # Create initial canvas
 
         # Establish initial values for local DB
         self._computeLocalDB()
+
+    def _initArguments(self, argSpec, argValues, exclude=None):
+        kwargs = argValues[3]["kwargs"]
+        args = (
+            [item for item in argSpec[0][1:] if item not in exclude]
+            if exclude is not None
+            else argSpec[0][1:]
+        )
+        defaults = argSpec[3]
+        for a in args:
+            kname = f"d{a}"
+            aname = f"_{a}"
+            if kname in kwargs:
+                i = args.index(a)
+                self._compile(
+                    kwargs[kname],
+                    name=aname,
+                    default=defaults[i],
+                    dynamic=True,
+                )
+            else:
+                self._compile(argValues[3][a], name=aname, dynamic=False)
+
+    def _compile(
+        self, source, name, default=None, validator=None, dynamic=True
+    ):
+        """
+        Compile dynamicValue for Widget.
+
+        :param source: The source for the dynamicValue
+        :param name: The name to assign the dynamicValue
+        :type name: str
+        :param default: The devault value used for the dynamicValue if
+            the evaluation fails
+        :param validator: function used to validate answer during eval (optional)
+        :type validator: callable
+        :param dynamic: True if dynamicVariable should compute value during eval
+        :type dynamic: bool
+
+        ..note:
+            If dynamic is False, eval returns the value provided in source every
+            time eval is called.  If dynamic is True, a new value is computed
+            based upon the function or evaluatable statement that was provided
+            in source.
+
+        ..note:
+            If provided, the validator function must accept a value to be tested
+            and return True if it is ok, or False if it is bad
+
+        :raises: `tinyDisplay.exception.CompileError`
+        """
+        self._dV.compile(
+            source=source,
+            name=name,
+            default=default,
+            validator=validator,
+            dynamic=dynamic,
+        )
+        setattr(self, name, default)
+
+    def _eval(self, name):
+        """
+        Evaluate dynamicValue.
+
+        :param name: The name of the dynamicValue to evaluate
+        :type name: str
+        :returns: The resulting value
+        :raises: `tinyDisplay.exceptions.EvaluationError`
+        :raises: `tinyDisplay.exceptions.ValidationError`
+        :raises: AttributeError
+        """
+        try:
+            value = self._dV.eval(name)
+            if self._dV._statements[name].changed:
+                setattr(self, name, value)
+            return value
+        except KeyError as ex:
+            # It's a KeyError from the perspective of the evaluator but from the
+            # widget's perspective it's a member variable so throw AttributeError
+            raise AttributeError(ex)
+
+    def _evalAll(self):
+        """
+        Evaluate all dynamicValues that are contained in the widget.
+
+        :returns: True if any of the values have changed
+        :rtype: bool
+        :raises: `tinyDisplay.exceptions.EvaluationError`
+        :raises: `tinyDisplay.exceptions.ValidationError`
+        """
+        changed = False
+        for name in self._dV:
+            self._eval(name)
+            if self._dV._statements[name].changed:
+                changed = True
+        return changed
 
     def __getattr__(self, name):
         msg = f"{self.__class__.__name__} object has no attribute {name}"
@@ -126,11 +233,18 @@ class widget(metaclass=abc.ABCMeta):
         cw = ""
         n = self.name if self.name else "unnamed"
         v = f"value({self._reprVal}) " if self._reprVal else ""
-        return f"<{n}.{self.type} {v}size{self.size} {cw}at 0x{id(self):x}>"
+        if "size" in dir(self) or (
+            "image" in dir(self) and "size" in dir(self.image)
+        ):
+            return (
+                f"<{n}.{self.type} {v}size{self.size} {cw}at 0x{id(self):x}>"
+            )
+        else:
+            return f"<{n}.{self.type} {v}size(unknown) {cw}at 0x{id(self):x}>"
 
     def __str__(self):
         if self.image:
-            return image2Text(self.image, self._dV["background"])
+            return image2Text(self.image, self._background)
         return "image empty"
 
     def _computeLocalDB(self):
@@ -170,8 +284,10 @@ class widget(metaclass=abc.ABCMeta):
             provided, clear will produce a blank image that has size (0, 0).
         """
         self.image = None
-        size = self._dV["requestedSize"] or size
-        self.image = Image.new(self._mode, size, self._dV["background"])
+        # size = self._dV["requestedSize"] or size
+        size = self._size or size
+        # self.image = Image.new(self._mode, size, self._dV["background"])
+        self.image = Image.new(self._mode, size, self._background)
 
     @property
     def active(self):
@@ -191,7 +307,8 @@ class widget(metaclass=abc.ABCMeta):
         """
 
         result = False
-        isActive = self._dV["activeWhen"]
+        # isActive = self._dV["activeWhen"]
+        isActive = self._activeWhen
 
         # If currentCoolingPeriod has time left return False
         if self._coolingPeriod is not None and self._currentCoolingPeriod > 0:
@@ -342,7 +459,7 @@ class widget(metaclass=abc.ABCMeta):
             force = True
 
         try:
-            nd = self._dV.evalAll()
+            nd = self._evalAll()
         except DataError as ex:
             if self._debug:
                 raise
@@ -398,6 +515,8 @@ class text(widget):
     :type lineSpacing: int
     """
 
+    NOTDYNAMIC = ["font", "antiAlias", "lineSpacing"]
+
     def __init__(
         self,
         value=None,
@@ -408,14 +527,43 @@ class text(widget):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        font = font or _textDefaultFont
-        self.font = font
-        self._fontMode = "L" if antiAlias else "1"
-        self.lineSpacing = lineSpacing
+
+        print(f"\n====KWARGS [{self.name}][{kwargs}] ====")
+        print(
+            f"====GETARGS [{self.name}][{getargvalues(currentframe())}] ====\n"
+        )
+        self._initArguments(
+            getfullargspec(text.__init__),
+            getargvalues(currentframe()),
+            text.NOTDYNAMIC,
+        )
+        self._evalAll()
+
+        self._font = font or _textDefaultFont
+        self._lineSpacing = lineSpacing
+        self._antiAlias = antiAlias
+
         self._tsDraw = ImageDraw.Draw(Image.new("1", (0, 0), 0))
         self._tsDraw.fontmode = self._fontMode
-        self._dV.compile(value, name="value", default="")
+
         self.render(reset=True)
+
+    @property
+    def font(self):
+        """
+        Return current font.
+
+        :returns: The current font used in the text widget
+        """
+        if "_font" in dir(self):
+            return self._font
+        return None
+
+    @property
+    def _fontMode(self):
+        if "_antiAlias" in dir(self):
+            return "L" if self._antiAlias else "1"
+        return "1"
 
     def _render(self, force=False, newData=False, *args, **kwargs):
 
@@ -423,15 +571,17 @@ class text(widget):
         if not newData and not force:
             return (self.image, False)
 
-        value = str(self._dV["value"])
+        # value = str(self._dV["value"])
+        value = self._value
         self._reprVal = f"'{value}'"
 
         tSize = self._tsDraw.textsize(
-            value, font=self.font, spacing=self.lineSpacing
+            value, font=self.font, spacing=self._lineSpacing
         )
         tSize = (0, 0) if tSize[0] == 0 else tSize
 
-        img = Image.new(self._mode, tSize, self._dV["background"])
+        # img = Image.new(self._mode, tSize, self._dV["background"])
+        img = Image.new(self._mode, tSize, self._background)
         if img.size[0] != 0:
             d = ImageDraw.Draw(img)
             d.fontmode = self._fontMode
@@ -440,8 +590,9 @@ class text(widget):
                 (0, 0),
                 value,
                 font=self.font,
-                fill=self._dV["foreground"],
-                spacing=self.lineSpacing,
+                # fill=self._dV["foreground"],
+                fill=self._foreground,
+                spacing=self._lineSpacing,
                 align=just,
             )
 
@@ -473,39 +624,42 @@ class progressBar(widget):
         the image that is transparent.
     """
 
+    NOTDYNAMIC = ["mask"]
+
     def __init__(
         self,
         value=None,
-        range=None,
+        range=(0, 100),
         mask=None,
-        fill=None,
+        fill="white",
         opacity=0,
         direction="ltr",
         *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self._dV.compile(fill, "fill", "white")
-        self._opacity = opacity
-        self.direction = direction.lower()
 
-        size = self._dV["requestedSize"]
-        self.mask = (
+        self._initArguments(
+            getfullargspec(progressBar.__init__),
+            getargvalues(currentframe()),
+            progressBar.NOTDYNAMIC,
+        )
+        self._evalAll()
+
+        self._mask = (
             mask
             if mask
             else self._defaultMask(
-                size,
+                self._size,
                 self._mode,
-                self._dV["foreground"],
-                self._dV["background"],
+                self._foreground,
+                self._background,
                 self._opacity,
             )
         )
         if type(mask) in [str, pathlib.PosixPath]:
-            self.mask = Image.open(pathlib.PosixPath(mask))
+            self._mask = Image.open(pathlib.PosixPath(mask))
 
-        self._dV.compile(range or (0, 100), name="range", default=(0, 100))
-        self._dV.compile(value, name="value", default="")
         self.render(reset=True)
 
     @staticmethod
@@ -569,14 +723,14 @@ class progressBar(widget):
         if not newData and not force:
             return (self.image, False)
 
-        value = self._dV["value"]
-        range = self._dV["range"]
+        value = self._value
+        range = self._range
         scale = self._getScaler(value, range)
 
         self._reprVal = f"{scale*100:.1f}%"
 
-        size = self.mask.size
-        dir = self.direction
+        size = self._mask.size
+        dir = self._direction
 
         (w, h) = (
             (size[0], round(size[1] * scale))
@@ -593,14 +747,12 @@ class progressBar(widget):
 
         # Build Fill
 
-        fill = Image.new(self._mode, size, self._dV["background"])
+        fill = Image.new(self._mode, size, self._background)
         fill.paste(
-            Image.new(
-                self._mode, (w, h), self._dV["fill"] or self._dV["foreground"]
-            ),
+            Image.new(self._mode, (w, h), self._fill or self._foreground),
             (px, py),
         )
-        fill.paste(self.mask, (0, 0), self.mask)
+        fill.paste(self._mask, (0, 0), self._mask)
 
         self.clear(fill.size)
         self._place(wImage=fill, just=self.just)
@@ -634,6 +786,8 @@ class marquee(widget):
     :type moveWhen: `function` or str
     """
 
+    NOTDYNAMIC = ["widget", "actions"]
+
     def __init__(
         self,
         widget=None,
@@ -643,38 +797,36 @@ class marquee(widget):
         distance=1,
         moveWhen=None,
         wait=None,
-        gap=None,
+        gap=(0, 0),
         *args,
         **kwargs,
     ):
         assert widget, "No widget supplied to initialize scroll"
         super().__init__(*args, **kwargs)
 
-        self._timeRatio = int(speed)
+        self._initArguments(
+            getfullargspec(marquee.__init__),
+            getargvalues(currentframe()),
+            marquee.NOTDYNAMIC,
+        )
+        self._evalAll()
+
         self._widget = widget
-        self._resetOnChange = resetOnChange
         self._actions = []
         for a in actions:
-            a = a if type(a) == tuple else (a,)
+            a = a if type(a) in [tuple, list] else (a,)
             self._actions.append(a)
-        self._distance = int(distance)
+
         self._timeline = []
         self._tick = 0
 
-        assert wait in [
-            "atStart",
-            "atPause",
-            "atPauseEnd",
-            None,
-        ], f"{0} is an invalid wait type.  Supported values are 'atStart', 'atPause' or 'atPauseEnd'"
-        if wait:
-            self._wait = wait
-
-        self._dV.compile(
-            moveWhen or self._shouldIMove, name="moveWhen", default=""
-        )
-        if gap is not None:
-            self._dV.compile(gap, name="gap", default=(0, 0))
+        if not self._dV._statements["_moveWhen"].dynamic:
+            self._compile(
+                moveWhen or self._shouldIMove,
+                "_moveWhen",
+                default=False,
+                dynamic=True,
+            )
 
         self.render(reset=True, move=False)
 
@@ -755,7 +907,7 @@ class marquee(widget):
             )
             curPos = (curPos[0] + dir[0], curPos[1] + dir[1])
 
-            for _ in range(self._timeRatio):
+            for _ in range(self._speed):
                 self._timeline.append(curPos)
                 tickCount += 1
         return (curPos, tickCount)
@@ -877,13 +1029,13 @@ class slide(marquee):
         return (curPos, tickCount)
 
     def _computeTimeline(self):
-        if self._dV["moveWhen"]:
+        if self._moveWhen:
             self._reprVal = "sliding"
             tickCount = 0
             curPos = self._curPos
 
             for a in self._actions:
-                a = a if type(a) == tuple else (a,)
+                a = a if type(a) in [tuple, list] else (a,)
                 if a[0] == "pause":
                     tickCount = self._addPause(a[1], curPos, tickCount)
                 elif a[0] == "rts":
@@ -931,7 +1083,7 @@ class popUp(slide):
         self, widget=widget, size=(0, 0), delay=(10, 10), *args, **kwargs
     ):
 
-        delay = delay if type(delay) == tuple else (delay, delay)
+        delay = delay if type(delay) in [tuple, list] else (delay, delay)
         range = widget.size[1] - size[1]
         actions = [
             ("pause", delay[0]),
@@ -967,20 +1119,23 @@ class scroll(marquee):
     :type gap: (int, int) or (str, str)
     """
 
-    def __init__(self, gap=(0, 0), actions=[("rtl",)], *args, **kwargs):
+    def __init__(self, actions=[("rtl",)], *args, **kwargs):
 
         # Figure out which directions the scroll will move so that we can inform the _computeShadowPlacements method
         dirs = [
             v[0]
             for v in actions
-            if (type(v) == tuple and v[0] in ["rtl", "ltr", "ttb", "btt"])
+            if (
+                type(v) in [tuple, list]
+                and v[0] in ["rtl", "ltr", "ttb", "btt"]
+            )
         ] + [v for v in actions if v in ["rtl", "ltr", "ttb", "btt"]]
 
         h = True if ("ltr" in dirs or "rtl" in dirs) else False
         v = True if ("ttb" in dirs or "btt" in dirs) else False
         self._movement = (h, v)
 
-        super().__init__(actions=actions, gap=gap, *args, **kwargs)
+        super().__init__(actions=actions, *args, **kwargs)
 
     def _shouldIMove(self, *args, **kwargs):
         if (
@@ -994,22 +1149,22 @@ class scroll(marquee):
         return False
 
     def _adjustWidgetSize(self):
-        gap = self._dV["gap"]
+        gap = self._gap
         gap = gap if type(gap) is tuple else (gap, gap)
 
-        gapX = round(gap[0])
-        gapY = round(gap[1])
+        gapX = round(float(gap[0]))
+        gapY = round(float(gap[1]))
         sizeX = self._widget.size[0] + gapX
         sizeY = self._widget.size[1] + gapY
         self._aWI = self._widget.image.crop((0, 0, sizeX, sizeY))
 
     def _computeTimeline(self):
-        if self._dV["moveWhen"]:
+        if self._moveWhen:
             self._reprVal = "scrolling"
             tickCount = 0
             curPos = self._curPos
             for a in self._actions:
-                a = a if type(a) == tuple else (a,)
+                a = a if type(a) in [tuple, list] else (a,)
                 if a[0] == "pause":
                     tickCount = self._addPause(a[1], curPos, tickCount)
                 else:
@@ -1102,6 +1257,8 @@ class image(widget):
     :type file: str
     """
 
+    NOTDYNAMIC = ["allowedDirs"]
+
     def __init__(
         self,
         image=None,
@@ -1113,36 +1270,45 @@ class image(widget):
     ):
 
         super().__init__(*args, **kwargs)
-        self._type = (
-            "image"
-            if image is not None
-            else "url"
-            if url is not None
-            else "file"
+        self._initArguments(
+            getfullargspec(Widgets.image.__init__),
+            getargvalues(currentframe()),
+            Widgets.image.NOTDYNAMIC,
         )
+        self._evalAll()
+
         self._allowedDirs = (
             allowedDirs if allowedDirs is not None else os.getcwd()
         )
 
-        self._dV.compile(image or url or file, "source")
         self.render(reset=True)
 
     def _render(self, force=False, newData=False, *args, **kwargs):
         if not force and not newData:
             return (self.image, False)
 
-        source = self._dV["source"]
+        typeImage = (
+            "url"
+            if self._url
+            else "file"
+            if self._file
+            else "image"
+            if self._image
+            else None
+        )
+
+        source = self._url or self._file or self._image
 
         img = None
-        if self._type == "url":
+        if typeImage == "url":
             url = source.replace(" ", "%20")
             img = Image.open(urlopen(url))
-        elif self._type == "file":
+        elif typeImage == "file":
             if okPath(self._allowedDirs, source):
                 img = Image.open(pathlib.Path(source))
             else:
                 raise ValueError(f"{source} is not an authorized path")
-        elif self._type == "image":
+        elif typeImage == "image":
             if isinstance(source, Image.Image):
                 img = source.copy()
             else:
@@ -1150,8 +1316,8 @@ class image(widget):
                     f"{source} is {type(source)} which is not a valid Image"
                 )
 
-        if self._dV["requestedSize"] is not None:
-            img = img.resize(self._dV["requestedSize"])
+        if self._size is not None:
+            img = img.resize(self._size)
 
         self.clear((0, 0) if img is None else img.size)
         self.image = img
@@ -1206,39 +1372,43 @@ class shape(widget):
     :type width: int
     """
 
+    NOTDYNAMIC = ["shape"]
+
     def __init__(
         self,
-        shape=None,
         xy=[],
-        fill="'white'",
-        outline="'white'",
+        shape=None,
+        fill="white",
+        outline="white",
         width=1,
         *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self._dV.compile(xy, "xy")
+        self._initArguments(
+            getfullargspec(Widgets.shape.__init__),
+            getargvalues(currentframe()),
+            Widgets.shape.NOTDYNAMIC,
+        )
+        self._evalAll()
+
         self._shape = shape
-        self._dV.compile(fill, "fill", "white")
-        self._dV.compile(outline, "outline", "white")
-        self._dV.compile(width, "width", 1)
 
     def _render(self, force=False, newData=False, *args, **kwargs):
         if not force and not newData:
             return (self.image, False)
 
-        xy = self._dV["xy"]
         img = None
         img, d = _makeShape(
             self._shape,
-            xy,
-            self._dV["fill"],
-            self._dV["outline"],
-            self._dV["width"],
+            self._xy,
+            self._fill,
+            self._outline,
+            self._width,
             self._mode,
-            self._dV["background"],
+            self._background,
         )
-        self._reprVal = f"{xy}"
+        self._reprVal = f"{self._xy}"
 
         self.clear((0, 0) if img is None else img.size)
         self._place(wImage=img, just=self.just)
@@ -1257,8 +1427,8 @@ class line(shape):
     :type width: int
     """
 
-    def __init__(self, xy=[], *args, **kwargs):
-        super().__init__(shape="line", xy=xy, *args, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, shape="line")
         self.render(reset=True)
 
 
@@ -1274,8 +1444,8 @@ class rectangle(shape):
     :type outline: str
     """
 
-    def __init__(self, xy=[], *args, **kwargs):
-        super().__init__(shape="rectangle", xy=xy, *args, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, shape="rectangle")
         self.render(reset=True)
 
 
@@ -1284,3 +1454,11 @@ PARAMS = {
     for k, v in Widgets.__dict__.items()
     if isclass(v) and issubclass(v, widget) and k != "widget"
 }
+
+for k, v in PARAMS.items():
+    nv = list(v)
+    NDD = getNotDynamicDecendents(Widgets.__dict__[k])
+    for arg in v:
+        if arg not in NDD:
+            nv.append(f"d{arg}")
+    PARAMS[k] = nv

@@ -26,6 +26,7 @@ from simple_pid import PID
 from tinyDisplay import globalVars
 from tinyDisplay.exceptions import (
     CompileError,
+    EvaluationError,
     NoChangeToValue,
     UpdateError,
     ValidationError,
@@ -363,6 +364,21 @@ class evaluator:
                 changed = True
         return changed
 
+    def addValidator(self, name, func):
+        """Add validator to named dynamicValue.
+
+        :param name: The name of the dynamicValue
+        :type name: str
+        :param func: A function to perform the validation
+        :type func: callable
+        :raises: KeyError if name not in evaluator
+
+        ..note:
+            func must accept a value to test and return a bool value that is
+            True when the answer is valid and False when not.
+        """
+        self._dV._statements[name].validator = func
+
     def changed(self, key):
         """
         Check if the evaluator statement named `key` has recently changed.
@@ -396,6 +412,14 @@ class evaluator:
             k: v.prevValue if hasattr(v, "prevValue") else None
             for k, v in self._statements.items()
         }
+
+    def items(self):
+        """
+        Implement items interface for evaluator class.
+
+        :returns: iterable for all key value pairs in evaluator
+        """
+        return self._makeDict().items()
 
     def __iter__(self):
         d = self._makeDict()
@@ -1284,12 +1308,12 @@ class dynamicValue:
                     raise
                 except (KeyError, TypeError, AttributeError) as ex:
                     if self._debug:
-                        raise ex.__class__(
+                        raise EvaluationError(
                             f"{errMsg} a {ex.__class__.__name__} error occured: {' '.join(ex.args)}"
                         )
                     ans = self.default
                 except Exception as ex:
-                    raise ex.__class__(
+                    raise EvaluationError(
                         f"{errMsg} a {ex.__class__.__name__} error occured: {' '.join(ex.args)}"
                     )
             else:
@@ -1299,16 +1323,16 @@ class dynamicValue:
 
         try:
             self._changed = (
-                True
-                if hasattr(self, "prevValue") and self.prevValue != ans
-                else False
+                False
+                if hasattr(self, "prevValue") and self.prevValue == ans
+                else True
             )
         # If objects are not comparible
         except:
             self._changed = True
 
         if self.validator is not None:
-            if not self._validator(ans):
+            if not self.validator(ans):
                 raise ValidationError(
                     f"While evaluating {self.name} with '{self.source}': {ans} is not a valid result"
                 )
@@ -1423,5 +1447,21 @@ def getArgDecendents(c):
     for i in getmro(c):
         for arg in getfullargspec(i)[0][1:]:
             if arg not in args:
+                args.append(arg)
+    return args
+
+
+def getNotDynamicDecendents(c):
+    """
+    Retrieve all of the NOTDYNAMIC arguments for all descendent classes.
+
+    :param c: The class to search
+    :type c: `class`
+    :returns: A list of arguments
+    """
+    args = []
+    for i in getmro(c):
+        if "NOTDYNAMIC" in dir(i):
+            for arg in i.NOTDYNAMIC:
                 args.append(arg)
     return args
