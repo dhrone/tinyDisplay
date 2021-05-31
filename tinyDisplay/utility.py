@@ -730,6 +730,7 @@ class dataset:
             self.update(db, samples)
 
     def _onUpdate(self, dbName, key, value):
+
         try:
             cfg = self._validset[dbName][key]
         except KeyError:
@@ -1144,7 +1145,7 @@ class dynamicValue:
     ):
 
         self.name = name
-        self._dataset = dataset or Dataset({})
+        self._dataset = dataset if dataset is not None else Dataset({})
         self._localDataset = localDataset if localDataset is not None else {}
         self._debug = debug
 
@@ -1177,7 +1178,6 @@ class dynamicValue:
         :raises NoChangeToValue: To signal that store is not updating the
             current database value.
         """
-
         if key is not None:
             self._dataset.update(dbName, {key: value})
         else:

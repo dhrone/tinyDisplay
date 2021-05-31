@@ -611,8 +611,7 @@ class text(widget):
         if not newData and not force:
             return (self.image, False)
 
-        # value = str(self._dV["value"])
-        value = self._value
+        value = str(self._value)
         self._reprVal = f"'{value}'"
 
         if self._wrap and self._size is not None:

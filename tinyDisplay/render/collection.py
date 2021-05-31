@@ -322,7 +322,7 @@ class index(canvas):
     def _render(self, force=False, newData=None, *args, **kwargs):
         img = None
         changed = None
-        value = self._dV["value"]
+        value = self._value
         try:
             img, changed = self._widgets[value].render(force=force)
         except IndexError:
