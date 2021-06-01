@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from tinyDisplay.utility import dataset, evaluator
+from tinydisplay.utility import dataset, evaluator
 
 
 updates = [

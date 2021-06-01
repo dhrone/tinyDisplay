@@ -10,10 +10,10 @@ from time import sleep, time
 from flask import Flask, Response, render_template
 from PIL import Image, ImageDraw, ImageFont
 
-from tinyDisplay.cfg import _tdLoader, load
-from tinyDisplay.render.collection import canvas, index, stack
-from tinyDisplay.render.widget import image, text
-from tinyDisplay.utility import animate, dataset
+from tinydisplay.cfg import _tdLoader, load
+from tinydisplay.render.collection import canvas, index, stack
+from tinydisplay.render.widget import image, text
+from tinydisplay.utility import animate, dataset
 
 
 app = Flask(__name__)
@@ -51,11 +51,14 @@ def video_feed():
 
 
 class MakeAnimation:
-    def __init__(self, pageFile, fps=30, resize=1):
+    def __init__(
+        self, pageFile, fps=30, resize=1, dataQ=None, debug=False, demo=False
+    ):
         self.fps = fps
         self.resize = resize
-        self._main = load(pageFile, demo=True)
+        self._main = load(pageFile, debug=debug, demo=demo)
         self._animate = animate(cps=fps, function=self.render, queueSize=100)
+        self._dataQ = dataQ
 
     def start(self):
         self._animate.start()
@@ -75,6 +78,11 @@ class MakeAnimation:
         return self._animate._running
 
     def render(self):
+        if self._dataQ is not None:
+            # Wait up to 1/10 of a second to get new data
+            data = self._dataQ.get(0.1)
+            self._main._dataset.update()
+
         img = self._main.render()[0]
         if img is not None:
             if img.mode != "RGB":

@@ -16,11 +16,11 @@ from urllib.request import urlopen
 
 from PIL import Image, ImageColor, ImageDraw
 
-from tinyDisplay import globalVars
-from tinyDisplay.exceptions import DataError
-from tinyDisplay.font import bmImageFont
-from tinyDisplay.render import widget as Widgets
-from tinyDisplay.utility import (
+from tinydisplay import globalVars
+from tinydisplay.exceptions import DataError
+from tinydisplay.font import bmImageFont
+from tinydisplay.render import widget as Widgets
+from tinydisplay.utility import (
     dataset as Dataset,
     evaluator,
     getArgDecendents,
@@ -39,7 +39,7 @@ class widget(metaclass=abc.ABCMeta):
     :param size: the max size of the widget (x,y) in pixels
     :type size: (int, int)
     :param dataset: dataset to be used for any arguments that are evaluated during run-time
-    :type dataset: `tinyDisplay.utility.dataset`
+    :type dataset: `tinydisplay.utility.dataset`
     :param foreground: The color to use for any foreground parts of the widget
     :type foreground: str, int, or tuple
     :param foreground: The color to use for any background parts of the widget
@@ -82,7 +82,7 @@ class widget(metaclass=abc.ABCMeta):
         self._reprVal = None
 
         # Initialize logging system
-        self._logger = logging.getLogger("tinyDisplay")
+        self._logger = logging.getLogger("tinydisplay")
 
         # Active State variables
         self._tick = 0
@@ -172,7 +172,7 @@ class widget(metaclass=abc.ABCMeta):
             If provided, the validator function must accept a value to be tested
             and return True if it is ok, or False if it is bad
 
-        :raises: `tinyDisplay.exception.CompileError`
+        :raises: `tinydisplay.exception.CompileError`
         """
         self._dV.compile(
             source=source,
@@ -190,8 +190,8 @@ class widget(metaclass=abc.ABCMeta):
         :param name: The name of the dynamicValue to evaluate
         :type name: str
         :returns: The resulting value
-        :raises: `tinyDisplay.exceptions.EvaluationError`
-        :raises: `tinyDisplay.exceptions.ValidationError`
+        :raises: `tinydisplay.exceptions.EvaluationError`
+        :raises: `tinydisplay.exceptions.ValidationError`
         :raises: AttributeError
         """
         try:
@@ -210,8 +210,8 @@ class widget(metaclass=abc.ABCMeta):
 
         :returns: True if any of the values have changed
         :rtype: bool
-        :raises: `tinyDisplay.exceptions.EvaluationError`
-        :raises: `tinyDisplay.exceptions.ValidationError`
+        :raises: `tinydisplay.exceptions.EvaluationError`
+        :raises: `tinydisplay.exceptions.ValidationError`
         """
         changed = False
         for name in self._dV:
@@ -803,7 +803,7 @@ class marquee(widget):
     Base class for the animated scroll, slide and popup classes.
 
     :param: widget: The widget that will be animated
-    :type widget: `tinyDisplay.render.widget`
+    :type widget: `tinydisplay.render.widget`
     :param resetOnChange: Determines whether to reset the contained widget to its starting
         position if the widget changes value
     :type resetOnChange: bool
@@ -1110,7 +1110,7 @@ class popUp(slide):
     it reaches one direction of the other.
 
     :param: widget: The widget that will be animated
-    :type widget: `tinyDisplay.render.widget`
+    :type widget: `tinydisplay.render.widget`
     :param size: the max size of the widget (x,y) in pixels
     :type size: (int, int)
     :param delay: The amount of time to delay at the top and then the bottom of

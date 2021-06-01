@@ -11,8 +11,8 @@ from pathlib import Path
 
 from PIL import Image, ImageChops
 
-from tinyDisplay.render.widget import text
-from tinyDisplay.utility import dataset
+from tinydisplay.render.widget import text
+from tinydisplay.utility import dataset
 
 
 def test_text_widget():

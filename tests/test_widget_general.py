@@ -10,9 +10,9 @@ Test of Widget class for the tinyDisplay system
 import pytest
 from PIL import Image, ImageChops, ImageDraw
 
-from tinyDisplay import globalVars
-from tinyDisplay.render.widget import rectangle, text
-from tinyDisplay.utility import compareImage as ci, dataset
+from tinydisplay import globalVars
+from tinydisplay.render.widget import rectangle, text
+from tinydisplay.utility import compareImage as ci, dataset
 
 
 def test_image_placement():

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageChops, ImageDraw
 
-from tinyDisplay.render.widget import progressBar
+from tinydisplay.render.widget import progressBar
 
 
 @pytest.mark.parametrize(

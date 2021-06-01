@@ -11,8 +11,8 @@ from pathlib import Path
 
 from PIL import Image, ImageChops
 
-from tinyDisplay.render.widget import image
-from tinyDisplay.utility import compareImage
+from tinydisplay.render.widget import image
+from tinydisplay.utility import compareImage
 
 
 def test_image_widget():

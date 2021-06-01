@@ -17,9 +17,9 @@ from inspect import getfullargspec
 import yaml
 from PIL import ImageFont
 
-from tinyDisplay.font import bmImageFont
-from tinyDisplay.render import collection, widget
-from tinyDisplay.utility import dataset as Dataset
+from tinydisplay.font import bmImageFont
+from tinydisplay.render import collection, widget
+from tinydisplay.utility import dataset as Dataset
 
 
 class _yamlLoader(yaml.SafeLoader):
@@ -290,16 +290,16 @@ def load(file, dataset=None, defaultCanvas=None, debug=False, demo=False):
     :param file: The filename of the tinyDisplay yaml file
     :type file: str
     :param dataset: A dataset to provide variables to any widgets which require them
-    :type dataset: tinyDisplay.utility.dataset
+    :type dataset: tinydisplay.utility.dataset
     :param defaultCanvas: A window (canvas) to display if there are no active windows
-    :type defaultCanvas: tinyDisplay.widget.canvas
+    :type defaultCanvas: tinydisplay.widget.canvas
     :param debug: Set resulting display into debug mode
     :type debug: bool
     :param demo: Set resulting database into demo mode
     :type demo: bool
 
     :returns: windows collection
-    :rtype: `tinyDisplay.collection.windows`
+    :rtype: `tinydisplay.collection.windows`
 
     ..Note:
         Debug mode causes exceptions to be thrown when dynamic variable
@@ -310,10 +310,10 @@ def load(file, dataset=None, defaultCanvas=None, debug=False, demo=False):
         enable simplified testing of display configurations.
     """
     if debug:
-        from tinyDisplay import globalVars
+        from tinydisplay import globalVars
 
         globalVars.__DEBUG__ = True
-        logging.getLogger("tinyDisplay").setLevel(logging.DEBUG)
+        logging.getLogger("tinydisplay").setLevel(logging.DEBUG)
 
     tdl = _tdLoader(
         pageFile=file,

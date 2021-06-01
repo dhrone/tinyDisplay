@@ -12,9 +12,9 @@ import time
 import pytest
 from PIL import Image, ImageChops
 
-from tinyDisplay.render.collection import canvas
-from tinyDisplay.render.widget import popUp, scroll, slide, text
-from tinyDisplay.utility import animate, image2Text
+from tinydisplay.render.collection import canvas
+from tinydisplay.render.widget import popUp, scroll, slide, text
+from tinydisplay.utility import animate, image2Text
 
 
 @pytest.fixture(scope="function")

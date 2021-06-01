@@ -13,10 +13,10 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageChops
 
-from tinyDisplay.cfg import _tdLoader, load
-from tinyDisplay.font import bmImageFont
-from tinyDisplay.render.widget import rectangle, scroll, text
-from tinyDisplay.utility import dataset, image2Text
+from tinydisplay.cfg import _tdLoader, load
+from tinydisplay.font import bmImageFont
+from tinydisplay.render.widget import rectangle, scroll, text
+from tinydisplay.utility import dataset, image2Text
 
 
 @pytest.fixture(scope="function")

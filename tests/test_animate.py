@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from tinyDisplay.utility import animate
+from tinydisplay.utility import animate
 
 
 @pytest.fixture(scope="function")
