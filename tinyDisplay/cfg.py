@@ -99,17 +99,19 @@ class _tdLoader:
 
         # for each database in the dataset
         for db, data in cfg.items():
+
+            # for each value element in the database
+            if "values" in data:
+                for k, v in data["values"].items():
+                    v = v if v is not None else {}
+                    # Register its data element settings
+                    self._dataset.registerValidation(dbName=db, key=k, **v)
+
             dbcfg = {
                 k: v for k, v in data.items() if k in ["onUpdate", "validate"]
             }
             if len(dbcfg) > 0:
                 self._dataset.registerValidation(dbName=db, **dbcfg)
-
-            # for each value element in the database
-            if "values" in data:
-                for k, v in data["values"].items():
-                    # Register its data element settings
-                    self._dataset.registerValidation(dbName=db, key=k, **v)
 
     def _createDisplay(self):
 
@@ -234,7 +236,8 @@ class _tdLoader:
         fnt = None
         if name in self._pf["FONTS"]:
             cfg = self._pf["FONTS"][name]
-            if cfg["type"] == "BMFONT":
+            cType = cfg.get("type", "BMFONT")
+            if cType == "BMFONT":
                 p = self._findFile(cfg["file"], "fonts")
                 fnt = bmImageFont(p)
             elif cfg["type"].lower() == "truetype":

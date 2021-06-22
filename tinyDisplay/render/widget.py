@@ -11,13 +11,16 @@ import abc
 import logging
 import os
 import pathlib
+import queue
+import threading
 from inspect import currentframe, getargvalues, getfullargspec, isclass
+from time import monotonic
 from urllib.request import urlopen
 
-from PIL import Image, ImageColor, ImageDraw
+from PIL import Image, ImageChops, ImageColor, ImageDraw
 
 from tinydisplay import globalVars
-from tinydisplay.exceptions import DataError
+from tinydisplay.exceptions import DataError, RenderError
 from tinydisplay.font import bmImageFont
 from tinydisplay.render import widget as Widgets
 from tinydisplay.utility import (
@@ -30,6 +33,9 @@ from tinydisplay.utility import (
 )
 
 
+# from IPython.core.debugger import set_trace
+
+
 class widget(metaclass=abc.ABCMeta):
     """
     Base class for all widgets.
@@ -38,6 +44,17 @@ class widget(metaclass=abc.ABCMeta):
     :type name: str
     :param size: the max size of the widget (x,y) in pixels
     :type size: (int, int)
+    :param activeWhen: Widget active when activeWhen is True
+    :type activeWhen: bool
+    :param duration: Number of ticks to remain active
+    :type duration: int
+    :param minDuration: Minimum number of ticks to stay active
+    :type minDuration: int
+    :param coolingPeriod: Number of ticks before widget can return to active state
+    :type coolingPeriod: int
+    :param overRun: Should widget remain active past its active state.  If yes,
+        widget will reset minDuration when active goes False
+    :type overRun: bool
     :param dataset: dataset to be used for any arguments that are evaluated during run-time
     :type dataset: `tinydisplay.utility.dataset`
     :param foreground: The color to use for any foreground parts of the widget
@@ -46,6 +63,9 @@ class widget(metaclass=abc.ABCMeta):
     :type foreground: str, int, or tuple
     :param just: The justification to use when placing the widget on its image.
     :type just: str
+    :param trim: Determine whether to trim image after render and what part of the
+        image to trim if yes.
+    :type time: str
     """
 
     NOTDYNAMIC = ["name", "dataset"]
@@ -58,11 +78,13 @@ class widget(metaclass=abc.ABCMeta):
         duration=None,
         minDuration=None,
         coolingPeriod=None,
+        overRun=False,
         dataset=None,
         mode="RGBA",
         foreground="white",
         background=None,
         just="lt",
+        trim=None,
         **kwargs,
     ):
 
@@ -84,6 +106,9 @@ class widget(metaclass=abc.ABCMeta):
         # Initialize logging system
         self._logger = logging.getLogger("tinydisplay")
 
+        # Image Cache
+        self._cache = {}  # Currently only used by image widget
+
         # Active State variables
         self._tick = 0
         self._normalDuration = duration
@@ -93,6 +118,10 @@ class widget(metaclass=abc.ABCMeta):
         self._coolingPeriod = coolingPeriod
         self._currentCoolingPeriod = 0
         self._currentActiveState = False
+        self._overRunning = False
+
+        # Perf problem alerting
+        self._slowRender = 0.1
 
         assert mode in (
             "1",
@@ -232,7 +261,7 @@ class widget(metaclass=abc.ABCMeta):
                     setattr(self, c, tuple(a))
 
     def __getattr__(self, name):
-        msg = f"{self.__class__.__name__} object has no attribute {name}"
+        msg = f"{self.__class__.__name__} object {self.name} has no attribute {name}.  image is type({type(self.image)})"
         if "image" not in self.__dict__:
             raise AttributeError(msg)
         if name in dir(self.image):
@@ -295,9 +324,16 @@ class widget(metaclass=abc.ABCMeta):
             provided, clear will produce a blank image that has size (0, 0).
         """
         self.image = None
-        # size = self._dV["requestedSize"] or size
-        size = self._size or size
+        size = (
+            self._size
+            if self._size is not None
+            else size
+            if type(size) == tuple and len(size) == 2
+            else (0, 0)
+        )
         self.image = Image.new(self._mode, size, self._background)
+        if self.image is None:
+            raise RuntimeError(f"Clear resulted in `None` for {self.name}")
 
     @property
     def active(self):
@@ -336,7 +372,18 @@ class widget(metaclass=abc.ABCMeta):
         if self._currentActiveState is False and result is True:
             self._resetDurationTimers()
         if self._currentActiveState is True and result is False:
-            self._resetCoolingTimer()
+            # If overRun is set, then reset currentMinDuration and remain active
+            if (
+                self._overRun is True
+                and self._minDuration is not None
+                and not self._overRunning
+            ):
+                self._currentMinDuration = self._minDuration
+                self._overRunning = True
+                result = True
+            else:
+                # else reset cooling timer and go inactive
+                self._resetCoolingTimer()
         self._currentActiveState = result
         return result
 
@@ -346,7 +393,12 @@ class widget(metaclass=abc.ABCMeta):
             self._currentDuration = self._normalDuration
 
         if self._minDuration is not None:
-            self._currentMinDuration = self._minDuration
+            self._currentMinDuration = (
+                self._minDuration if not self._overRun else 0
+            )
+
+        if self._overRun is not None:
+            self._overRunning = False
 
     def _resetCoolingTimer(self):
         if self._coolingPeriod is not None:
@@ -363,7 +415,9 @@ class widget(metaclass=abc.ABCMeta):
         isActive = self.active
         if reset:
             self._currentDuration = self._normalDuration
-            self._currentMinDuration = self._minDuration if isActive else 0
+            self._currentMinDuration = (
+                self._minDuration if isActive and not self._overRun else 0
+            )
             self._currentCoolingPeriod = 0
         else:
             if self._normalDuration is not None:
@@ -392,6 +446,42 @@ class widget(metaclass=abc.ABCMeta):
             self._resetMovement()
         self._tick = 0
 
+    def trim(self, region=None):
+        """Trim image of any extra (non-content e.g. background) pixels.
+
+        :param region: Detemines what parts of the image to trip.  Possible Values
+            are 'top', 'bottom', 'left', 'right', 'horizontal', or 'vertical'
+        :type region: str
+        :returns: trimmed image
+        :rtype: `PIL.Image.Image`
+
+        ..note:
+            region values that relate to a side, trim that side
+            (e.g. top, bottom, left, right)
+            horizontal trims both the top and bottom of the image
+            vertical trims the left and right sides of the image
+            default is to trim all sides
+        """
+        # Strip Alpha channel from Mode (because ImageChops dif doesn't like alpha)
+        compMode = self._mode if self._mode[-1] != "A" else self._mode[0:-1]
+        empty = Image.new(compMode, self.size, self._background)
+
+        size = self.size
+        bbox = ImageChops.difference(
+            self.image.convert(compMode), empty
+        ).getbbox()
+        if bbox:
+            cropd = {
+                "left": (bbox[0], 0, size[0], size[1]),
+                "right": (0, 0, bbox[2], size[1]),
+                "top": (0, bbox[1], size[0], size[1]),
+                "bottom": (0, 0, size[0], bbox[3]),
+                "horizontal": (0, bbox[1], size[0], bbox[3]),
+                "vertical": (bbox[0], 0, bbox[2], size[1]),
+            }.get(region, (bbox[0], bbox[1], bbox[2], bbox[3]))
+            self.image = self.image.crop(cropd)
+        return self.image
+
     def _place(self, wImage=None, offset=(0, 0), just="lt"):
         just = just or "lt"
         offset = offset or (0, 0)
@@ -399,6 +489,9 @@ class widget(metaclass=abc.ABCMeta):
             just[0] in "lmr" and just[1] in "tmb"
         ), f"Requested justification \"{just}\" is invalid.  Valid values are left top ('lt'), left middle ('lm'), left bottom ('lb'), middle top ('mt'), middle middle ('mm'), middle bottom ('mb'), right top ('rt'), right middle ('rm'), and right bottom ('rb')"
 
+        if self.image is None:
+            print(f"WIDGET._PLACE 'image' is None in {self.name}")
+            raise RuntimeError(f"WIDGET._PLACE 'image' is None in {self.name}")
         # if there is an image to place
         if wImage:
             mh = round((self.image.size[0] - wImage.size[0]) / 2)
@@ -463,6 +556,11 @@ class widget(metaclass=abc.ABCMeta):
         :raises Exception: When any other exception occurs during render (debug
             mode only)
         """
+        self._renderTime = monotonic()
+        if self.image is None:
+            raise RuntimeError(
+                f"Starting Render for {repr(self)}:{self.name}.  Image is None"
+            )
         self._computeLocalDB()
 
         if reset:
@@ -480,6 +578,10 @@ class widget(metaclass=abc.ABCMeta):
                 )
                 return (self.image, False)
 
+        if monotonic() - self._renderTime > self._slowRender:
+            print(
+                f"=== slow data render {self.name} {monotonic()-self._renderTime:0.3f} ==="
+            )
         if force:
             self.resetMovement()
 
@@ -490,6 +592,9 @@ class widget(metaclass=abc.ABCMeta):
             img, changed = self._render(
                 force=force, tick=tick, move=move, newData=nd or newData
             )
+            # If any trim is selected, perform trim if image has changed
+            if self._trim is not None and changed:
+                img = self.trim(self._trim)
         except Exception as ex:
             if self._debug:
                 raise
@@ -498,6 +603,11 @@ class widget(metaclass=abc.ABCMeta):
                 return (img, False)
 
         self._updateTimers(force)
+
+        if monotonic() - self._renderTime > self._slowRender:
+            print(
+                f"=== slow render {self.name} {monotonic()-self._renderTime:0.3f} ==="
+            )
 
         return (img, changed)
 
@@ -540,6 +650,8 @@ class text(widget):
         antiAlias=False,
         lineSpacing=0,
         wrap=False,
+        width=None,
+        height=None,
         *args,
         **kwargs,
     ):
@@ -557,7 +669,7 @@ class text(widget):
         self._antiAlias = antiAlias
         self._wrap = wrap
 
-        self._tsDraw = ImageDraw.Draw(Image.new("1", (0, 0), 0))
+        self._tsDraw = ImageDraw.Draw(Image.new(self._mode, (0, 0), 0))
         self._tsDraw.fontmode = self._fontMode
 
         self.render(reset=True)
@@ -599,14 +711,30 @@ class text(widget):
         return "\n".join(lines)
 
     def _sizeLine(self, value):
-        tSize = self._tsDraw.textsize(
-            value, font=self.font, spacing=self._lineSpacing
-        )
+        if value == "" or value is None:
+            return (0, 0)
+
+        if "getmetrics" in dir(self._font):
+            ascent, descent = self._font.getmetrics()
+            h = 0
+            w = 0
+            for v in value.split("\n"):
+                try:
+                    tw, th = self._font.getmask(v).getbbox()[2:4]
+                    th += descent
+                    w = max(w, tw)
+                    h += th
+                except TypeError:
+                    pass
+            tSize = (w, h)
+        else:
+            tSize = self._tsDraw.textsize(
+                value, font=self._font, spacing=self._lineSpacing
+            )
         tSize = (0, 0) if tSize[0] == 0 else tSize
         return tSize
 
     def _render(self, force=False, newData=False, *args, **kwargs):
-
         # If the string to render has not changed then return current image
         if not newData and not force:
             return (self.image, False)
@@ -614,9 +742,9 @@ class text(widget):
         value = str(self._value)
         self._reprVal = f"'{value}'"
 
-        if self._wrap and self._size is not None:
-            # Wrap only if a specific size was requested, otherwise ignore
-            value = self._makeWrapped(value, self._size[0])
+        if self._wrap and self._width is not None:
+            # Wrap only if a width was requested, otherwise ignore
+            value = self._makeWrapped(value, self._width)
 
         tSize = self._sizeLine(value)
 
@@ -635,7 +763,11 @@ class text(widget):
                 align=just,
             )
 
-        self.clear(img.size)
+        size = (
+            self._width if self._width is not None else img.size[0],
+            self._height if self._height is not None else img.size[1],
+        )
+        self.clear(size)
         self._place(wImage=img, just=self.just)
         return (self.image, True)
 
@@ -756,7 +888,10 @@ class progressBar(widget):
             scale = r0 if scale < r0 else r1
 
         rangeSize = r1 - r0
-        return (scale - r0) / rangeSize
+        if rangeSize == 0:
+            return 0
+        else:
+            return (scale - r0) / rangeSize
 
     def _render(self, force=False, newData=False, *args, **kwargs):
         if not newData and not force:
@@ -1320,11 +1455,47 @@ class image(widget):
             allowedDirs if allowedDirs is not None else os.getcwd()
         )
 
+        self._response = queue.Queue()
+        self._fetchSet = set()
+
         self.render(reset=True)
 
+    def fetchURL(self, url):
+        """Fetch Image from url and place into image cache.
+
+        :param url: The url to retrieve the image from
+        """
+        threading.Thread(target=self._fetchURL, args=(url,)).start()
+        self._fetchSet.add(url)
+
+    def _fetchURL(self, url):
+        try:
+            img = Image.open(urlopen(url))
+            print(f"=== Fetch succeeded for {url} ===")
+            self._response.put((url, img))
+        except Exception as ex:
+            print(f"=== Fetch failed for {url} ===")
+            self._response.put((url, ex))
+
+    def _gatherURLResponses(self):
+        # Determine if there are responses waiting
+        while True:
+            try:
+                url, img = self._response.get_nowait()
+                self._response.task_done()
+                if isinstance(img, Exception):
+                    msg = f"Retrieval of image {url} failed: {img}"
+                    if self._debug:
+                        raise RenderError(msg)
+                    else:
+                        self._logger.warning(msg)
+                else:
+                    self._cache[url] = img
+                    self._fetchSet.remove(url)
+            except queue.Empty:
+                break
+
     def _render(self, force=False, newData=False, *args, **kwargs):
-        if not force and not newData:
-            return (self.image, False)
 
         typeImage = (
             "url"
@@ -1335,36 +1506,64 @@ class image(widget):
             if self._image
             else None
         )
-
         source = self._url or self._file or self._image
 
-        img = None
-        if typeImage == "url":
-            url = source.replace(" ", "%20")
-            img = Image.open(urlopen(url))
-        elif typeImage == "file":
-            if okPath(self._allowedDirs, source):
-                img = Image.open(pathlib.Path(source))
-            else:
-                raise ValueError(f"{source} is not an authorized path")
-        elif typeImage == "image":
-            if isinstance(source, Image.Image):
-                img = source.copy()
-            else:
-                raise ValueError(
-                    f"{source} is {type(source)} which is not a valid Image"
-                )
+        if (
+            not force
+            and not newData
+            and (typeImage == "image" or source in self._cache)
+        ):
+            return (self.image, False)
 
-        if self._size is not None:
+        # Put any received responses in the cache
+        self._gatherURLResponses()
+
+        if typeImage in ["url", "file"] and source in self._cache:
+            print(f"=== Cache Hit: {source}: {self._cache[source]}")
+            img = self._cache[source]
+        else:
+            # Retrieve image
+            img = None
+            if typeImage == "url":
+                url = source.replace(" ", "%20")
+                if url not in self._fetchSet:
+                    self.fetchURL(url)
+            elif typeImage == "file":
+                if okPath(self._allowedDirs, source):
+                    img = Image.open(pathlib.Path(source))
+                else:
+                    raise ValueError(f"{source} is not an authorized path")
+            elif typeImage == "image":
+                if isinstance(source, Image.Image):
+                    img = source.copy()
+                    img = img.convert(self._mode)
+                else:
+                    raise ValueError(
+                        f"{source} is {type(source)} which is not a valid Image"
+                    )
+        if (
+            typeImage != "image"
+            and source not in self._cache
+            and img is not None
+        ):
+            self._cache[source] = img  # Store image in cache
+
+        if (
+            self._size is not None
+            and img is not None
+            and img.size != self._size
+        ):
             img = img.resize(self._size)
 
+        if img is not None and img.mode != self._mode:
+            img = img.convert(self._mode)
+
         self.clear((0, 0) if img is None else img.size)
-        self.image = img
         if img is not None:
             self._place(wImage=img, just=self.just)
             self._reprVal = f"{source}"
         else:
-            self._reprVal = f"no image found: {source}"
+            self._reprVal = f"no image: {source}"
 
         return (self.image, True if self.image is not None else False)
 

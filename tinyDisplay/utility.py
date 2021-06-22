@@ -7,7 +7,6 @@ Utility functions to support tinyDisplay.
 
 .. versionadded:: 0.0.1
 """
-
 import builtins
 import logging
 import math
@@ -28,9 +27,14 @@ from tinydisplay.exceptions import (
     CompileError,
     EvaluationError,
     NoChangeToValue,
+    NoResult,
+    RegistrationError,
     UpdateError,
     ValidationError,
 )
+
+
+# from IPython.core.debugger import set_trace
 
 
 class animate(Thread):
@@ -230,6 +234,7 @@ class animate(Thread):
 
         renderTimer = time.time()
         renderCounter = 0
+        renderCounterLimit = 1
         self._event.set()
         self._Force = False
 
@@ -237,9 +242,10 @@ class animate(Thread):
 
             # Compute current FPS every 5 seconds
             renderCounter += 1
-            if renderTimer + 0.1 < time.time():
-                self.fps = renderCounter / 0.1
+            if renderCounter > renderCounterLimit:
+                self.fps = renderCounter / (time.time() - renderTimer)
                 renderCounter = 0
+                renderCounterLimit = 10
                 renderTimer = time.time()
 
             if not self._event.isSet():
@@ -267,17 +273,24 @@ class animate(Thread):
 
                 # Must put value in queue before clearing the force Event
                 # so that the forced function receives the newly computed value
-                retval = self._invoke(*self._args, **self._kwargs)
-                self._queue.put(retval)
+                try:
+                    retval = self._invoke(*self._args, **self._kwargs)
+                    self._queue.put(retval)
+                except NoResult:
+                    pass
+
                 self._forceEvent.set()
             else:
-                retval = self._invoke(*self._args, **self._kwargs)
                 try:
-                    self._queue.put_nowait(retval)
-                except Full:
-                    self._pid.set_auto_mode(False)
-                    self._queue.put(retval)
-                    self._pid.set_auto_mode(True, last_output=correction)
+                    retval = self._invoke(*self._args, **self._kwargs)
+                    try:
+                        self._queue.put_nowait(retval)
+                    except Full:
+                        self._pid.set_auto_mode(False)
+                        self._queue.put(retval)
+                        self._pid.set_auto_mode(True, last_output=correction)
+                except NoResult:
+                    pass
 
             # Correct startLoop to account for time blocked by full queue
             startLoop = startLoop + (time.time() - putStart)
@@ -490,6 +503,9 @@ class dataset:
         # Initialize validation / transformation configuration
         self._validset = {}
 
+        # Initialize cache dataset to cache values stored during onUpdate processing
+        self._cacheDB = {}
+
         # Start the clock
         self._startedAt = time.time()
 
@@ -563,147 +579,6 @@ class dataset:
         """
         return self._dataset.keys()
 
-    @staticmethod
-    def _getType(t):
-        if type(t) is type:
-            return t
-        return {
-            "int": int,
-            "float": float,
-            "complex": complex,
-            "str": str,
-            "bool": bool,
-            "dict": dict,
-            "list": list,
-            "range": range,
-            "set": set,
-        }[t]
-
-    @staticmethod
-    def _getDefaultForType(t):
-        return {
-            int: 0,
-            float: 0.0,
-            complex: complex(),
-            str: "",
-            bool: False,
-            dict: {},
-            list: [],
-            range: (0),
-            set: set(),
-        }[t]
-
-    def _rVKey(self, dbName, key, vtype, onUpdate, default, sample, validate):
-        if key not in self._validset[dbName]:
-            self._validset[dbName][key] = {}
-        self._validset[dbName][key]["type"] = (
-            self._getType(vtype) if vtype is not None else str
-        )
-
-        if default is not None:
-            self._validset[dbName][key]["default"] = default
-        else:
-            self._validset[dbName][key]["default"] = self._getDefaultForType(
-                self._validset[dbName][key]["type"]
-            )
-        self._validset[dbName][key]["sample"] = default
-
-        if sample is not None:
-            self._validset[dbName][key]["sample"] = sample
-
-        if onUpdate is not None:
-            self._validset[dbName][key]["onUpdate"] = onUpdate
-            if type(onUpdate) is list:
-                for i, u in enumerate(onUpdate):
-                    self._dV.compile(
-                        u, name=f"{dbName}.{key}.onUpdate{i}", default=None
-                    )
-            else:
-                self._dV.compile(
-                    onUpdate, name=f"{dbName}.{key}.onUpdate", default=None
-                )
-
-        if validate is not None:
-            self._validset[dbName][key]["validate"] = validate
-            if type(validate) is list:
-                for i, v in enumerate(validate):
-                    self._dV.compile(
-                        v, name=f"{dbName}.{key}.validate{i}", default=False
-                    )
-            else:
-                self._dV.compile(
-                    validate, name=f"{dbName}.{key}.validate", default=False
-                )
-
-    def _rVDB(self, dbName, onUpdate, validate):
-
-        if onUpdate is not None:
-            self._validset[dbName]["onUpdate"] = onUpdate
-            if type(onUpdate) is list:
-                for i, u in enumerate(onUpdate):
-                    self._dV.compile(
-                        u, name=f"{dbName}.onUpdate{i}", default=None
-                    )
-            else:
-                self._dV.compile(
-                    onUpdate, name=f"{dbName}.onUpdate", default=None
-                )
-
-        if validate is not None:
-            self._validset[dbName]["validate"] = validate
-            if type(validate) is list:
-                for i, v in enumerate(validate):
-                    self._dV.compile(
-                        v, name=f"{dbName}.validate{i}", default=False
-                    )
-            else:
-                self._dV.compile(
-                    validate, name=f"{dbName}.validate", default=False
-                )
-
-    def registerValidation(self, dbName=None, key=None, **kwargs):
-        """
-        Add validation data for a database or data element within a database.
-
-        :param dbName:  The name of the database
-        :type dbName: str
-        :param key: The value of the key (optional).  If not provided, the
-            validation data will be for the whole database
-        :type key: str
-        :param **kwargs:  The set of validation to add to the database
-
-        ..note:
-            There are five validation capabilities that can be added.
-            * onUpdate: A function (or list of functions) that can take
-                actions on received data including storing new values in any
-                database contained within the dataset
-            * validate: A function to evaluate when new data is received by
-                the database
-            * type: Sets the variable type of the data element.  If type is
-            provided for a key, when new data arrives it will be type checked
-                using this value.  If it fails, an attempt will be made to
-                convert it to the correct value.
-            * default:  Provides a default value to use when bad data is received
-            * sample: A value to use when dataset is in 'Demo' mode
-        """
-
-        # Extract arguments
-        vtype = kwargs.get("type")
-        onUpdate = kwargs.get("onUpdate")
-        default = kwargs.get("default")
-        sample = kwargs.get("sample")
-        validate = kwargs.get("validate")
-
-        if dbName not in self._validset:
-            self._validset[dbName] = {}
-
-        if key is not None:
-            self._rVKey(
-                dbName, key, vtype, onUpdate, default, sample, validate
-            )
-        else:
-            self._rVDB(dbName, key, onUpdate, validate)
-
     def setDefaults(self):
         """
         Initialize dataset to its default values.
@@ -713,7 +588,11 @@ class dataset:
         defaults
         """
         for db, data in self._validset.items():
-            defaults = {k: v["default"] for k, v in data.items()}
+            defaults = {
+                k: v["default"]
+                for k, v in data.items()
+                if type(v) is dict and "default" in v
+            }
             self.update(db, defaults)
 
     def setDemo(self):
@@ -729,169 +608,349 @@ class dataset:
             samples = {k: v["sample"] for k, v in data.items()}
             self.update(db, samples)
 
-    def _onUpdate(self, dbName, key, value):
+    @staticmethod
+    def _getType(t):
+        if type(t) is type:
+            return t
+        if type(t) is str:
+            try:
+                return {
+                    "int": int,
+                    "float": float,
+                    "complex": complex,
+                    "str": str,
+                    "bool": bool,
+                    "dict": dict,
+                    "list": list,
+                    "range": range,
+                    "set": set,
+                    "none": type(None),
+                    type(None): type(None),
+                }[t.lower()]
+            except KeyError:
+                raise TypeError(f"{t} is not a valid type")
+        raise TypeError(f"{type(t)} is not a valid type")
+
+    @staticmethod
+    def _getDefaultForType(t):
+        return {
+            int: 0,
+            float: 0.0,
+            complex: complex(),
+            str: "",
+            bool: False,
+            dict: {},
+            list: [],
+            range: (0),
+            set: set(),
+        }[t]
+
+    def _registerType(self, type, default, sample, cfg):
+        default = default if default is not None else cfg.get("default")
+        sample = sample if sample is not None else cfg.get("sample")
+
+        if type is not None:
+            if builtins.type(type) is str:
+                vtl = []
+                for vt in type.split(","):
+                    vtl.append(self._getType(vt.strip()))
+                cfg["type"] = vtl
+            else:
+                # If input is not a string, see if it is a valid type
+                cfg["type"] = [self._getType(type)]
+        elif "type" in cfg:
+            return
+        elif default is not None:
+            cfg["type"] = [builtins.type(default)]
+        elif sample is not None:
+            cfg["type"] = [builtins.type(sample)]
+        else:
+            # If no value was provide or can be inferred, use str as default
+            cfg["type"] = [str]
+
+    def _registerDefault(self, default, sample, cfg):
+        # Register default value for variable.
+        type = cfg["type"][0]
+        default = default if default is not None else cfg.get("default")
+        sample = sample if sample is not None else cfg.get("sample")
+
+        if default is not None:
+            cfg["default"] = default
+        elif "default" in cfg:
+            return
+        elif sample is not None:
+            cfg["default"] = self._getDefaultForType(builtins.type(sample))
+        elif type is not None:
+            cfg["default"] = self._getDefaultForType(type)
+
+    def _registerSample(self, sample, default, cfg):
+        # Register sample value for variable.
+        default = default if default is not None else cfg.get("default")
+
+        if sample is not None:
+            cfg["sample"] = sample
+        elif "sample" in cfg:
+            return
+        elif default is not None:
+            cfg["sample"] = default
+
+    def _registerStatement(self, dbName, key, stmtType, stmt, cfg):
+        # Register validation statement for variable (onUpdate, validate).
+
+        if stmt is not None:
+            stmt = [stmt] if type(stmt) is not list else stmt
+            cfg[stmtType] = stmt
+
+            for i, u in enumerate(stmt):
+                dvKey = (
+                    f"{dbName}.{key}.{stmtType}{i}"
+                    if key is not None
+                    else f"{dbName}.{stmtType}{i}"
+                )
+                self._dV.compile(u, name=dvKey, default=None)
+
+    def registerValidation(
+        self,
+        dbName=None,
+        key=None,
+        type=None,
+        onUpdate=None,
+        default=None,
+        sample=None,
+        validate=None,
+    ):
+        """
+        Add validation data for a database or data element within a database.
+
+        :param dbName:  The name of the database
+        :type dbName: str
+        :param key: The value of the key (optional).  If not provided, the
+            validation data will be for the whole database
+        :type key: str
+        :param type: Sets the variable type for the data element.  If type is
+            provided for a key, when new data arrives it will be type
+            checked using this value.  If it fails, an attempt will be made
+            to convert it to the correct value.
+        :type type: A str containing a valid type from the set {'int', 'float',
+            'complex', 'str', 'bool', 'dict', 'list', 'range', 'set', 'None'}
+        :param onUpdate: An evaluatable statement (or list of statements) that
+            can take actions on received data including storing new values in
+            any database contained within the dataset
+        :type onUpdate: str or [str,]
+        :param default: The default value for the data element.  This is used
+            during initialization and whenever the element is missing from an
+            update or if there is a ValidationError from an update
+        :param sample: A sample value for the data element.  Specifying sample
+            values is helpful for testing.  The `setDemo` method will update
+            the dataset with any configued sample values.
+        :param validate: An evaluatable statement (or list of statements) that
+            can test whether a new value for the data element is correct.  Each
+            statement MUST return either True for valid and False for invalid.
+        """
+        if dbName not in self._validset:
+            self._validset[dbName] = {}
+
+        if key is not None and key not in self._validset[dbName]:
+            self._validset[dbName][key] = {}
+
+        cfg = (
+            self._validset[dbName][key]
+            if key is not None
+            else self._validset[dbName]
+        )
 
         try:
-            cfg = self._validset[dbName][key]
-        except KeyError:
-            # No validation record for this database/key combination
-            raise NoChangeToValue()
+            errType = "type"
+            self._registerType(type, default, sample, cfg)
+            errType = "default"
+            self._registerDefault(default, sample, cfg)
+            if key is not None:
+                self.update(
+                    dbName,
+                    {key: self._validset[dbName][key].get("default", None)},
+                )
+            errType = "sample"
+            self._registerSample(sample, default, cfg)
+            errType = "validate"
+            self._registerStatement(dbName, key, "validate", validate, cfg)
+            errType = "onUpdate"
+            self._registerStatement(dbName, key, "onUpdate", onUpdate, cfg)
+        except Exception as ex:
+            raise RegistrationError(
+                f"{dbName}[{key}] {errType} failed: {ex.__class__.__name__}: {ex}"
+            )
 
-        if "onUpdate" not in cfg:
-            # If no onUpdate statement(s)
-            raise NoChangeToValue()
+    def _validateType(self, dbName, key, value, cfg):
+        # Validate type of element converting if necessary and possible.
+
+        if key in cfg:
+            tl = cfg[key].get("type", [str])
+            if type(value) not in tl:
+                # Attempt to convert to valid type
+                for t in tl:
+                    try:
+                        value = t(value)
+                    except (ValueError, TypeError):
+                        continue
+            if type(value) not in tl:
+                errDK = f"{dbName}[{key}]" if key is not None else f"{dbName}"
+                raise ValidationError(
+                    f"{errDK}: {value} failed validation: {type(value)} not in {tl}"
+                )
+            return value
+        else:
+            return value
+
+    def _validateStatement(
+        self, dbName, key, value, stmtType, cfg, failOn=None
+    ):
+        # Generic processing for validation methods
+
+        if key is not None:
+            if key in cfg:
+                cfg = cfg[key]
+            else:
+                raise NoChangeToValue
+
+        if stmtType not in cfg:
+            raise NoChangeToValue
+
+        actCFG = cfg[stmtType]
 
         self._localDB["_VAL_"] = value
+        ans = value
 
-        ul = (
-            ["onUpdate"]
-            if type(cfg["onUpdate"]) is not list
-            else [f"onUpdate{i}" for i in range(len(cfg["onUpdate"]))]
-        )
+        errDK = f"{dbName}[{key}]" if key is not None else f"{dbName}"
+
+        ul = [f"{stmtType}{i}" for i in range(len(actCFG))]
         for i, ui in enumerate(ul):
             try:
-                ue = (
-                    cfg["onUpdate"]
-                    if type(cfg["onUpdate"]) is not list
-                    else cfg["onUpdate"][i]
-                )
-                try:
-                    self._localDB["_VAL_"] = self._dV.eval(
-                        f"{dbName}.{key}.{ui}"
-                    )
-                except NoChangeToValue:
-                    pass
-            except Exception as ex:
-                raise UpdateError(
-                    f"Attempt to update '{dbName}[{key}]' failed using \"{ue}\" with _VAL_ = '{self._localDB['_VAL_']}': {ex}"
+                ue = actCFG[i]
+
+                stmtKey = (
+                    f"{dbName}.{key}.{ui}"
+                    if key is not None
+                    else f"{dbName}.{ui}"
                 )
 
-        if value == self._localDB["_VAL_"]:
-            raise NoChangeToValue()
-        return self._localDB["_VAL_"]
+                ans = self._dV.eval(stmtKey)
 
-    def _onUpdateDB(self, dbName, value):
-        try:
-            cfg = self._validset[dbName]
-        except KeyError:
-            # No validation record for this database/key combination
-            raise NoChangeToValue()
-
-        if "onUpdate" not in cfg:
-            # If no onUpdate statement(s)
-            raise NoChangeToValue()
-
-        self._localDB["_VAL_"] = value
-
-        ul = (
-            ["onUpdate"]
-            if type(cfg["onUpdate"]) is not list
-            else [f"onUpdate{i}" for i in range(len(cfg["onUpdate"]))]
-        )
-        for i, ui in enumerate(ul):
-            try:
-                ue = (
-                    cfg["onUpdate"]
-                    if type(cfg["onUpdate"]) is not list
-                    else cfg["onUpdate"][i]
-                )
-                try:
-                    self._localDB["_VAL_"] = self._dV.eval(f"{dbName}.{ui}")
-                except NoChangeToValue:
-                    pass
-            except Exception as ex:
-                raise UpdateError(
-                    f"Attempt to update '{dbName}' failed using \"{ue}\" with _VAL_ = '{self._localDB['_VAL_']}': {ex}"
-                )
-
-        if value == self._localDB["_VAL_"]:
-            raise NoChangeToValue()
-        return self._localDB["_VAL_"]
-
-    def _validate(self, dbName, key, value):
-        try:
-            cfg = self._validset[dbName][key]
-        except KeyError:
-            # No validation record for this database/key combination
-            return
-
-        # TYPE VALIDATION
-        # Validate the type of the value.
-        # If value not the right type attempt too convert it
-        try:
-            # Get type or return default (e.g. str)
-            t = cfg.get("type", str)
-            if type(value) != t:
-                # Attempt to convert
-                value = t(value)
-        except (ValueError, TypeError):
-            # Attempt to convert value to correct type failed
-            raise ValidationError(f"{value} is not a valid {t}")
-
-        # PROCESS VALIDATE STATEMENTS
-        if "validate" not in cfg:
-            # If no validate eval statement exists, validation (by default) succeeds
-            return
-
-        self._localDB["_VAL_"] = value
-        vl = (
-            ["validate"]
-            if type(cfg["validate"]) is not list
-            else [f"validate{i}" for i in range(len(cfg["validate"]))]
-        )
-        for i, vi in enumerate(vl):
-            try:
-                ve = (
-                    cfg["validate"]
-                    if type(cfg["validate"]) is not list
-                    else cfg["validate"][i]
-                )
-                if not self._dV.eval(f"{dbName}.{key}.{vi}"):
-                    raise ValidationError(
-                        f"'{value}' failed validation using \"{ve}\""
-                    )
+                if failOn is not None:
+                    if ans == failOn:
+                        raise ValidationError(
+                            f"{errDK}: {value} failed validation: {ue}"
+                        )
+                else:
+                    self._localDB["_VAL_"] = ans
+            except NoChangeToValue:
+                pass
             except ValidationError:
                 raise
             except Exception as ex:
-                raise ValidationError(
-                    f"Attempt to validate '{value}' failed using \"{ve}\": {ex}"
+                raise UpdateError(
+                    f"{errDK}: {value} {stmtType} failed using \"{ue}\" with _VAL_ = '{self._localDB['_VAL_']}': {ex}"
                 )
 
-    def _validateDB(self, dbName, value):
+        return ans
+
+    def validateUpdate(self, dbName, update):
+        """
+        Perform any configured validation activities.
+
+        :param dbName: Name of the database to validate the update against
+        :param update: The update that is being submitted to the database
+        :raises: ValidationError
+        :returns: new version of update if any validation activity required it
+        """
+
+        # If no validset record then skip validation
+        if dbName not in self._validset:
+            return update
+
+        cfg = self._validset[dbName]
+
+        # VALIDATE STEP
+        # Check for full DB validation
         try:
-            cfg = self._validset[dbName]
-        except KeyError:
-            # No validation record for this database
-            return
-
-        # PROCESS VALIDATE STATEMENTS
-        if "validate" not in cfg:
-            # If no validate eval statement exists, validation (by default) succeeds
-            return
-
-        self._localDB["_VAL_"] = value
-        vl = (
-            ["validate"]
-            if type(cfg["validate"]) is not list
-            else [f"validate{i}" for i in range(len(cfg["validate"]))]
-        )
-        for i, vi in enumerate(vl):
-            try:
-                ve = (
-                    cfg["validate"]
-                    if type(cfg["validate"]) is not list
-                    else cfg["validate"][i]
-                )
-                if not self._dV.eval(f"{dbName}.{vi}"):
-                    raise ValidationError(
-                        f"'{value}' failed validation using \"{ve}\""
-                    )
-            except ValidationError:
+            self._validateStatement(
+                dbName, None, update, "validate", cfg, False
+            )
+        except NoChangeToValue:
+            pass
+        except ValidationError as ex:
+            if self._debug:
                 raise
-            except Exception as ex:
-                raise ValidationError(
-                    f"Attempt to validate '{value}' failed using \"{ve}\": {ex}"
+            # If validation fails, use default value
+            self._logger.debug(ex)
+            if "default" in cfg:
+                update = cfg["default"]
+            else:
+                # If no default then reject entire update
+                self._logger.debug(
+                    f"Validation failed with no default for {dbName}"
                 )
+                return
+
+        # VALIDATE individual items
+        for k, v in update.items():
+            try:
+                ans = self._validateType(dbName, k, v, cfg)
+                self._validateStatement(dbName, k, v, "validate", cfg, False)
+            except NoChangeToValue:
+                pass
+            except ValidationError as ex:
+                if self._debug:
+                    raise
+                # If validation fails, use default value
+                self._logger.debug(ex)
+                ans = cfg[k].get("default", "")
+            update[k] = ans
+
+        # UPDATE STEP
+        # Update Database
+        try:
+            update = self._validateStatement(
+                dbName, None, update, "onUpdate", cfg
+            )
+        except NoChangeToValue:
+            pass
+        except ValidationError as ex:
+            if self._debug:
+                raise
+            # If onUpdate fails, revert to original value in update
+            self._logger.debug(ex)
+
+        # Update individual items
+        for k, v in update.items():
+            try:
+                update[k] = self._validateStatement(
+                    dbName, k, v, "onUpdate", cfg
+                )
+            except NoChangeToValue:
+                pass
+            except ValidationError as ex:
+                if self._debug:
+                    raise
+                # If onUpdate fails, revert to original value in update
+                self._logger.debug(ex)
+
+        # Pull in defaults for missing values
+        for k, v in self._validset[dbName].items():
+            if k not in update and "default" in v:
+                update[k] = v["default"]
+
+        return update
+
+    def _cache(self, dbName, key):
+        # Place stored values in cache to be processed during next update.
+
+        if dbName not in self._cacheDB:
+            self._cacheDB = {dbName: {}}
+
+        self._cacheDB[dbName] = {**self._cacheDB[dbName], **key}
+
+    def _clearCache(self):
+        self._cacheDB = {}
 
     def add(self, dbName, db):
         """
@@ -911,57 +970,23 @@ class dataset:
 
         self.update(dbName, db)
 
-    def _baseUpdate(self, dbName, update):
+    def _baseUpdate(self, dbName, update, merge):
         # Update database named dbName using the dictionary contained within update.
 
         # Copy update
-        update = dict(update)
+        update = update.copy()
 
         # Add timestamp to update
         update["__timestamp__"] = time.time() - self._startedAt
 
-        # Check for full DB validation
-        try:
-            self._validateDB(dbName, update)
-        except ValidationError as ex:
-            if self._debug:
-                raise
-            self._logger.debug(ex)
-
-        # VALIDATE individual items
-        try:
-            for k, v in update.items():
-                self._validate(dbName, k, v)
-        except ValidationError as ex:
-            if self._debug:
-                raise
-            self._logger.debug(ex)
-
-        try:
-            self._onUpdateDB(dbName, update)
-        except NoChangeToValue:
-            pass
-        except UpdateError as ex:
-            if self._debug:
-                raise
-            self._logger.debug(ex)
-
-        for k, v in update.items():
-            try:
-                update[k] = self._onUpdate(dbName, k, v)
-            except NoChangeToValue:
-                pass
-            except UpdateError as ex:
-                if self._debug:
-                    raise
-                self._logger.debug(ex)
+        update = self.validateUpdate(dbName, update)
 
         if dbName not in self._dataset:
             self._checkForReserved(dbName)
-            d = update
+            db = update
             # Initialize _prevDS with current values
             self._prevDS[dbName] = deque(maxlen=self._lookBack)
-            self._prevDS[dbName].append(d)
+            self._prevDS[dbName].append(db)
         else:
             # Update prevDS with the current values that are about to get updated
             self._prevDS[dbName].append(
@@ -969,22 +994,45 @@ class dataset:
             )
 
             # Merge current db values with new values
-            d = {**self._dataset[dbName], **update}
+            db = {**self._dataset[dbName], **update} if merge else update
 
-        self.__dict__[dbName] = d
-        self._dataset[dbName] = d
+        # Update d with any cached values
+        db = {**db, **self._cacheDB[dbName]} if dbName in self._cacheDB else db
+
+        self.__dict__[dbName] = db
+        self._dataset[dbName] = db
         self._ringBuffer.append({dbName: update})
 
-    def _update(self, dbName, update):
+        # If any cache values were for different databases, merge update them
+        if len(self._cacheDB) > 0:
+            cdb = {k: v for k, v in self._cacheDB.items() if k != dbName}
+            self._clearCache()
+            for k, v in cdb.items():
+                self.update(k, v, merge=True)
+
+    def _update(self, dbName, update, merge=False):
         # Initial update method used when _ringBuffer is not full
 
-        self._baseUpdate(dbName, update)
+        self._baseUpdate(dbName, update, merge)
 
         # If the ringBuffer has become full switch to _updateFull from now on
         if len(self._ringBuffer) == self._ringBuffer.maxlen:
             self.update = self._updateFull
 
-    def _updateFull(self, dbName, update):
+    def update(self, dbName, update, merge=False):
+        """Update a database within the dataset.
+
+        :param dbName: The name of the database to update
+        :type dbName: str
+        :param update: The content of the update
+        :type update: dict
+        :param merge: Update will be merged into database if True and will overwrite
+            database if False
+        :type merge: bool
+        """
+        pass
+
+    def _updateFull(self, dbName, update, merge=False):
         # Adds updating of starting position when the ring buffer has become full
 
         # Add databases from oldest ringbuffer entry into dsStart if dsStart does not already contain them
@@ -1000,7 +1048,7 @@ class dataset:
                     **self._ringBuffer[0][db],
                 }
 
-        self._baseUpdate(dbName, update)
+        self._baseUpdate(dbName, update, merge)
 
     # TODO: add persistence methods
     """
@@ -1129,6 +1177,7 @@ class dynamicValue:
         "get",
         "lower",
         "upper",
+        "split",
         "capitalize",
         "title",
         "find",
@@ -1161,7 +1210,7 @@ class dynamicValue:
         self._allowedBuiltIns["history"] = self._dataset.history
         self._allowedBuiltIns["store"] = self.store
 
-    def store(self, dbName=None, key=None, value=None):
+    def store(self, dbName=None, key=None, value=None, when=True):
         """
         Store new value to dataset.
 
@@ -1175,13 +1224,16 @@ class dynamicValue:
         :param key: (optional) If updating a single key within the database,
             the value of that key
         :param value: The data to use for the update
+        :param when: Store value if when is True else ignore
+        :type when: bool
         :raises NoChangeToValue: To signal that store is not updating the
             current database value.
         """
-        if key is not None:
-            self._dataset.update(dbName, {key: value})
-        else:
-            self._dataset.update(dbName, key)
+        if when:
+            if key is not None:
+                self._dataset._cache(dbName, {key: value})
+            else:
+                self._dataset._cache(dbName, key)
         raise NoChangeToValue()
 
     def _isChanged(self, value):
@@ -1398,8 +1450,12 @@ def compareImage(i1, i2, debug=False):
     """
 
     if i1.size != i2.size:
+        if debug:
+            print(f"Images are different sizes: {i1.size}, {i2.size}")
         return False
     if i1.mode != i2.mode:
+        if debug:
+            print(f"Images are different modes: {i1.mode}, {i2.mode}")
         return False
     for j in range(i1.size[1]):
         for i in range(i1.size[0]):

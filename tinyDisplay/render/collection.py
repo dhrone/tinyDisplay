@@ -45,6 +45,9 @@ class canvas(widget):
         self._priorities = []
         self._reprVal = "no widgets"
 
+        if not hasattr(self, "size"):
+            print(f"CANVAS {self.name} has no size")
+
     @staticmethod
     def _convertPlacement(p):
         # Convert placement into offset and justification values
@@ -211,7 +214,7 @@ class stack(canvas):
         self._gap = gap
         self.render(reset=True)
 
-    def append(self, item=None):
+    def append(self, item=None, gap=None):
         """
         Add a new widget (or widgets) to the stack.
 
@@ -220,28 +223,39 @@ class stack(canvas):
 
         :param item: A widget to add to the stack
         :type item: `tinydisplay.render.widget`
+        :param gap: The number of pixels to place between this widget and the
+            next widget in the stack.  This value can also be set at the
+            stack level if you want the same gap between every widget
+        :type gap: int
         """
         if item is not None:
-            self._widgets.append(item)
+            self._widgets.append((item, gap))
             self._reprVal = f'{len(self._widgets) or "no"} widgets'
             self._render(force=True)
 
     def _computeSize(self):
         x = 0
         y = 0
+        gap = 0
         if self._orientation == "horizontal":
-            for w in self._widgets:
-                x += w.size[0] + self._gap
-                y = max(y, w.size[1])
+            for w, g in self._widgets:
+                if w.active:
+                    gap = g if g is not None else self._gap
+                    x += w.size[0] + gap
+                    y = max(y, w.size[1])
+            x -= gap
         else:
-            for w in self._widgets:
-                x = max(x, w.size[0])
-                y += w.size[1] + self._gap
+            for w, g in self._widgets:
+                if w.active:
+                    gap = g if g is not None else self._gap
+                    x = max(x, w.size[0])
+                    y += w.size[1] + gap
+            y -= gap
         return (x, y)
 
     def _render(self, force=False, newData=None, *args, **kwargs):
         changed = False or force
-        for w in self._widgets:
+        for w, g in self._widgets:
             if w.render(force=force)[1]:
                 changed = True
 
@@ -250,14 +264,18 @@ class stack(canvas):
             img = Image.new(self._mode, (x, y), self._background)
             if self._orientation == "horizontal":
                 o = 0
-                for w in self._widgets:
-                    img.paste(w.image, (o, 0))
-                    o += w.image.size[0] + self._gap
+                for w, g in self._widgets:
+                    if w.active:
+                        gap = g if g is not None else self._gap
+                        img.paste(w.image, (o, 0))
+                        o += w.image.size[0] + gap
             else:
                 o = 0
-                for w in self._widgets:
-                    img.paste(w.image, (0, o))
-                    o += w.image.size[1] + self._gap
+                for w, g in self._widgets:
+                    if w.active:
+                        gap = g if g is not None else self._gap
+                        img.paste(w.image, (0, o))
+                        o += w.image.size[1] + gap
 
             self.clear(img.size)
             self._place(wImage=img, just=self.just)

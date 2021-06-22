@@ -21,7 +21,7 @@ exclude = '''
 
 [tool.isort]
 known_first_party = 'tinyDisplay'
-known_third_party = ["PIL", "flask", "pytest", "simple_pid", "yaml"]
+known_third_party = ["PIL", "flask", "pyattention", "pytest", "simple_pid", "yaml"]
 multi_line_output = 3
 lines_after_imports = 2
 force_grid_wrap = 0
@@ -40,6 +40,15 @@ pyyaml = "^5.3.1"
 pillow = "^7.2.0"
 simple-pid = "^0.2.4"
 requests = "^2.25.1"
+pyattention = {path = "../pyattention/dist/pyAttention-0.1.0-py3-none-any.whl"}
+lxml = "^4.6.3"
+httpx = "^0.18.1"
+beautifulsoup4 = "^4.9.3"
+python-socketio = {version = "^4.6.1", extras = ["client"]}
+aiohttp = "^3.7.4"
+psutil = "^5.8.0"
+netifaces = "^0.11.0"
+freetype-py = "^2.2.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6"
