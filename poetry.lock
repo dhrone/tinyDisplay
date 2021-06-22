@@ -951,15 +951,11 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
 [[package]]
 name = "pyattention"
-version = "0.1.0"
+version = "0.1.1"
 description = "A library to monitor information sources"
 category = "main"
 optional = false
-python-versions = ">=3.8,<4.0"
-
-[package.source]
-type = "file"
-url = "../pyattention/dist/pyAttention-0.1.0-py3-none-any.whl"
+python-versions = ">=3.7,<4.0"
 
 [[package]]
 name = "pycodestyle"
@@ -1429,7 +1425,7 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.2"
-content-hash = "1194039cd7014f8e1bcedd195c2a63d873dbe278448b751547a388e700dc42dc"
+content-hash = "a3016514cc1dd7ba02520a1b4eeed6b9335759fd649550a4455507d16322a73b"
 
 [metadata.files]
 aiohttp = [
@@ -2083,7 +2079,8 @@ py = [
     {file = "py-1.10.0.tar.gz", hash = "sha256:21b81bda15b66ef5e1a777a21c4dcd9c20ad3efd0b3f817e7a809035269e1bd3"},
 ]
 pyattention = [
-    {file = "pyAttention-0.1.0-py3-none-any.whl", hash = "sha256:5c969796b1a3dc494d1350213903a3d7cbd391b7da70dec0cfbabe4106fb5306"},
+    {file = "pyAttention-0.1.1-py3-none-any.whl", hash = "sha256:a86d9f51a030bc153ec44ecaa6380861e6f9eb674f31fc76f75a1e815b4192ad"},
+    {file = "pyAttention-0.1.1.tar.gz", hash = "sha256:691010a616bf25ee92b1e243139a2f6a0a5c16f798a4029b44150b4b98a1e5f1"},
 ]
 pycodestyle = [
     {file = "pycodestyle-2.7.0-py2.py3-none-any.whl", hash = "sha256:514f76d918fcc0b55c6680472f0a37970994e07bbb80725808c17089be302068"},
