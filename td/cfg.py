@@ -16,7 +16,6 @@ from inspect import getfullargspec
 
 import yaml
 from PIL import ImageFont
-
 from tinydisplay.font import bmImageFont
 from tinydisplay.render import collection, widget
 from tinydisplay.utility import dataset as Dataset

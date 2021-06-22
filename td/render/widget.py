@@ -18,7 +18,6 @@ from time import monotonic
 from urllib.request import urlopen
 
 from PIL import Image, ImageChops, ImageColor, ImageDraw
-
 from tinydisplay import globalVars
 from tinydisplay.exceptions import DataError, RenderError
 from tinydisplay.font import bmImageFont
