@@ -107,6 +107,7 @@ class bmImageFont(ImageFont.ImageFont):
     def __init__(self, fileName, defaultChar=" ", *args, **kwargs):
         self._defaultChar = defaultChar
         self._load(fileName, **kwargs)
+        self.font = self
 
     def _load(self, fileName, *args, **kwargs):
         self.lineHeight, self.tdGlyphs = _readGlyphData(fileName)

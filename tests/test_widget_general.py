@@ -82,7 +82,9 @@ def test_string_eval():
     w = text(value=f"'{s}'")
     drw = ImageDraw.Draw(Image.new("1", (0, 0), 0))
     img = Image.new(
-        w.image.mode, drw.textsize(s, font=w.font), w._dV["background"]
+        w.image.mode,
+        drw.textbbox((0, 0), s, font=w.font)[2:4],
+        w._dV["background"],
     )
     drw = ImageDraw.Draw(img)
     drw.text((0, 0), s, font=w.font, fill=w._dV["foreground"])

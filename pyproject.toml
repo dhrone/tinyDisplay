@@ -35,11 +35,11 @@ description = ""
 authors = ["dhrone <dhrone@dhrone.xyz>"]
 
 [tool.poetry.dependencies]
-python = "^3.8.2"
+python = "^3.9"
 pyyaml = "^5.3.1"
-pillow = "^7.2.0"
 simple-pid = "^0.2.4"
 requests = "^2.25.1"
+pillow = "^10.3.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6"
@@ -54,7 +54,7 @@ rstcheck = "^3.3.1"
 jupyter = "^1.0.0"
 ipykernel = "^5.5.5"
 Flask = "^2.0.1"
-black = "^21.5b1"
+black = "^24.4"
 
 [tool.pytest.ini_options]
 minversion = 6.0

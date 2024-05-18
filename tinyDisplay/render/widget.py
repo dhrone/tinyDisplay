@@ -426,9 +426,10 @@ class text(widget):
         value = str(self._dV["value"])
         self._reprVal = f"'{value}'"
 
-        tSize = self._tsDraw.textsize(
-            value, font=self.font, spacing=self.lineSpacing
+        tBB = self._tsDraw.textbbox(
+            (0, 0), value, font=self.font, spacing=self.lineSpacing
         )
+        tSize = (tBB[2], tBB[3])
         tSize = (0, 0) if tSize[0] == 0 else tSize
 
         img = Image.new(self._mode, tSize, self._dV["background"])
