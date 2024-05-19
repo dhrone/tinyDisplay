@@ -328,7 +328,7 @@ class widget(metaclass=abc.ABCMeta):
             self._size
             if self._size is not None
             else size
-            if type(size) == tuple and len(size) == 2
+            if type(size) is tuple and len(size) == 2
             else (0, 0)
         )
         self.image = Image.new(self._mode, size, self._background)
@@ -580,7 +580,7 @@ class widget(metaclass=abc.ABCMeta):
 
         if monotonic() - self._renderTime > self._slowRender:
             print(
-                f"=== slow data render {self.name} {monotonic()-self._renderTime:0.3f} ==="
+                f"=== slow data render {self.name} {monotonic() - self._renderTime:0.3f} ==="
             )
         if force:
             self.resetMovement()
@@ -606,7 +606,7 @@ class widget(metaclass=abc.ABCMeta):
 
         if monotonic() - self._renderTime > self._slowRender:
             print(
-                f"=== slow render {self.name} {monotonic()-self._renderTime:0.3f} ==="
+                f"=== slow render {self.name} {monotonic() - self._renderTime:0.3f} ==="
             )
 
         return (img, changed)
@@ -906,7 +906,7 @@ class progressBar(widget):
         range = self._range
         scale = self._getScaler(value, range)
 
-        self._reprVal = f"{scale*100:.1f}%"
+        self._reprVal = f"{scale * 100:.1f}%"
 
         size = self._mask.size
         dir = self._direction

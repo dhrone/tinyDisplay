@@ -139,7 +139,7 @@ class _tdLoader:
 
     def _createWidget(self, cfg, parent="", itemNr=0):
         name = (
-            parent + ":" + cfg.get("name", f"item {itemNr+1}")
+            parent + ":" + cfg.get("name", f"item {itemNr + 1}")
             if parent != ""
             else cfg.get("name", itemNr)
         )
