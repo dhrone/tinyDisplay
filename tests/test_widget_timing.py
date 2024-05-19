@@ -10,8 +10,8 @@ Test of Widget class for the tinyDisplay system
 import pytest
 from PIL import Image, ImageChops, ImageDraw
 
-from tinydisplay.render.widget import text
-from tinydisplay.utility import dataset
+from tinyDisplay.render.widget import text
+from tinyDisplay.utility import dataset
 
 
 def test_duration():

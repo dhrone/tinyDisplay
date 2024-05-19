@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageChops, ImageDraw
 
-from tinydisplay.render.collection import canvas
-from tinydisplay.render.widget import text
-from tinydisplay.utility import image2Text
+from tinyDisplay.render.collection import canvas
+from tinyDisplay.render.widget import text
+from tinyDisplay.utility import image2Text
 
 
 def compute_placement(size, wsize, offset, anchor):

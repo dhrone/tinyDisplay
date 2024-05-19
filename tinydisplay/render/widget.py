@@ -728,9 +728,9 @@ class text(widget):
                     pass
             tSize = (w, h)
         else:
-            tSize = self._tsDraw.textsize(
-                value, font=self._font, spacing=self._lineSpacing
-            )
+            tSize = self._tsDraw.textbbox(
+                (0, 0), value, font=self._font, spacing=self._lineSpacing
+            )[2:4]
         tSize = (0, 0) if tSize[0] == 0 else tSize
         return tSize
 
@@ -743,7 +743,7 @@ class text(widget):
         self._reprVal = f"'{value}'"
 
         tBB = self._tsDraw.textbbox(
-            (0, 0), value, font=self.font, spacing=self.lineSpacing
+            (0, 0), value, font=self.font, spacing=self._lineSpacing
         )
         tSize = (tBB[2], tBB[3])
         tSize = (0, 0) if tSize[0] == 0 else tSize

@@ -10,8 +10,8 @@ Test of Line Widget for the tinyDisplay system
 import pytest
 from PIL import Image, ImageChops, ImageDraw
 
-from tinydisplay.render.widget import line
-from tinydisplay.utility import compareImage
+from tinyDisplay.render.widget import line
+from tinyDisplay.utility import compareImage
 
 
 def test_line_widget():

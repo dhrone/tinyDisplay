@@ -9,9 +9,9 @@ Test of tinyDisplay windows class
 """
 import pytest
 
-from tinydisplay.render.collection import canvas, sequence
-from tinydisplay.render.widget import rectangle, text
-from tinydisplay.utility import dataset, image2Text
+from tinyDisplay.render.collection import canvas, sequence
+from tinyDisplay.render.widget import rectangle, text
+from tinyDisplay.utility import dataset, image2Text
 
 
 @pytest.fixture

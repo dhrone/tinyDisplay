@@ -11,8 +11,8 @@ import time
 
 import pytest
 
-from tinydisplay.exceptions import ValidationError
-from tinydisplay.utility import dataset, evaluator
+from tinyDisplay.exceptions import ValidationError
+from tinyDisplay.utility import dataset, evaluator
 
 
 updates = [

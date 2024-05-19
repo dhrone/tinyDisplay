@@ -10,7 +10,7 @@ Test of Rectangle Widget for the tinyDisplay system
 import pytest
 from PIL import Image, ImageChops, ImageDraw
 
-from tinydisplay.render.widget import rectangle
+from tinyDisplay.render.widget import rectangle
 
 
 def test_rectangle_widget():

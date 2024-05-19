@@ -84,7 +84,7 @@ def test_string_eval():
     img = Image.new(
         w.image.mode,
         drw.textbbox((0, 0), s, font=w.font)[2:4],
-        w._dV["background"],
+        w._dV["_background"],
     )
     drw = ImageDraw.Draw(img)
     drw.text((0, 0), s, font=w.font, fill=w._foreground)

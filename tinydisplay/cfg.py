@@ -17,9 +17,9 @@ from inspect import getfullargspec
 import yaml
 from PIL import ImageFont
 
-from tinydisplay.font import bmImageFont
-from tinydisplay.render import collection, widget
-from tinydisplay.utility import dataset as Dataset
+from tinyDisplay.font import bmImageFont
+from tinyDisplay.render import collection, widget
+from tinyDisplay.utility import dataset as Dataset
 
 
 class _yamlLoader(yaml.SafeLoader):

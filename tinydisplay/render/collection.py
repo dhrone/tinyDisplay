@@ -12,9 +12,9 @@ from inspect import currentframe, getargvalues, getfullargspec, isclass
 
 from PIL import Image
 
-from tinydisplay.render import collection
-from tinydisplay.render.widget import image, widget
-from tinydisplay.utility import getArgDecendents, getNotDynamicDecendents
+from tinyDisplay.render import collection
+from tinyDisplay.render.widget import image, widget
+from tinyDisplay.utility import getArgDecendents, getNotDynamicDecendents
 
 
 class canvas(widget):

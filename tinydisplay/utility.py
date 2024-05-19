@@ -22,8 +22,8 @@ from threading import Event, Thread
 from PIL import ImageColor
 from simple_pid import PID
 
-from tinydisplay import globalVars
-from tinydisplay.exceptions import (
+from tinyDisplay import globalVars
+from tinyDisplay.exceptions import (
     CompileError,
     EvaluationError,
     NoChangeToValue,
