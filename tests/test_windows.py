@@ -9,9 +9,9 @@ Test of tinyDisplay windows class
 """
 import pytest
 
-from tinyDisplay.render.collection import canvas, sequence
-from tinyDisplay.render.widget import rectangle, text
-from tinyDisplay.utility import dataset, image2Text
+from tinydisplay.render.collection import canvas, sequence
+from tinydisplay.render.widget import rectangle, text
+from tinydisplay.utility import dataset, image2Text
 
 
 @pytest.fixture
@@ -25,17 +25,17 @@ def makeSetup():
     ds = dataset({"db": db, "sys": system})
 
     # Widgets
-    artist = text(value="f\"Artist {db['artist']}\"", dataset=ds)
-    title = text(value="f\"Title {db['title']}\"", dataset=ds)
-    album = text(value="f\"Album {db['album']}\"", dataset=ds)
-    alert = text(value="'ALERT -- HOT'")
+    artist = text(dvalue="f\"Artist {db['artist']}\"", dataset=ds)
+    title = text(dvalue="f\"Title {db['title']}\"", dataset=ds)
+    album = text(dvalue="f\"Album {db['album']}\"", dataset=ds)
+    alert = text(dvalue="'ALERT -- HOT'")
     rectAlert = rectangle(
         (0, 0, alert.size[0] + 3, alert.size[1] + 3),
-        outline="'white'",
-        fill="'black'",
+        outline="white",
+        fill="black",
     )
 
-    time = text("'12:32p'")
+    time = text("12:32p")
 
     # Canvases
     cAT = canvas(size=(80, 16), duration=2)

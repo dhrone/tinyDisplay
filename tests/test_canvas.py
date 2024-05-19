@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageChops, ImageDraw
 
-from tinyDisplay.render.collection import canvas
-from tinyDisplay.render.widget import text
-from tinyDisplay.utility import image2Text
+from tinydisplay.render.collection import canvas
+from tinydisplay.render.widget import text
+from tinydisplay.utility import image2Text
 
 
 def compute_placement(size, wsize, offset, anchor):
@@ -80,7 +80,7 @@ def test_canvas_widget(size, offset, anchor):
     """
     Place widgets and verify position
     """
-    w = text("'X'", mode="1")
+    w = text("X", mode="1")
     ri = w.render()[0]
 
     img = Image.new("1", size, 0)
@@ -117,8 +117,8 @@ def test_canvas_widget(size, offset, anchor):
 
 
 def test_z_order():
-    w1 = text("'ABC'", size=(20, 8), background="'black'")
-    w2 = text("'123'", size=(20, 8), background="'black'")
+    w1 = text("ABC", size=(20, 8), background="black")
+    w2 = text("123", size=(20, 8), background="black")
 
     # Place second append at a higher z
     c1 = canvas(size=(20, 8))
@@ -141,7 +141,7 @@ def test_canvas_widget_change():
 
     db = {"artist": "Sting"}
     w = text(
-        value="f\"Artist {db['artist']}\"", dataset={"db": db}, size=(60, 8)
+        dvalue="f\"Artist {db['artist']}\"", dataset={"db": db}, size=(60, 8)
     )
     c = canvas(size=(80, 16))
     c.append(w)

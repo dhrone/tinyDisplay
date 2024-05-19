@@ -9,7 +9,7 @@ PATHS:
 
 DEFAULTS:
   display:
-    size: &dsize 100, 16
+    dsize: &dsize [100, 16]
     type: &dtype weh001602a
 
   zorder:
@@ -21,11 +21,11 @@ DEFAULTS:
   widgets:
     scroll: &scroll
       type: scroll
-      gap: __self__['size'][0]/4, 0
-      size: 100, 8
+      dgap: __self__['size'][0]/4, 0
+      size: [100, 8]
       wait: 'atStart'
       actions:
-        - pause, 5
+        - [pause, 5]
         - rtl
 
 WIDGETS:
@@ -40,59 +40,59 @@ WIDGETS:
   # NOW PLAYING
   nowPlaying: &nowPlaying
       type: text
-      value: f"NOW PLAYING"
+      value: NOW PLAYING
       font: tiny
   nowPlayingData: &nowPlayingData
       type: text
       font: tiny
-      value: f"{db['plPos']} OF {db['plLen']}"
-      size: 50, 5
+      dvalue: f"{db['plPos']} OF {db['plLen']}"
+      size: [50, 5]
       just: rt
 
   # ARTIST, TITLE, ALBUM
   artist: &artist
       type: text
-      value: db['artist']
+      dvalue: db['artist']
       effect: *scroll
   album: &album
       type: text
-      value: db['album']
+      dvalue: db['album']
       effect: *scroll
   title: &title
       type: text
-      value: db['title']
+      dvalue: db['title']
       effect: *scroll
 
   # PROGRESS
   songProgress: &songProgress
       type: progressBar
-      value: db['elapsed']
-      range: 0, db['length']
-      size: 100, 1
+      dvalue: db['elapsed']
+      drange: 0, db['length']
+      size: [100, 1]
 
   # TIME
   time: &time
       type: text
       font: large
       just: rt
-      value: time.strftime('%-I:%M',time.localtime(sys['time']))
-      size: 50, 16
+      dvalue: time.strftime('%-I:%M',time.localtime(sys['time']))
+      size: [50, 16]
   amPm: &amPm
       type: text
       font: tiny
-      value: time.strftime('%p',time.localtime(sys['time']))
+      dvalue: time.strftime('%p',time.localtime(sys['time']))
 
   # ALERT
   alert: &alert
       type: text
       just: rt
-      value: f'ALERT -- HOT'
+      value: ALERT -- HOT
 
   rectAlert: &rectAlert
       type: rectangle
-      xy: 0, 0, 63, 11
-      fill: f'black'
-      outline: f'white'
+      xy: [0, 0, 63, 11]
+      fill: black
+      outline: white
 
 
 CANVASES:
@@ -101,50 +101,50 @@ CANVASES:
     type: canvas
     items:
       - <<: *artist
-        placement: 0, 6, lt
+        placement: [0, 6, lt]
       - <<: *nowPlaying
-        placement: 0, 0
+        placement: [0, 0]
       - <<: *nowPlayingData
-        placement: 50, 0
+        placement: [50, 0]
       - <<: *songProgress
-        placement: 0, 15
+        placement: [0, 15]
     size: *dsize
 
   playAlbum: &playAlbum
     type: canvas
     items:
       - <<: *album
-        placement: 0, 6
+        placement: [0, 6]
       - <<: *nowPlaying
-        placement: 0, 0
+        placement: [0, 0]
       - <<: *nowPlayingData
-        placement: 50, 0
+        placement: [50, 0]
       - <<: *songProgress
-        placement: 0, 15
+        placement: [0, 15]
     size: *dsize
 
   playTitle: &playTitle
     type: canvas
     items:
       - <<: *title
-        placement: 0, 6
+        placement: [0, 6]
       - <<: *nowPlaying
-        placement: 0, 0
+        placement: [0, 0]
       - <<: *nowPlayingData
-        placement: 50, 0
+        placement: [50, 0]
       - <<: *songProgress
-        placement: 0, 15
+        placement: [0, 15]
     size: *dsize
 
   stopTime: &stopTime
     type: canvas
     items:
       - <<: *time
-        placement: 16, 1
+        placement: [16, 1]
       - <<: *amPm
-        placement: 70, 2
+        placement: [70, 2]
     size: *dsize
-    activeWhen: db['state']=='stop'
+    dactiveWhen: db['state']=='stop'
 
   cAlert: &cAlert
     type: canvas
@@ -155,8 +155,8 @@ CANVASES:
       - <<: *alert
         placement: mm
         z: *ZHIGH
-    size: 64, 12
-    activeWhen: sys['temp'] >= 100
+    size: [64, 12]
+    dactiveWhen: sys['temp'] >= 100
 
 
 SEQUENCES:
@@ -171,7 +171,7 @@ SEQUENCES:
         duration: 15
       - <<: *splash
         duration: 5
-    activeWhen: db['state']=='play'
+    dactiveWhen: db['state']=='play'
 
 
 DISPLAY:

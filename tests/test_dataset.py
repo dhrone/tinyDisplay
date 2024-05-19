@@ -11,7 +11,8 @@ import time
 
 import pytest
 
-from tinyDisplay.utility import dataset, evaluator
+from tinydisplay.exceptions import ValidationError
+from tinydisplay.utility import dataset, evaluator
 
 
 updates = [
@@ -155,6 +156,67 @@ def test_ischanged():
     assert not e.eval("Test"), "Nothing has changed yet"
     ds.update("db", {"title": "b"})
     assert e.eval("Test"), "Title has changed but change was not detected"
+
+
+def test_validate():
+    ds = dataset()
+    ds.registerValidation(
+        "db",
+        "test",
+        type=int,
+        onUpdate="_VAL_*10",
+        validate="0 <= _VAL_ < 100",
+        default=0,
+        sample=1,
+    )
+
+    ds.update("db", {"test": 3})
+    assert (
+        ds.db["test"] == 30
+    ), f"onUpdate Test. Expected value 30.  It was {ds.db['test']}."
+
+    ds.update("db", {"test": "abc"})
+    assert (
+        ds.db["test"] == 0
+    ), f"type Test.  Expected value 0.  It was {ds.db['test']}."
+
+    ds.update("db", {"test": 101})
+    assert (
+        ds.db["test"] == 0
+    ), f"validate Test.  Expected value 0.  It was {ds.db['test']}."
+
+    ds.update("db", {"test": 10})
+    assert (
+        ds.db["test"] == 100
+    ), f"Show validate happens before onUpdate Test.  Expected value 100.  It was {ds.db['test']}."
+
+    ds.registerValidation("db", "test", onUpdate=["_VAL_*10", "_VAL_//2"])
+    ds.update("db", {"test": 10})
+    assert (
+        ds.db["test"] == 50
+    ), f"Multi-line onUpdate test.  Expected value 50.  It was {ds.db['test']}."
+
+    ds.registerValidation("db", "test", validate=["_VAL_ >= 0", "_VAL_ < 100"])
+    ds.update("db", {"test": 101})
+    assert (
+        ds.db["test"] == 0
+    ), f"Multi-line validate test.  Expected value 0.  It was {ds.db['test']}."
+
+    ds._debug = True
+    try:
+        ds.update("db", {"test": 101})
+    except ValidationError as ex:
+        assert (
+            str(ex) == "db[test]: 101 failed validation: _VAL_ < 100"
+        ), "Expected Validation Error"
+
+    ds.registerValidation(
+        "db", onUpdate="{k.upper(): v for k, v in _VAL_.items()}"
+    )
+    ds.update("db", {"test": 1})
+    assert (
+        ds.db.get("TEST") == 1
+    ), "DB level onUpdate test.  Expected value was 1"
 
 
 def test_eval_errors():

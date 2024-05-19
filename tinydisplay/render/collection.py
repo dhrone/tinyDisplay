@@ -8,13 +8,13 @@ Collection widgets to present, and animate the display canvases.
 .. versionadded:: 0.0.1
 """
 import bisect
-from inspect import isclass
+from inspect import currentframe, getargvalues, getfullargspec, isclass
 
 from PIL import Image
 
-from tinyDisplay.render import collection
-from tinyDisplay.render.widget import image, widget
-from tinyDisplay.utility import getArgDecendents
+from tinydisplay.render import collection
+from tinydisplay.render.widget import image, widget
+from tinydisplay.utility import getArgDecendents, getNotDynamicDecendents
 
 
 class canvas(widget):
@@ -45,6 +45,9 @@ class canvas(widget):
         self._priorities = []
         self._reprVal = "no widgets"
 
+        if not hasattr(self, "size"):
+            print(f"CANVAS {self.name} has no size")
+
     @staticmethod
     def _convertPlacement(p):
         # Convert placement into offset and justification values
@@ -67,7 +70,7 @@ class canvas(widget):
         Append new widget to canvas.
 
         :param item: The item (widget or canvas) to add to this canvas
-        :type item: `tinyDisplay.render.widget`
+        :type item: `tinydisplay.render.widget`
         :param placement: Instruction on where to place the widget on the canvas
         :param z: The z order for the item.  Higher z order items get placed
             above lower ones.
@@ -112,7 +115,7 @@ class canvas(widget):
         # Check wait status for any widgets that have wait settings
         for i in self._placements:
             wid, off, anc = i
-            if hasattr(wid, "_wait"):
+            if hasattr(wid, "_wait") and wid._wait is not None:
                 waiting = {
                     "atStart": wid.atStart,
                     "atPause": wid.atPause,
@@ -211,7 +214,7 @@ class stack(canvas):
         self._gap = gap
         self.render(reset=True)
 
-    def append(self, item=None):
+    def append(self, item=None, gap=None):
         """
         Add a new widget (or widgets) to the stack.
 
@@ -219,45 +222,60 @@ class stack(canvas):
         bottom for vertical orientation.
 
         :param item: A widget to add to the stack
-        :type item: `tinyDisplay.render.widget`
+        :type item: `tinydisplay.render.widget`
+        :param gap: The number of pixels to place between this widget and the
+            next widget in the stack.  This value can also be set at the
+            stack level if you want the same gap between every widget
+        :type gap: int
         """
         if item is not None:
-            self._widgets.append(item)
+            self._widgets.append((item, gap))
             self._reprVal = f'{len(self._widgets) or "no"} widgets'
             self._render(force=True)
 
     def _computeSize(self):
         x = 0
         y = 0
+        gap = 0
         if self._orientation == "horizontal":
-            for w in self._widgets:
-                x += w.size[0] + self._gap
-                y = max(y, w.size[1])
+            for w, g in self._widgets:
+                if w.active:
+                    gap = g if g is not None else self._gap
+                    x += w.size[0] + gap
+                    y = max(y, w.size[1])
+            x -= gap
         else:
-            for w in self._widgets:
-                x = max(x, w.size[0])
-                y += w.size[1] + self._gap
+            for w, g in self._widgets:
+                if w.active:
+                    gap = g if g is not None else self._gap
+                    x = max(x, w.size[0])
+                    y += w.size[1] + gap
+            y -= gap
         return (x, y)
 
     def _render(self, force=False, newData=None, *args, **kwargs):
         changed = False or force
-        for w in self._widgets:
+        for w, g in self._widgets:
             if w.render(force=force)[1]:
                 changed = True
 
         if changed or newData:
             x, y = self._computeSize()
-            img = Image.new(self._mode, (x, y), self._dV["background"])
+            img = Image.new(self._mode, (x, y), self._background)
             if self._orientation == "horizontal":
                 o = 0
-                for w in self._widgets:
-                    img.paste(w.image, (o, 0))
-                    o += w.image.size[0] + self._gap
+                for w, g in self._widgets:
+                    if w.active:
+                        gap = g if g is not None else self._gap
+                        img.paste(w.image, (o, 0))
+                        o += w.image.size[0] + gap
             else:
                 o = 0
-                for w in self._widgets:
-                    img.paste(w.image, (0, o))
-                    o += w.image.size[1] + self._gap
+                for w, g in self._widgets:
+                    if w.active:
+                        gap = g if g is not None else self._gap
+                        img.paste(w.image, (0, o))
+                        o += w.image.size[1] + gap
 
             self.clear(img.size)
             self._place(wImage=img, just=self.just)
@@ -284,7 +302,11 @@ class index(canvas):
 
         super().__init__(*args, **kwargs)
 
-        self._dV.compile(value, name="value", default=0)
+        self._initArguments(
+            getfullargspec(index.__init__), getargvalues(currentframe())
+        )
+        self._evalAll()
+
         self._widgets = []
         self._max = (0, 0)
 
@@ -295,7 +317,7 @@ class index(canvas):
         Add a new widget to the index.
 
         :param item:  Item to add to widget
-        :type item: `tinyDisplay.render.widget`
+        :type item: `tinydisplay.render.widget`
         """
 
         if item is None:
@@ -306,19 +328,19 @@ class index(canvas):
         self.render(force=True)
 
     def _calculateSize(self):
-        if self._dV["requestedSize"] is None:
+        if self._size is None:
             x, y = 0, 0
             for w in self._widgets:
                 x = max(x, w.size[0])
                 y = max(y, w.size[1])
             return (x, y)
         else:
-            return self._dV["requestedSize"]
+            return self._size
 
     def _render(self, force=False, newData=None, *args, **kwargs):
         img = None
         changed = None
-        value = self._dV["value"]
+        value = self._value
         try:
             img, changed = self._widgets[value].render(force=force)
         except IndexError:
@@ -341,11 +363,11 @@ class sequence(canvas):  # noqa: D101
     of widgets in the order they are added to the sequence.  When a widget's
     turn arrives, it is displayed if active.
 
-    See the documentation for `tinyDisplay.render.widget` to see how the
+    See the documentation for `tinydisplay.render.widget` to see how the
     active state of widgets are managed.
 
     :param defaultCanvas: a canvas to display when there are no active canvases
-    :type defaultCanvas: tinyDisplay.render.widget
+    :type defaultCanvas: tinydisplay.render.widget
     :param *args: Additional arguments passed to parent `widget`
 
     # noqa: DAR101
@@ -358,9 +380,9 @@ class sequence(canvas):  # noqa: D101
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        size = self._dV["requestedSize"] or (0, 0)
+        size = self._size or (0, 0)
         self._defaultCanvas = defaultCanvas or image(
-            image=Image.new(self._mode, size, self._dV["background"])
+            image=Image.new(self._mode, size, self._background)
         )  # Set an empty image if no defaultCanvas provided
 
         self._canvases = []
@@ -377,7 +399,7 @@ class sequence(canvas):  # noqa: D101
         Add an item (either canvas or widget) to the sequence.
 
         :param item: the canvas or widget to be added to the sequence
-        :type item: tinyDisplay.render.canvas or tinyDisplay.render.widget
+        :type item: tinydisplay.render.canvas or tinydisplay.render.widget
         """
         assert (
             item
@@ -386,12 +408,22 @@ class sequence(canvas):  # noqa: D101
         item.render(force=True)
 
         # Resize sequence's canvas as needed to fit any appended canvas
-        rs = self._dV["requestedSize"] or (0, 0)
+        rs = self._size or (0, 0)
         mx = max(item.size[0], rs[0])
         my = max(item.size[1], rs[1])
-        self._requestedSize = (mx, my)
+        self._size = (mx, my)
         self._currentCanvas = 0
         self.render(force=True)
+
+    def _computeSize(self):
+        mx, my = self._size or (0, 0)
+        if len(self._canvases) == 0:
+            dcs = self._defaultCanvas.size
+            mx, my = max(dcs[0], mx), max(dcs[1], my)
+        else:
+            for item in self._canvases:
+                mx, my = max(item.size[0], mx), max(item.size[1], my)
+        return (mx, my)
 
     def _render(self, force=False, newData=None, *args, **kwargs):
         if force:
@@ -402,7 +434,7 @@ class sequence(canvas):  # noqa: D101
         if not img:
             img, new = self._defaultCanvas.render()
         if new or newData:
-            self.clear(img.size)
+            self.clear(self._computeSize())
             self._place(wImage=img, just=self.just)
         return (self.image, new or force)
 
@@ -414,7 +446,7 @@ class sequence(canvas):  # noqa: D101
         :type force: bool
         :returns: the currently active Canvas or None if no canvas is active
             and whether the activeCanvas is newly activated
-        :rtype: (tinyDisplay.render.widget, bool)
+        :rtype: (tinydisplay.render.widget, bool)
         """
         if self._currentCanvas is None:
             return (None, False)
@@ -456,3 +488,11 @@ PARAMS = {
     for k, v in collection.__dict__.items()
     if isclass(v) and issubclass(v, canvas)
 }
+
+for k, v in PARAMS.items():
+    nv = list(v)
+    NDD = getNotDynamicDecendents(collection.__dict__[k])
+    for arg in v:
+        if arg not in NDD:
+            nv.append(f"d{arg}")
+    PARAMS[k] = nv

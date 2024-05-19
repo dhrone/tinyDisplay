@@ -11,8 +11,8 @@ from pathlib import Path
 
 from PIL import Image, ImageChops
 
-from tinyDisplay.render.widget import image
-from tinyDisplay.utility import compareImage
+from tinydisplay.render.widget import image
+from tinydisplay.utility import compareImage, image2Text
 
 
 def test_image_widget():
@@ -25,7 +25,7 @@ def test_image_widget():
         img, w.render()[0]
     ), f"{path} did not match image within widget"
 
-    w = image(file=path)
+    w = image(file=path, mode=img.mode)
     assert compareImage(
-        img, w.render()[0]
-    ), f"{path} did not match image within widget"
+        img, w.render()[0], debug=True
+    ), f"{path} did not match image within widget. {image2Text(img)}\n{w}"

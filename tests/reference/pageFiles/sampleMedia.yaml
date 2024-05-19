@@ -6,9 +6,10 @@ DATASET:
         onUpdate:
           - _VAL_.lower()
           - store('db', 'lastStatus', time.monotonic())
+          - store('db', 'lastPlay', time.monotonic(), prev.db['status'] == 'play' and _VAL_ != 'play')
         default: stop
         sample: play
-        validate: True if _VAL_ in ['stop', 'play', 'pause'] else False
+        validate: True if _VAL_ in ['stop', 'play', 'pause', ''] else False
       position:  # position in the play queue of the current  track
         type: int
         default: 0
@@ -19,16 +20,21 @@ DATASET:
       album:  # name of the album the track is on
         sample: Sign "O" the Times
       albumart:  # URL to an image of the album cover
-        validation: _VAL_[0:4].lower() == 'http'
+        type: str
+        validate: "_VAL_[0:4].lower() == 'http' or _VAL_ == '' or _VAL_[0:1] == '/'"
+        onUpdate: "'http://volumio.local'+_VAL_ if _VAL_[0:1] == '/' else _VAL_"
         sample: https://i.scdn.co/image/ab67616d0000b2733b67e4695d120ebfe9ca359a
       uri:  # URI to the track
         sample: spotify:track:13UqaNF8STsJSGKxd12rmy
       trackType:  # The track's type (flac, mp3, spotify, etc)
         sample: spotify
       seek:  # Elapsed time in milliseconds
-        type: int
+        type: int, None
         sample: 107998
-        onUpdate: store('db', 'elapsed', _VAL_/1000)
+        default: 0
+        onUpdate: store('db', 'elapsed', _VAL_/1000 if _VAL_ is not None else 0)
+      elapsed:
+        default: 0.0
       duration:  # duration of track in seconds
         type: int
         sample: 243
@@ -58,21 +64,38 @@ DATASET:
       bitdepth:  # Number of bits used to encode track
         sample: 24 bit
       channels:  # number of channels in the track
-        type: int
+        type: int, None, str
         default: 2
-        onUpdate: "store('db', 'channelDescription', {2: 'stereo', 1: 'mono', 0: 'unknown'}.get(_VAL_, 'multi'))"
+        onUpdate: "store('db', 'channelDescription', {2: 'stereo', 1: 'mono', 0: 'unknown'}.get(_VAL_, ''))"
+      channelDescription:
       service:  # Service that is the source of the currently playing music
         sample: mpd
       disableVolumeControl:
         type: bool
+  pl:
+    values:
       playlist:
         type: list
         onUpdate:
-          - store('db', 'playlistLength', len(_VAL_))
+          - store('pl', 'playlistLength', len(_VAL_))
         sample:
           - {'service': 'spop', 'uri': 'spotify:track:02MWAaffLxlfxAUY7c5dvx', 'artist': 'Glass Animals', 'album': 'Dreamland', 'title': 'Heat Waves', 'albumart': 'https://i.scdn.co/image/ab67616d0000b2739e495fb707973f3390850eea'}
           - {'service': 'spop', 'uri': 'spotify:track:40rOlDoGejXXF4B0BYsjx8', 'artist': 'Glass Animals', 'album': 'Dreamland', 'title': 'Badu', 'albumart': 'https://i.scdn.co/image/ab67616d0000b2739e495fb707973f3390850eea'}
         validate: len([True for i in _VAL_ if len(set(('uri', 'service', )).intersection(set(i)))==2]) == len(_VAL_)
+  wea:
+    values:
+      current:
+        type: dict
+        default: { 'description': 'High: 0 F Low: 0 F' }
+        validate: "'description' in _VAL_"
+      today:
+        type: dict
+        default: { 'description': 'High: 0 F Low: 0 F' }
+        validate: "'description' in _VAL_"
+      tomorrow:
+        type: dict
+        default: { 'description': 'High: 0 F Low: 0 F' }
+        validate: "'description' in _VAL_"
 
 
 SOURCES:
@@ -104,19 +127,27 @@ FONTS:
     file: rajdhani-regular.ttf
     type: truetype
     size: 16
+  xlarge:
+    file: rajdhani-bold.ttf
+    type: truetype
+    size: 36
+  xxxlarge:
+    file: rajdhani-bold.ttf
+    type: truetype
+    size: 80
 
 PATHS:
   images: 'images/media/'
   fonts: 'tests/reference/fonts/'
 
 COLORS:
-  background: &bg 0x7, 0x37, 0x63, 0xff
-  foreground: &fg 0, 0, 0, 0xff
-  transparent: &transparent 0, 0, 0, 0
+  background: &bg [0x7, 0x37, 0x63, 0xff]
+  foreground: &fg [0, 0, 0, 0xff]
+  transparent: &transparent [0, 0, 0, 0]
 
 DEFAULTS:
   display:
-    size: &dsize 320, 240
+    size: &dsize [320, 240]
     type: &dtype ili9341
 
   zorder:
@@ -128,11 +159,11 @@ DEFAULTS:
   widgets:
     scroll: &scroll
       type: scroll
-      gap: int(__self__['size'][0]/4), 0
-      size: 100, 8
+      dgap: int(__self__['size'][0]/4), 0
+      size: [100, 8]
       wait: 'atStart'
       actions:
-        - pause, 5
+        - [pause, 5]
         - rtl
 
 DISPLAY:
@@ -141,29 +172,31 @@ DISPLAY:
   - name: PLAY
     type: canvas
     activeWhen: db['status'] == 'play'
+    overRun: True
+    minDuration: 100
     size: *dsize
     background: *bg
     items:
       - name: topBar
         type: canvas
-        size: 320, 20
+        size: [320, 20]
         items:
 
           - name: service
             type: text
-            value: db['service']
-            placement: 2, -1, lm
+            dvalue: "{'spop': 'Spotify', 'mpd': 'MPD'}.get(db['service'], db['service'])"
+            placement: [2, -1, lm]
             font: small
 
           - name: topBarRightIcons
             type: stack
-            size: int(320 * 0.75), 20
+            dsize: int(320 * 0.75), 20
             just: rm
-            placement: -2, 0, rm
+            placement: [-2, 0, rm]
             items:
               - name: volumeIcon
                 type: index
-                value: ceil(db['volume']/25)
+                dvalue: ceil(db['volume']/25) if not db['mute'] else 0
                 items:
                   - type: image
                     file: Volume_Off_16x16.png
@@ -177,86 +210,113 @@ DISPLAY:
                     file: Volume_On_100_16x16.png
               - name: volume
                 type: text
-                value: db['volume']
+                dvalue: db['volume']
                 font: small
-                foreground: "'white' if db['volume'] > 0 else 'grey'"
+                dforeground: "'white' if db['volume'] > 0 and not db['mute'] else 'grey'"
+                gap: 6
+              - name: time
+                type: text
+                width: 42
+                just: lt
+                dvalue: time.strftime('%H:%M:%S', time.localtime())
+                font: small
 
 
       - name: middleRegion
         type: canvas
-        size: 320, 200
-        placement: 0, 20
+        size: [320, 200]
+        placement: [0, 20]
         items:
           - name: left
             type: canvas
-            size: 160, 200
+            size: [160, 200]
             items:
               - name: albumart
                 type: image
-                url: db['albumart']
-                size: 150, 150
+                durl: db['albumart']
+                size: [150, 150]
                 placement: mm
 
           - name: right
             type: canvas
-            size: 160, 200
-            placement: 160, 0
+            size: [160, 200]
+            placement: [160, 0]
             items:
-              - name: album
-                type: text
-                font: large
-                value: db['album']
-                placement: 0, 20, mt
-              - name: artist
-                type: text
-                font: small
-                value: db['artist']
-                placement: 0, 36, mt
-              - name: title
-                type: text
-                font: small
-                value: db['title']
-                placement: 0, 60, mt
+              - name: AlbumArtistTitle
+                type: stack
+                orientation: vertical
+                gap: 0
+                placement: mm
+                items:
+                - name: album
+                  type: text
+                  font: large
+                  activeWhen: db['album'] != 'None'
+                  dvalue: db['album']
+                  wrap: True
+                  width: 160
+                  just: mt
+                - name: artist
+                  type: text
+                  font: small
+                  dvalue: db['artist']
+                  wrap: True
+                  width: 160
+                  gap: 6
+                  just: mt
+                - name: title
+                  type: text
+                  font: small
+                  dvalue: db['title']
+                  wrap: True
+                  width: 160
+                  just: mt
               - name: encoding
                 type: text
                 font: small
-                value: f"{db['channelDescription'].upper()} {db['samplerate']} / {db['bitdepth']}"
-                placement: 0, -4, lb
-              - name: playListState
-                type: text
-                font: small
-                value: f"{db['position']+1} of {db['playlistLength']}"
-                just: rt
-                placement: -2, -4, rb
+                dvalue: f"{db['channelDescription'].upper()} {db['samplerate']} {db['bitdepth']}"
+                placement: [0, -22, mb]
+              - name: EncodingAndPlayListStateBar
+                type: canvas
+                size: [160, 16]
+                placement: lb
+                items:
+                - name: playListState
+                  type: text
+                  font: small
+                  dvalue: f"{db['position']+1} of {pl['playlistLength']}"
+                  just: rt
+                  placement: [-2, 0, rt]
 
       - name: bottomBar
         type: canvas
-        size: 320, 20
+        size: [320, 20]
         placement: lb
         items:
           - name: position
             type: text
             font: small
-            value: time.strftime('%M:%S', time.gmtime(int(db['elapsed'])))
-            placement: 2, 0, lm
+            dvalue: time.strftime('%M:%S', time.gmtime(int(db['elapsed']+time.monotonic()-db['lastStatus']) if db['status']=='play' else db['elapsed']))
+            placement: [2, 0, lm]
           - name: duration
             type: text
             font: small
-            value: time.strftime('%M:%S', time.gmtime(int(db['duration'])))
-            placement: -2, 0, rm
+            activeWhen: db['duration'] > 0
+            dvalue: time.strftime('%M:%S', time.gmtime(int(db['duration'])))
+            placement: [-2, 0, rm]
           - name: progress
             type: progressBar
-            value: db['elapsed']
-            range: 0, db['duration']
-            foreground: f'white'
-            background: 0x3d, 0x85, 0xc6
-            fill: f'white'
-            size: (316, 2)
+            dvalue: db['elapsed']+time.monotonic()-db['lastStatus'] if db['status']=='play' else db['elapsed']
+            drange: 0, db['duration']
+            foreground: white
+            background: [0x3d, 0x85, 0xc6]
+            fill: white
+            size: [316, 2]
             placement: mt
           - name: playerStateIcon
             type: index
             placement: mm
-            value: 0 if db['status'] == 'play' else 1 if db['status'] == 'pause' else 2
+            dvalue: 0 if db['status'] == 'play' else 1 if db['status'] == 'pause' else 2
             items:
               - type: image
                 file: play_16x16.png
@@ -264,3 +324,82 @@ DISPLAY:
                 file: pause_16x16.png
               - type: image
                 file: stop_16x16.png
+  - name: STOP
+    type: canvas
+    activeWhen: db['status'] != 'play'
+    size: *dsize
+    background: *bg
+    items:
+      - name: time_12
+        type: stack
+        placement: mm
+        items:
+          - name: hour_min
+            type: text
+            font: xxxlarge
+            trim: top
+            dvalue: time.strftime('%-I:%M', time.localtime())
+            gap: 2
+          - name: am_pm
+            type: text
+            font: large
+            trim: top
+            dvalue: time.strftime('%p', time.localtime())
+      - name: Weather_Desc
+        type: text
+        font: medium
+        width: 180
+        wrap: True
+        placement: [5, -8, lb]
+        dvalue: wea['current']['description'].split('\n')[0]
+      - name: HiLow
+        type: stack
+        placement: [-5, -10, rb]
+        gap: 10
+        items:
+          - name: high_complete
+            type: stack
+            orientation: vertical
+            items:
+              - name: high_value
+                type: stack
+                trim: all
+                items:
+                - name: high_nr
+                  type: text
+                  font: xlarge
+                  trim: top
+                  dvalue: wea['today']['description'].split()[1]
+                  gap: 2
+                - name: fh1
+                  type: text
+                  font: small
+                  trim: top
+                  value: f
+              - name: high_text
+                type: text
+                font: medium
+                value: High
+          - name: low_complete
+            type: stack
+            orientation: vertical
+            items:
+              - name: low_value
+                type: stack
+                trim: all
+                items:
+                - name: low_nr
+                  type: text
+                  font: xlarge
+                  trim: top
+                  dvalue: wea['today']['description'].split()[4]
+                  gap: 2
+                - name: fh2
+                  type: text
+                  font: small
+                  trim: top
+                  value: f
+              - name: low_text
+                type: text
+                font: medium
+                value: Low

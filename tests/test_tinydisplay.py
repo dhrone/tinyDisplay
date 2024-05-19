@@ -1,4 +1,4 @@
-from tinyDisplay import __version__
+from tinydisplay import __version__
 
 
 def test_version():

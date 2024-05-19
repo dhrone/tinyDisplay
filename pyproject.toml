@@ -1,6 +1,6 @@
 [tool.coverage.run]
 branch = true
-source = ['tinyDisplay']
+#source = ['tinydisplay']
 omit = ['setup.py', 'docs/*', '.tox/*']
 
 [tool.black]
@@ -20,8 +20,8 @@ exclude = '''
 '''
 
 [tool.isort]
-known_first_party = 'tinyDisplay'
-known_third_party = ["PIL", "flask", "pytest", "simple_pid", "yaml"]
+known_first_party = 'tinydisplay'
+known_third_party = ["PIL", "flask", "pyattention", "pytest", "simple_pid", "yaml"]
 multi_line_output = 3
 lines_after_imports = 2
 force_grid_wrap = 0
@@ -58,7 +58,7 @@ black = "^24.4"
 
 [tool.pytest.ini_options]
 minversion = 6.0
-addopts = "-ra -v --cov=tinyDisplay --cov-report term --cov-report html"
+addopts = "-ra -v --cov=tinydisplay --cov-report term --cov-report html"
 testpaths = [
   "tests"
 ]

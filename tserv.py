@@ -1,19 +1,24 @@
 #!/usr/bin/env python
 
+import json
 import webbrowser
 from io import BytesIO
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
-from time import sleep, time
+from time import monotonic, sleep, time
 
 from flask import Flask, Response, render_template
 from PIL import Image, ImageDraw, ImageFont
+from pyattention.collection import collection
+from pyattention.media import volumio
+from pyattention.source import rss, system
 
-from tinyDisplay.cfg import _tdLoader, load
-from tinyDisplay.render.collection import canvas, index, stack
-from tinyDisplay.render.widget import image, text
-from tinyDisplay.utility import animate, dataset
+from tinydisplay.cfg import _tdLoader, load
+from tinydisplay.exceptions import NoResult
+from tinydisplay.render.collection import canvas, index, stack
+from tinydisplay.render.widget import image, text
+from tinydisplay.utility import animate, dataset
 
 
 app = Flask(__name__)
@@ -29,7 +34,7 @@ def create_frame(a):
     while True:
         if not a.running:
             break
-        img = a.get(1)
+        img = a.get(10)
         if img is not None:
             yield (
                 b"--frame\r\n"
@@ -51,17 +56,30 @@ def video_feed():
 
 
 class MakeAnimation:
-    def __init__(self, pageFile, fps=30, resize=1):
+    def __init__(
+        self, pageFile, fps=30, resize=1, dataQ=None, debug=False, demo=False
+    ):
         self.fps = fps
         self.resize = resize
-        self._main = load(pageFile, demo=True)
+        self._pageFile = pageFile
+        self._main = load(pageFile, debug=debug, demo=demo)
         self._animate = animate(cps=fps, function=self.render, queueSize=100)
+        print(f"animate started with {self._animate._speed}")
+        self._dataQ = dataQ
+        self._rc = 0
 
     def start(self):
-        self._animate.start()
+        if "_started" not in dir(self):
+            self._animate.start()
+            self._started = True
 
     def stop(self):
         self._animate.stop()
+
+    def reset(self, debug=False, demo=False):
+        self._animate.pause()
+        self._main = load(self._pageFile, debug=debug, demo=demo)
+        self._animate.restart()
 
     def get(self, wait):
         return self._animate.get(wait)
@@ -75,7 +93,74 @@ class MakeAnimation:
         return self._animate._running
 
     def render(self):
+        data_expectation = 0.1
+        render_expectation = 0.1
+        self._timer = monotonic()
+        self._renderTime = self._timer
+        if self._dataQ is not None:
+            # Wait up to 1/10 of a second to get new data
+            new_data = []
+            while True:
+                data = self._dataQ.get(0.01)
+                if data is None:
+                    break
+                new_data.append(data)
+
+            for ditem in new_data:
+                if "vol" in ditem:
+                    if "pushQueue" in ditem["vol"]:
+                        self._main._dataset.update(
+                            "pl", {"playlist": ditem["vol"]["pushQueue"]}
+                        )
+                    if "pushState" in ditem["vol"]:
+                        # print (f"RECEIVED\n========\n{json.dumps(v, indent=4)}")
+                        self._main._dataset.update(
+                            "db", ditem["vol"]["pushState"]
+                        )
+                if "sys" in ditem:
+                    self._main._dataset.update("sys", ditem["sys"])
+
+                if "wea" in ditem:
+                    if "data" in ditem["wea"]:
+                        if len(ditem["wea"]["data"]) == 4:
+                            # Got expected data
+                            wd = {
+                                "current": ditem["wea"]["data"][0],
+                                "today": ditem["wea"]["data"][1],
+                                "tomorrow": ditem["wea"]["data"][2],
+                            }
+                            self._main._dataset.update("wea", wd)
+
+                        else:
+                            print(
+                                f"Weather: Expected four data elements: {len(ditem['wea'])}"
+                            )
+                    else:
+                        print(
+                            f"Weather: Received message but no data: {ditem['wea']}"
+                        )
+
+        if monotonic() - self._renderTime > data_expectation:
+            print(
+                f"=== slow data colleciton {monotonic()-self._renderTime:.4f} > {data_expectation} ==="
+            )
+        self._renderTime = monotonic()
+        self._rc += 1
+        if self._rc % 600 == 0:  # Once per minute
+            mt = monotonic()
+            print(
+                f"Render #{self._rc}: loop time {mt-self._timer:.3f}  queue size {self._animate.qsize}"
+            )
+            print(f"==============================================")
+            print(f"=                 CURRENT DATA               =")
+            print(f"==============================================")
+            print(f"{json.dumps(self._main._dataset.db, indent=4)}")
+            print(f"========\n{json.dumps(self._main._dataset.wea, indent=4)}")
+            print(f"========\n{json.dumps(self._main._dataset.sys, indent=4)}")
+            print(f"==============================================")
+            self._timer = mt
         img = self._main.render()[0]
+        result = None
         if img is not None:
             if img.mode != "RGB":
                 img = img.convert("RGB")
@@ -83,15 +168,31 @@ class MakeAnimation:
                 img = img.resize(
                     (img.size[0] * self.resize, img.size[1] * self.resize)
                 )
-                return get_pil_image_data(img)
-        else:
-            return None
+                result = get_pil_image_data(img)
+
+        if monotonic() - self._renderTime > render_expectation:
+            print(
+                f"=== slow render {monotonic()-self._renderTime:.4f} > {render_expectation} ==="
+            )
+
+        return result
 
 
 pf = "tests/reference/pageFiles/sampleMedia.yaml"
-fps = 15
+fps = 10
 resize = 2
-ma = MakeAnimation(pf, fps, resize)
+col = collection()
+srcV = volumio("http://volumio.local", loop=col.tloop)
+srcS = system(loop=col.tloop)
+srcW = rss(
+    "http://rss.accuweather.com/rss/liveweather_rss.asp?locCode=18-327659_1_al",
+    loop=col.tloop,
+    frequency=7200,
+)  # Poll 4x per day
+col.register("vol", srcV)
+col.register("sys", srcS)
+col.register("wea", srcW)
+ma = MakeAnimation(pf, fps=fps, resize=resize, dataQ=col, debug=True)
 
 Thread(target=lambda: app.run(host="0.0.0.0", debug=False)).start()
 

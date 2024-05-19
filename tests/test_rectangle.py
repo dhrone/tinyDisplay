@@ -10,7 +10,7 @@ Test of Rectangle Widget for the tinyDisplay system
 import pytest
 from PIL import Image, ImageChops, ImageDraw
 
-from tinyDisplay.render.widget import rectangle
+from tinydisplay.render.widget import rectangle
 
 
 def test_rectangle_widget():
@@ -19,12 +19,12 @@ def test_rectangle_widget():
     d = ImageDraw.Draw(img)
     d.rectangle((0, 0, 9, 7), outline="white")
 
-    w = rectangle(xy=(0, 0, 9, 7), outline="'white'", fill="'black'")
+    w = rectangle(xy=(0, 0, 9, 7), outline="white", fill="black")
     renderImage = w.render()[0]
     bbox = ImageChops.difference(img, renderImage).getbbox()
     assert not bbox, f"Rectangles did not match"
 
-    w = rectangle(xy=[(0, 0), (9, 7)], outline="'white'", fill="'black'")
+    w = rectangle(xy=[(0, 0), (9, 7)], outline="white", fill="black")
     renderImage = w.render()[0]
     bbox = ImageChops.difference(img, renderImage).getbbox()
     assert not bbox, f"Rectangles did not match"
