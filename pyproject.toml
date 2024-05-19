@@ -36,7 +36,7 @@ authors = ["dhrone <dhrone@dhrone.xyz>"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-pyyaml = "^5.3.1"
+pyyaml = "^6.0.1"
 simple-pid = "^0.2.4"
 requests = "^2.25.1"
 pillow = "^10.3.0"
