@@ -1240,9 +1240,11 @@ class dynamicValue:
         ret = (
             False
             if self._changeID not in self._holdForIsChanged
-            else True
-            if self._holdForIsChanged.get(self._changeID) != value
-            else False
+            else (
+                True
+                if self._holdForIsChanged.get(self._changeID) != value
+                else False
+            )
         )
         self._holdForIsChanged[self._changeID] = value
         return ret

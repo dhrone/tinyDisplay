@@ -274,9 +274,11 @@ class _tdLoader:
         for k, v, d in self._find("actions", self._pf):
             if type(v) is list:
                 d[k] = [
-                    (i.split(",")[0], int(i.split(",")[1]))
-                    if type(i) is str and len(i.split(",")) == 2
-                    else i
+                    (
+                        (i.split(",")[0], int(i.split(",")[1]))
+                        if type(i) is str and len(i.split(",")) == 2
+                        else i
+                    )
                     for i in v
                 ]
 

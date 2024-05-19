@@ -1078,11 +1078,15 @@ class marquee(widget):
             dir = (
                 (self._distance, 0)
                 if direction == "ltr"
-                else (-self._distance, 0)
-                if direction == "rtl"
-                else (0, self._distance)
-                if direction == "ttb"
-                else (0, -self._distance)
+                else (
+                    (-self._distance, 0)
+                    if direction == "rtl"
+                    else (
+                        (0, self._distance)
+                        if direction == "ttb"
+                        else (0, -self._distance)
+                    )
+                )
             )
             curPos = (curPos[0] + dir[0], curPos[1] + dir[1])
 
@@ -1179,11 +1183,15 @@ class slide(marquee):
         return (
             pos[0]
             if direction == "rtl"
-            else self.size[0] - (pos[0] + self._widget.size[0])
-            if direction == "ltr"
-            else pos[1]
-            if direction == "btt"
-            else self.size[1] - (pos[1] + self._widget.size[1])
+            else (
+                self.size[0] - (pos[0] + self._widget.size[0])
+                if direction == "ltr"
+                else (
+                    pos[1]
+                    if direction == "btt"
+                    else self.size[1] - (pos[1] + self._widget.size[1])
+                )
+            )
         )
 
     def _returnToStart(self, direction, curPos, tickCount):
@@ -1194,11 +1202,13 @@ class slide(marquee):
             dir = (
                 "rtl"
                 if dem == 0 and curPos[dem] > sp[dem]
-                else "ltr"
-                if dem == 0 and curPos[dem] < sp[dem]
-                else "btt"
-                if dem == 1 and curPos[dem] > sp[dem]
-                else "ttb"
+                else (
+                    "ltr"
+                    if dem == 0 and curPos[dem] < sp[dem]
+                    else "btt"
+                    if dem == 1 and curPos[dem] > sp[dem]
+                    else "ttb"
+                )
             )
             curPos, tickCount = self._addMovement(
                 abs(curPos[dem] - sp[dem]), dir, curPos, tickCount
