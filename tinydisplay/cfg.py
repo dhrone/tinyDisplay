@@ -85,9 +85,7 @@ class _tdLoader:
         just = (
             placement[2]
             if len(placement) == 3
-            else placement[0]
-            if len(placement) == 1
-            else "lt"
+            else placement[0] if len(placement) == 1 else "lt"
         )
         return (offset, just.strip())
 

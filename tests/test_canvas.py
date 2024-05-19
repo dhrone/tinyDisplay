@@ -30,20 +30,12 @@ def compute_placement(size, wsize, offset, anchor):
     a = (
         0
         if anchor[0] == "l"
-        else mh
-        if anchor[0] == "m"
-        else r
-        if anchor[0] == "r"
-        else 0
+        else mh if anchor[0] == "m" else r if anchor[0] == "r" else 0
     )
     b = (
         0
         if anchor[1] == "t"
-        else mv
-        if anchor[1] == "m"
-        else b
-        if anchor[1] == "b"
-        else 0
+        else mv if anchor[1] == "m" else b if anchor[1] == "b" else 0
     )
     return (offset[0] + a, offset[1] + b)
 
@@ -90,11 +82,7 @@ def test_canvas_widget(size, offset, anchor):
     placement = (
         (offset[0], offset[1], anchor)
         if offset and anchor
-        else (offset[0], offset[1])
-        if offset
-        else anchor
-        if anchor
-        else None
+        else (offset[0], offset[1]) if offset else anchor if anchor else None
     )
     c = canvas(size=size, mode="1")
     c.append(w, placement)

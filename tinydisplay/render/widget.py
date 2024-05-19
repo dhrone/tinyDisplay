@@ -327,9 +327,7 @@ class widget(metaclass=abc.ABCMeta):
         size = (
             self._size
             if self._size is not None
-            else size
-            if type(size) is tuple and len(size) == 2
-            else (0, 0)
+            else size if type(size) is tuple and len(size) == 2 else (0, 0)
         )
         self.image = Image.new(self._mode, size, self._background)
         if self.image is None:
@@ -503,20 +501,12 @@ class widget(metaclass=abc.ABCMeta):
             a = (
                 0
                 if just[0] == "l"
-                else mh
-                if just[0] == "m"
-                else r
-                if just[0] == "r"
-                else 0
+                else mh if just[0] == "m" else r if just[0] == "r" else 0
             )
             b = (
                 0
                 if just[1] == "t"
-                else mv
-                if just[1] == "m"
-                else b
-                if just[1] == "b"
-                else 0
+                else mv if just[1] == "m" else b if just[1] == "b" else 0
             )
 
             pos = (offset[0] + a, offset[1] + b)
@@ -843,9 +833,7 @@ class progressBar(widget):
         mode = (
             "L"
             if mode in ("1", "L", "LA")
-            else "RGBA"
-            if mode in ("RGB", "RGBA")
-            else "RGBA"
+            else "RGBA" if mode in ("RGB", "RGBA") else "RGBA"
         )
 
         # Convert color name into color value if needed
@@ -919,9 +907,7 @@ class progressBar(widget):
         (px, py) = (
             (0, 0)
             if dir in ["ltr", "ttb"]
-            else (size[0] - w, 0)
-            if dir == "rtl"
-            else (0, size[1] - h)
+            else (size[0] - w, 0) if dir == "rtl" else (0, size[1] - h)
         )
 
         # Build Fill
@@ -1205,9 +1191,7 @@ class slide(marquee):
                 else (
                     "ltr"
                     if dem == 0 and curPos[dem] < sp[dem]
-                    else "btt"
-                    if dem == 1 and curPos[dem] > sp[dem]
-                    else "ttb"
+                    else "btt" if dem == 1 and curPos[dem] > sp[dem] else "ttb"
                 )
             )
             curPos, tickCount = self._addMovement(
@@ -1515,11 +1499,7 @@ class image(widget):
         typeImage = (
             "url"
             if self._url
-            else "file"
-            if self._file
-            else "image"
-            if self._image
-            else None
+            else "file" if self._file else "image" if self._image else None
         )
         source = self._url or self._file or self._image
 
