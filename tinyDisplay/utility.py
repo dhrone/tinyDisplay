@@ -133,7 +133,7 @@ class animate(Thread):
 
     def toggle(self):
         """Toggle calling the function from on to off or off to on."""
-        if self._event.isSet():
+        if self._event.is_set():
             self._event.clear()
         else:
             self._event.set()
@@ -248,7 +248,7 @@ class animate(Thread):
                 renderCounterLimit = 10
                 renderTimer = time.time()
 
-            if not self._event.isSet():
+            if not self._event.is_set():
                 # Disable pid while waiting to be activated
                 self._pid.set_auto_mode(False)
                 self._event.wait()
