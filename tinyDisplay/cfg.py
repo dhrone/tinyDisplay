@@ -293,16 +293,16 @@ def load(file, dataset=None, defaultCanvas=None, debug=False, demo=False):
     :param file: The filename of the tinyDisplay yaml file
     :type file: str
     :param dataset: A dataset to provide variables to any widgets which require them
-    :type dataset: tinydisplay.utility.dataset
+    :type dataset: tinyDisplay.utility.dataset
     :param defaultCanvas: A window (canvas) to display if there are no active windows
-    :type defaultCanvas: tinydisplay.widget.canvas
+    :type defaultCanvas: tinyDisplay.widget.canvas
     :param debug: Set resulting display into debug mode
     :type debug: bool
     :param demo: Set resulting database into demo mode
     :type demo: bool
 
     :returns: windows collection
-    :rtype: `tinydisplay.collection.windows`
+    :rtype: `tinyDisplay.collection.windows`
 
     ..Note:
         Debug mode causes exceptions to be thrown when dynamic variable
@@ -313,10 +313,10 @@ def load(file, dataset=None, defaultCanvas=None, debug=False, demo=False):
         enable simplified testing of display configurations.
     """
     if debug:
-        from tinydisplay import globalVars
+        from tinyDisplay import globalVars
 
         globalVars.__DEBUG__ = True
-        logging.getLogger("tinydisplay").setLevel(logging.DEBUG)
+        logging.getLogger("tinyDisplay").setLevel(logging.DEBUG)
 
     tdl = _tdLoader(
         pageFile=file,

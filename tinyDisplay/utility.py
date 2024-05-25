@@ -303,7 +303,7 @@ class evaluator:
     Class to compile and evaluate values for a dataset.
 
     :param dataset: The dataset to be used when compiling and evaluating statements
-    :type dataset: `tinydisplay.utility.dataset`
+    :type dataset: `tinyDisplay.utility.dataset`
     """
 
     def __init__(self, dataset, localDataset=None, debug=False):
@@ -311,7 +311,7 @@ class evaluator:
         self._localDataset = localDataset if localDataset is not None else {}
         self._debug = debug
 
-        self._logger = logging.getLogger("tinydisplay")
+        self._logger = logging.getLogger("tinyDisplay")
 
         # Holds the collection of statements that this evaluator manages
         self._statements = {}
@@ -336,7 +336,7 @@ class evaluator:
         :param dynamic: Enables dynamic evaluation
         :type dynamic: bool
         :returns: a new dynamicValue
-        :rtype: `tinydisplay.utility.dynamicValue`
+        :rtype: `tinyDisplay.utility.dynamicValue`
         """
         # create dynamic value
         # compile dynamic value
@@ -445,10 +445,10 @@ class evaluator:
 
 class dataset:
     """
-    Class to manage data that tinydisplay will use to render widgets and test conditions.
+    Class to manage data that tinyDisplay will use to render widgets and test conditions.
 
     :param dataset: Dataset that will be used to initialize this dataset (optional)
-    :type dataset: `tinydisplay.utility.dataset`
+    :type dataset: `tinyDisplay.utility.dataset`
     :param data: Dictionary that will be used to initialize this dataset (optional)
     :type data: dict
     :param suppressErrors: Determines whether common errors are suppressed
@@ -472,7 +472,7 @@ class dataset:
         lookBack=10,
     ):
 
-        self._logger = logging.getLogger("tinydisplay")
+        self._logger = logging.getLogger("tinyDisplay")
         dataset = dataset if dataset is not None else {}
         for tk in (
             (False, i) if type(i) is not str else (True, i)
@@ -1111,7 +1111,7 @@ class dataset:
         Returns a dataset composed of the version of the databases that is one update behind the current versions.
 
         :returns: The previous dataset
-        :type: `tinydisplay.utility.dataset`
+        :type: `tinyDisplay.utility.dataset`
 
         ..example::
             # Return the previous value of 'title' from the 'db' database
@@ -1130,10 +1130,10 @@ class dynamicValue:
     :param name: The name of the dynamicValue (optional)
     :type name: str
     :param dataset: The main dataset to use when calculating the dynamicValue
-    :type dataset: `tinydisplay.utility.dataset`
+    :type dataset: `tinyDisplay.utility.dataset`
     :param localDataset: An additional dict or dataset to use when calculating
         the dynamicValue.  (optional)
-    :type localDataset: dict or `tinydisplay.utility.dataset`
+    :type localDataset: dict or `tinyDisplay.utility.dataset`
     :param debug: Set debug mode
     :type debug: bool
 
@@ -1198,7 +1198,7 @@ class dynamicValue:
         self._localDataset = localDataset if localDataset is not None else {}
         self._debug = debug
 
-        self._logger = logging.getLogger("tinydisplay")
+        self._logger = logging.getLogger("tinyDisplay")
 
         # Used to support methods that will be called by eval but need to be
         # able to distinguish which object is calling it (e.g. changed)

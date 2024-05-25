@@ -14,11 +14,11 @@ from pyattention.collection import collection
 from pyattention.media import volumio
 from pyattention.source import rss, system
 
-from tinydisplay.cfg import _tdLoader, load
-from tinydisplay.exceptions import NoResult
-from tinydisplay.render.collection import canvas, index, stack
-from tinydisplay.render.widget import image, text
-from tinydisplay.utility import animate, dataset
+from tinyDisplay.cfg import _tdLoader, load
+from tinyDisplay.exceptions import NoResult
+from tinyDisplay.render.collection import canvas, index, stack
+from tinyDisplay.render.widget import image, text
+from tinyDisplay.utility import animate, dataset
 
 
 app = Flask(__name__)

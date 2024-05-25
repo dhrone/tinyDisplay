@@ -70,7 +70,7 @@ class canvas(widget):
         Append new widget to canvas.
 
         :param item: The item (widget or canvas) to add to this canvas
-        :type item: `tinydisplay.render.widget`
+        :type item: `tinyDisplay.render.widget`
         :param placement: Instruction on where to place the widget on the canvas
         :param z: The z order for the item.  Higher z order items get placed
             above lower ones.
@@ -222,7 +222,7 @@ class stack(canvas):
         bottom for vertical orientation.
 
         :param item: A widget to add to the stack
-        :type item: `tinydisplay.render.widget`
+        :type item: `tinyDisplay.render.widget`
         :param gap: The number of pixels to place between this widget and the
             next widget in the stack.  This value can also be set at the
             stack level if you want the same gap between every widget
@@ -317,7 +317,7 @@ class index(canvas):
         Add a new widget to the index.
 
         :param item:  Item to add to widget
-        :type item: `tinydisplay.render.widget`
+        :type item: `tinyDisplay.render.widget`
         """
 
         if item is None:
@@ -363,11 +363,11 @@ class sequence(canvas):  # noqa: D101
     of widgets in the order they are added to the sequence.  When a widget's
     turn arrives, it is displayed if active.
 
-    See the documentation for `tinydisplay.render.widget` to see how the
+    See the documentation for `tinyDisplay.render.widget` to see how the
     active state of widgets are managed.
 
     :param defaultCanvas: a canvas to display when there are no active canvases
-    :type defaultCanvas: tinydisplay.render.widget
+    :type defaultCanvas: tinyDisplay.render.widget
     :param *args: Additional arguments passed to parent `widget`
 
     # noqa: DAR101
@@ -399,7 +399,7 @@ class sequence(canvas):  # noqa: D101
         Add an item (either canvas or widget) to the sequence.
 
         :param item: the canvas or widget to be added to the sequence
-        :type item: tinydisplay.render.canvas or tinydisplay.render.widget
+        :type item: tinyDisplay.render.canvas or tinyDisplay.render.widget
         """
         assert (
             item
@@ -446,7 +446,7 @@ class sequence(canvas):  # noqa: D101
         :type force: bool
         :returns: the currently active Canvas or None if no canvas is active
             and whether the activeCanvas is newly activated
-        :rtype: (tinydisplay.render.widget, bool)
+        :rtype: (tinyDisplay.render.widget, bool)
         """
         if self._currentCanvas is None:
             return (None, False)
