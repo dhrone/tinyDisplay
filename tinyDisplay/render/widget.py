@@ -724,7 +724,7 @@ class text(widget):
             # TrueType font path
             bbox = self._tsDraw.textbbox((0, 0), value, font=self._font, spacing=self._lineSpacing)
             tSize = (bbox[2] - bbox[0], bbox[3] - bbox[1])
-        
+
         tSize = (0, 0) if tSize[0] == 0 else tSize
         return tSize
 
