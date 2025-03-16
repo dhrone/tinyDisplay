@@ -149,7 +149,9 @@ def test_scroll_distance(value, size, distance, makeScroll):
     w = sw._widget
 
     startImg = sw.render()[0]
-    for i in range((w.size[0] // distance) + (1 if w.size[0] % distance else 0)):
+    for i in range(
+        (w.size[0] // distance) + (1 if w.size[0] % distance else 0)
+    ):
         img, res = sw.render()
     bbox = ImageChops.difference(img, startImg).getbbox()
     assert not bbox, "scroll didn't return to start"
@@ -246,9 +248,9 @@ def test_scroll_gap(gap):
         img2 = sw.render()[0]
 
     bbox = ImageChops.difference(img, img2).getbbox()
-    assert not bbox, (
-        f"scroll didn't return to start\n{image2Text(img)}\nand\n{image2Text(img2)}"
-    )
+    assert (
+        not bbox
+    ), f"scroll didn't return to start\n{image2Text(img)}\nand\n{image2Text(img2)}"
 
 
 def test_slide1():
@@ -305,7 +307,9 @@ def test_should_slide_move(value, size, moved):
 def _slide23(request):
     def _slide(actions):
         w = text(value="This is a test!")
-        sw = slide(size=(100, 16), widget=w, just="mm", actions=actions, speed=1)
+        sw = slide(
+            size=(100, 16), widget=w, just="mm", actions=actions, speed=1
+        )
         return sw
 
     yield _slide
@@ -314,25 +318,37 @@ def _slide23(request):
 def test_slider_return_to_start(_slide23):
     """Test whether slider returns to starting position as expected from provided actions."""
     # Return to start without using RTS
-    sw = _slide23([("pause", 1), ("ltr"), ("pause", 2), ("ttb"), ("rtl"), ("btt")])
+    sw = _slide23(
+        [("pause", 1), ("ltr"), ("pause", 2), ("ttb"), ("rtl"), ("btt")]
+    )
     startPos = sw._curPos
     sw.render()
     while not sw.atStart:
         img, res = sw.render()
 
-    assert sw._curPos == startPos, f"Slide didn't return to origin.  Instead it is at {sw._curPos}"
+    assert (
+        sw._curPos == startPos
+    ), f"Slide didn't return to origin.  Instead it is at {sw._curPos}"
 
     # Return to start using RTS
     sw = _slide23(
-        [("pause", 1), ("ltr"), ("pause", 2), ("ttb"), ("rtl"), ("btt"), ("rts")]
+        [
+            ("pause", 1),
+            ("ltr"),
+            ("pause", 2),
+            ("ttb"),
+            ("rtl"),
+            ("btt"),
+            ("rts"),
+        ]
     )
     startPos = sw._curPos
     while not sw.atStart:
         img, res = sw.render()
 
-    assert sw._curPos == startPos, (
-        f"Slide didn't return to origin ({startPos}).  Instead it is at {sw._curPos}"
-    )
+    assert (
+        sw._curPos == startPos
+    ), f"Slide didn't return to origin ({startPos}).  Instead it is at {sw._curPos}"
 
 
 def test_popup():
