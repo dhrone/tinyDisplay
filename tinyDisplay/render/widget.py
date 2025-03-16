@@ -251,15 +251,14 @@ class widget(metaclass=abc.ABCMeta):
         return changed
 
     def _fixColors(self):
-        # When reaching from Yaml need to accept lists because tuples are not
-        # possible.  Colors require tuples (if numeric) so thie function
-        # converts list entries into tuples.
-        colorArgs = ["_background", "_foreground", "_fill", "_outline"]
-        for c in colorArgs:
-            if c in dir(self):
-                a = getattr(self, c)
-                if type(a) is list:
-                    setattr(self, c, tuple(a))
+        # Create a set of color attributes for faster lookup
+        color_attrs = {'_background', '_foreground', '_fill', '_outline'}
+        
+        # Only process attributes that exist
+        for attr in color_attrs & set(dir(self)):
+            value = getattr(self, attr)
+            if isinstance(value, list):
+                setattr(self, attr, tuple(value))
 
     def __getattr__(self, name):
         """
