@@ -261,13 +261,31 @@ class widget(metaclass=abc.ABCMeta):
                     setattr(self, c, tuple(a))
 
     def __getattr__(self, name):
-        msg = f"{self.__class__.__name__} object {self.name} has no attribute {name}.  image is type({type(self.image)})"
-        if "image" not in self.__dict__:
-            raise AttributeError(msg)
-        if name in dir(self.image):
-            return getattr(self.image, name)
-        else:
-            raise AttributeError(msg)
+        """
+        Handle attribute access for widget objects.
+        Delegates to the underlying image object for image-specific attributes.
+        """
+        # First check if we're looking for image-related attributes
+        if name == 'image' or name == '_image_attrs':
+            raise AttributeError(f"{self.__class__.__name__} object {self.name} has no attribute {name}")
+        
+        # Check for direct dictionary access to avoid recursion
+        if name == '_parent' and '_parent' not in self.__dict__:
+            return None
+        
+        # Only try to access image attributes if we have an image
+        if 'image' in self.__dict__:
+            # Initialize image attributes cache if needed
+            if '_image_attrs' not in self.__dict__:
+                self._image_attrs = set(dir(self.image))
+            
+            if name in self._image_attrs:
+                return getattr(self.image, name)
+        
+        msg = f"{self.__class__.__name__} object {self.name} has no attribute {name}"
+        if 'image' in self.__dict__:
+            msg += f". image is type({type(self.image)})"
+        raise AttributeError(msg)
 
     def __repr__(self):
         cw = ""
@@ -288,20 +306,26 @@ class widget(metaclass=abc.ABCMeta):
         return "image empty"
 
     def _computeLocalDB(self):
+        """Compute the local database for the widget."""
         wdb = {
-            "size": self.size,
             "name": self.name,
             "just": self.just,
         }
-        pdb = (
-            {
+        
+        # Use direct dictionary access to avoid recursion
+        if '_size' in self.__dict__:
+            wdb["size"] = self._size
+        elif 'image' in self.__dict__ and hasattr(self.image, 'size'):
+            wdb["size"] = self.image.size
+        
+        # Use direct dictionary access to check for parent
+        pdb = {}
+        if '_parent' in self.__dict__ and self._parent is not None:
+            pdb = {
                 "size": self._parent.size,
                 "name": self._parent.name,
                 "just": self._parent.just,
             }
-            if hasattr(self, "_parent")
-            else {}
-        )
 
         self._localDB["__self__"] = wdb
         self._localDB["__parent__"] = pdb
@@ -1307,8 +1331,7 @@ class scroll(marquee):
             if (
                 type(v) in [tuple, list]
                 and v[0] in ["rtl", "ltr", "ttb", "btt"]
-            )
-        ] + [v for v in actions if v in ["rtl", "ltr", "ttb", "btt"]]
+            )] + [v for v in actions if v in ["rtl", "ltr", "ttb", "btt"]]
 
         h = True if ("ltr" in dirs or "rtl" in dirs) else False
         v = True if ("ttb" in dirs or "btt" in dirs) else False
