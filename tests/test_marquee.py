@@ -63,7 +63,6 @@ def makeScroll(request):
 )
 def test_scroll_widget_performance(speed, duration, animator, makeScroll):
     """Test whether scroll animation is smoothly rendered at the requested speed."""
-
     scrollHigh = makeScroll("High", (19, 8))
 
     s = speed
@@ -85,9 +84,10 @@ def test_scroll_widget_performance(speed, duration, animator, makeScroll):
     expected = s * d
     received = p
 
-    assert (
-        abs(received - expected) <= 0.1 * expected
-    ), f"Received {received} renders.  Expected {expected}.  [{received/expected:0.3f}]\nActual Time was {t1-t0:0.2f}"
+    assert abs(received - expected) <= 0.1 * expected, (
+        f"Received {received} renders.  Expected {expected}.  [{received/expected:0.3f}]\n"
+        f"Actual Time was {t1-t0:0.2f}"
+    )
 
 
 def test_scroll_wrap_move(makeScroll):
@@ -95,9 +95,10 @@ def test_scroll_wrap_move(makeScroll):
     sw = makeScroll("High", (19, 8))
     startImg = sw.render()[0]
     img = sw.render()[0]
-    assert (
-        img != startImg
-    ), f"scroll should have moved but didn't\n{image2Text(img)}\nand\n{image2Text(startImg)}"
+    assert img != startImg, (
+        f"scroll should have moved but didn't\n{image2Text(img)}\n"
+        f"and\n{image2Text(startImg)}"
+    )
 
     sw = makeScroll("Hig", (19, 8))
     startImg = sw.render()[0]
@@ -148,9 +149,7 @@ def test_scroll_distance(value, size, distance, makeScroll):
     w = sw._widget
 
     startImg = sw.render()[0]
-    for i in range(
-        (w.size[0] // distance) + (1 if w.size[0] % distance else 0)
-    ):
+    for i in range((w.size[0] // distance) + (1 if w.size[0] % distance else 0)):
         img, res = sw.render()
     bbox = ImageChops.difference(img, startImg).getbbox()
     assert not bbox, "scroll didn't return to start"
@@ -182,25 +181,28 @@ def test_wait(makeScroll):
     for _ in range(pause - 1):
         img, update = c.render()
 
-    assert (
-        imgOrig == img
-    ), f"This image should have matched the first one as we are still in the pause period \n{image2Text(imgOrig)}\nand\n{str(img)}"
+    assert imgOrig == img, (
+        "This image should have matched the first one as we are still in the pause period \n"
+        f"{image2Text(imgOrig)}\nand\n{str(img)}"
+    )
 
     for _ in range(w2.size[0]):
         img, update = c.render()
 
     imgCrop = img.crop((0, 8, 19, 16))
     w2Crop = w2.image.crop((0, 0, 19, 8))
-    assert (
-        w2Crop == imgCrop
-    ), f"The cropped area should have matched the original 'Four' text widget\n{image2Text(w2Crop)}\nand\n{image2Text(imgCrop)}"
+    assert w2Crop == imgCrop, (
+        "The cropped area should have matched the original 'Four' text widget\n"
+        f"{image2Text(w2Crop)}\nand\n{image2Text(imgCrop)}"
+    )
 
     for _ in range(w1.size[0] - w2.size[0]):
         img, update = c.render()
 
-    assert (
-        imgOrig == img
-    ), f"Images should have matched again as they should have become aligned due to the wait condition \n{image2Text(imgOrig)}\nand\n{image2Text(img)}"
+    assert imgOrig == img, (
+        "Images should have matched again as they should have become aligned due to the wait condition \n"
+        f"{image2Text(imgOrig)}\nand\n{image2Text(img)}"
+    )
 
 
 def test_should_scroll_move(makeScroll):
@@ -244,9 +246,9 @@ def test_scroll_gap(gap):
         img2 = sw.render()[0]
 
     bbox = ImageChops.difference(img, img2).getbbox()
-    assert (
-        not bbox
-    ), f"scroll didn't return to start\n{image2Text(img)}\nand\n{image2Text(img2)}"
+    assert not bbox, (
+        f"scroll didn't return to start\n{image2Text(img)}\nand\n{image2Text(img2)}"
+    )
 
 
 def test_slide1():
@@ -278,11 +280,7 @@ def test_slide1():
 @pytest.mark.parametrize(
     "value, size, moved",
     [
-        (
-            "High",
-            (20, 8),
-            False,
-        ),
+        ("High", (20, 8), False),
         ("High", (25, 8), True),
         ("12345", (20, 8), False),
         ("12345", (26, 8), True),
@@ -307,9 +305,7 @@ def test_should_slide_move(value, size, moved):
 def _slide23(request):
     def _slide(actions):
         w = text(value="This is a test!")
-        sw = slide(
-            size=(100, 16), widget=w, just="mm", actions=actions, speed=1
-        )
+        sw = slide(size=(100, 16), widget=w, just="mm", actions=actions, speed=1)
         return sw
 
     yield _slide
@@ -318,37 +314,25 @@ def _slide23(request):
 def test_slider_return_to_start(_slide23):
     """Test whether slider returns to starting position as expected from provided actions."""
     # Return to start without using RTS
-    sw = _slide23(
-        [("pause", 1), ("ltr"), ("pause", 2), ("ttb"), ("rtl"), ("btt")]
-    )
+    sw = _slide23([("pause", 1), ("ltr"), ("pause", 2), ("ttb"), ("rtl"), ("btt")])
     startPos = sw._curPos
     sw.render()
     while not sw.atStart:
         img, res = sw.render()
 
-    assert (
-        sw._curPos == startPos
-    ), f"Slide didn't return to origin.  Instead it is at {sw._curPos}"
+    assert sw._curPos == startPos, f"Slide didn't return to origin.  Instead it is at {sw._curPos}"
 
     # Return to start using RTS
     sw = _slide23(
-        [
-            ("pause", 1),
-            ("ltr"),
-            ("pause", 2),
-            ("ttb"),
-            ("rtl"),
-            ("btt"),
-            ("rts"),
-        ]
+        [("pause", 1), ("ltr"), ("pause", 2), ("ttb"), ("rtl"), ("btt"), ("rts")]
     )
     startPos = sw._curPos
     while not sw.atStart:
         img, res = sw.render()
 
-    assert (
-        sw._curPos == startPos
-    ), f"Slide didn't return to origin ({startPos}).  Instead it is at {sw._curPos}"
+    assert sw._curPos == startPos, (
+        f"Slide didn't return to origin ({startPos}).  Instead it is at {sw._curPos}"
+    )
 
 
 def test_popup():
