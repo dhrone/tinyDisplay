@@ -36,14 +36,13 @@ class canvas(widget):
     ZVHIGH = 10000
 
     def __init__(self, *args, **kwargs):
-
         super().__init__(*args, **kwargs)
-
-        self._newWidget = True
+        self._widgets_dict = {}
         self._placements = []
         self._activeList = []
         self._priorities = []
         self._reprVal = "no widgets"
+        self._tick = 0  # Add tick counter
 
         if not hasattr(self, "size"):
             print(f"CANVAS {self.name} has no size")
@@ -110,8 +109,10 @@ class canvas(widget):
         self.render(reset=True)
 
     def _renderWidgets(self, force=False, *args, **kwargs):
+        # Increment tick counter
+        self._tick += 1
+        
         notReady = {}
-
         # Check wait status for any widgets that have wait settings
         for i in self._placements:
             wid, off, anc = i
@@ -125,10 +126,9 @@ class canvas(widget):
                     wid._wait, False
                 )
 
-        changed = (
-            False if not force and not self._newWidget and self.image else True
-        )
+        changed = False if not force and not self._newWidget and self.image else True
         results = []
+        
         for i, p in enumerate(self._placements):
             wid, off, anc = p
 
@@ -212,6 +212,8 @@ class stack(canvas):
 
         self._widgets = []
         self._gap = gap
+        self._cached_size = None
+        self._newWidget = False  # Keep tracking widget changes
         self.render(reset=True)
 
     def append(self, item=None, gap=None):
@@ -231,9 +233,15 @@ class stack(canvas):
         if item is not None:
             self._widgets.append((item, gap))
             self._reprVal = f'{len(self._widgets) or "no"} widgets'
+            self._newWidget = True  # Set flag when widget is added
+            self._cached_size = None  # Invalidate size cache
             self._render(force=True)
 
     def _computeSize(self):
+        # Only recompute if widgets have changed or cache is None
+        if self._cached_size is not None and not self._newWidget:
+            return self._cached_size
+        
         x = 0
         y = 0
         gap = 0
@@ -251,7 +259,10 @@ class stack(canvas):
                     x = max(x, w.size[0])
                     y += w.size[1] + gap
             y -= gap
-        return (x, y)
+        
+        self._cached_size = (x, y)
+        self._newWidget = False  # Reset flag after computing new size
+        return self._cached_size
 
     def _render(self, force=False, newData=None, *args, **kwargs):
         changed = False or force

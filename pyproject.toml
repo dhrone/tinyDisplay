@@ -30,7 +30,7 @@ include_trailing_comma = true
 
 [tool.poetry]
 name = "tinyDisplay"
-version = "0.1.1"
+version = "0.1.2"
 description = "A widget library and window manager for small displays"
 authors = ["dhrone <dhrone@dhrone.xyz>"]
 packages = [{include = "tinyDisplay"}]
