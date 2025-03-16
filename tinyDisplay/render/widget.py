@@ -705,22 +705,26 @@ class text(widget):
             return (0, 0)
 
         if "getmetrics" in dir(self._font):
+            # Bitmap font path
             ascent, descent = self._font.getmetrics()
             h = 0
             w = 0
             for v in value.split("\n"):
                 try:
-                    tw, th = self._font.getmask(v).getbbox()[2:4]
-                    th += descent
+                    # Use getbbox() instead of getmask().getbbox() for more accurate sizing
+                    bbox = self._tsDraw.textbbox((0, 0), v, font=self._font)
+                    tw = bbox[2] - bbox[0]
+                    th = bbox[3] - bbox[1] + descent
                     w = max(w, tw)
                     h += th
                 except TypeError:
                     pass
             tSize = (w, h)
         else:
-            tSize = self._tsDraw.textbbox(
-                (0, 0), value, font=self._font, spacing=self._lineSpacing
-            )[2:4]
+            # TrueType font path
+            bbox = self._tsDraw.textbbox((0, 0), value, font=self._font, spacing=self._lineSpacing)
+            tSize = (bbox[2] - bbox[0], bbox[3] - bbox[1])
+        
         tSize = (0, 0) if tSize[0] == 0 else tSize
         return tSize
 
