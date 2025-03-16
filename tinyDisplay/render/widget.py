@@ -236,17 +236,18 @@ class widget(metaclass=abc.ABCMeta):
     def _evalAll(self):
         """
         Evaluate all dynamicValues that are contained in the widget.
-
-        :returns: True if any of the values have changed
-        :rtype: bool
-        :raises: `tinyDisplay.exceptions.EvaluationError`
-        :raises: `tinyDisplay.exceptions.ValidationError`
         """
         changed = False
-        for name in self._dV:
-            self._eval(name)
-            if self._dV._statements[name].changed:
-                changed = True
+        # Get list of names once instead of iterating multiple times
+        names = list(self._dV)
+        for name in names:
+            try:
+                value = self._dV.eval(name)
+                if self._dV._statements[name].changed:
+                    setattr(self, name, value)
+                    changed = True
+            except KeyError:
+                continue
         return changed
 
     def _fixColors(self):
