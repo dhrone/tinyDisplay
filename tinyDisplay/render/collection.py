@@ -111,7 +111,7 @@ class canvas(widget):
     def _renderWidgets(self, force=False, *args, **kwargs):
         # Increment tick counter
         self._tick += 1
-        
+
         notReady = {}
         # Check wait status for any widgets that have wait settings
         for i in self._placements:
@@ -126,9 +126,11 @@ class canvas(widget):
                     wid._wait, False
                 )
 
-        changed = False if not force and not self._newWidget and self.image else True
+        changed = (
+            False if not force and not self._newWidget and self.image else True
+        )
         results = []
-        
+
         for i, p in enumerate(self._placements):
             wid, off, anc = p
 
@@ -241,7 +243,7 @@ class stack(canvas):
         # Only recompute if widgets have changed or cache is None
         if self._cached_size is not None and not self._newWidget:
             return self._cached_size
-        
+
         x = 0
         y = 0
         gap = 0
@@ -259,7 +261,7 @@ class stack(canvas):
                     x = max(x, w.size[0])
                     y += w.size[1] + gap
             y -= gap
-        
+
         self._cached_size = (x, y)
         self._newWidget = False  # Reset flag after computing new size
         return self._cached_size
