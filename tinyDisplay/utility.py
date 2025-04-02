@@ -1450,14 +1450,15 @@ def compareImage(i1, i2, debug=False):
     :param debug: If true prints the location of the first failed match to stdout
     :type debug: bool
     """
-
+    logger = logging.getLogger("tinyDisplay") if debug else None
+    
     if i1.size != i2.size:
         if debug:
-            print(f"Images are different sizes: {i1.size}, {i2.size}")
+            logger.warning(f"Images are different sizes: {i1.size}, {i2.size}")
         return False
     if i1.mode != i2.mode:
         if debug:
-            print(f"Images are different modes: {i1.mode}, {i2.mode}")
+            logger.warning(f"Images are different modes: {i1.mode}, {i2.mode}")
         return False
     for j in range(i1.size[1]):
         for i in range(i1.size[0]):
@@ -1469,7 +1470,7 @@ def compareImage(i1, i2, debug=False):
                     ):
                         continue
                 if debug:
-                    print(
+                    logger.warning(
                         f"Match failed at ({i}, {j}) i1 = {i1.getpixel((i, j))}, i2 = {i2.getpixel((i, j))}"
                     )
                 return False

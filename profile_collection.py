@@ -1,130 +1,134 @@
+#!/usr/bin/env python3
+
 import cProfile
+import io
+import logging
 import pstats
-from PIL import Image
-from tinyDisplay.render.collection import canvas, stack, index, sequence
-from tinyDisplay.render.widget import image as widget_image
+import timeit
+from pathlib import Path
+
+from PIL import Image, ImageFont
+
+from tinyDisplay.render.collection import canvas, index, sequence, stack
+from tinyDisplay.render.profileWidget import profileText
+from tinyDisplay.render.widget import rectangle, text
+from tinyDisplay.utility import dataset
+
+# Setup logger
+logger = logging.getLogger("tinyDisplay")
+
+canvases = []
+stacks = []
+indexes = []
+sequences = []
 
 
-def create_test_image(size=(100, 100), color="white"):
-    """Create a test image for profiling.
+def make_canvases():
+    """Make canvases to profile."""
 
-    :param size: The size of the image.
-    :type size: tuple
-    :param color: The color of the image.
-    :type color: str
-    :return: A new RGB image of the specified size and color.
-    :rtype: PIL.Image
-    """
-    return Image.new("RGB", size, color)
+    global canvases
 
-
-def profile_canvas_operations():
-    """Profile basic canvas operations."""
-    # Create a base canvas
-    c = canvas(size=(500, 500))
-
-    # Create test widgets
-    test_images = [
-        widget_image(
-            image=create_test_image(
-                size=(50, 50), color=f"rgb({i * 20},{i * 20},{i * 20})"
-            )
-        )
-        for i in range(10)
-    ]
-
-    # Profile append operations
-    for i, img in enumerate(test_images):
-        c.append(img, placement=(i * 60, i * 60))
-
-    # Profile rendering
-    for _ in range(100):
-        c.render()
-
-
-def profile_stack_operations():
-    """Profile stack widget operations."""
-    s = stack(orientation="horizontal", gap=5, size=(800, 200))
-
-    # Create and add test widgets
     for i in range(10):
-        img = widget_image(image=create_test_image(size=(70, 70)))
-        s.append(img)
-
-    # Profile rendering
-    for _ in range(100):
-        s.render()
-
-
-def profile_index_operations():
-    """Profile index widget operations."""
-    idx = index(size=(200, 200))
-
-    # Add multiple images to index
-    for i in range(5):
-        img = widget_image(
-            image=create_test_image(
-                size=(100, 100), color=f"rgb({i * 50},{i * 50},{i * 50})"
+        c = canvas(name=f"sample {i}", dataset=None, size=(64, 32))
+        c.place(rectangle(size=(64, 32), fill=128))
+        c.place(rectangle(size=(60, 28), offset=(2, 2), fill=255))
+        c.place(text(size=(60, 10), offset=(2, 2), text=f"This is line {i}"))
+        c.place(
+            text(
+                size=(60, 10),
+                offset=(2, 12),
+                text="This is another line",
+                font="FreeSans.ttf",
+                fontsize=10,
             )
         )
-        idx.append(img)
-
-    # Profile switching between indices
-    for i in range(100):
-        idx._value = i % 5
-        idx.render()
+        canvases.append(c)
 
 
-def profile_sequence_operations():
-    """Profile sequence widget operations."""
-    seq = sequence(size=(300, 300))
+def make_stacks():
+    """Make stacks with canvases to profile."""
 
-    # Create test canvases
-    for i in range(5):
-        c = canvas(size=(200, 200))
-        img = widget_image(image=create_test_image(size=(150, 150)))
-        c.append(img)
-        seq.append(c)
+    global stacks
 
-    # Profile sequence transitions
-    for _ in range(100):
-        seq.render()
+    i = index(dataset=None, active=0)
+    i.append(canvases[0])
+    i.append(canvases[1])
+    i.append(canvases[2])
+    i.append(canvases[3])
+
+    s = stack(dataset=None)
+    s.append(canvases[0])
+    s.append(canvases[1], showIf=False)
+    s.append(canvases[2], showIf=True)
+    s.append(canvases[3], showIf=False)
+
+    stacks.append(s)
+
+
+def make_indexes():
+    """Make indexes with canvases to profile."""
+
+    global indexes
+
+    i = index(dataset=None, active=0)
+    i.append(canvases[0])
+    i.append(canvases[1])
+    i.append(canvases[2])
+    i.append(canvases[3])
+
+    indexes.append(i)
+
+
+def make_sequences():
+    """Make sequences with canvases to profile."""
+
+    global sequences
+
+    s = sequence(dataset=None, duration=10)
+    s.append(canvases[0], duration=2)
+    s.append(canvases[1], duration=3)
+    s.append(canvases[2], duration=4, showIf="True")
+    s.append(canvases[3], duration=5, showIf="False")
+
+    sequences.append(s)
 
 
 def main():
-    # Create profiler
-    profiler = cProfile.Profile()
+    """Profile collection rendering."""
+    logger.info("Starting profiling...")
 
-    print("Starting profiling...")
+    make_canvases()
 
-    # Profile each component
-    print("\nProfiling canvas operations...")
-    profiler.enable()
-    profile_canvas_operations()
-    profiler.disable()
-    stats = pstats.Stats(profiler).sort_stats("cumulative")
-    stats.print_stats(20)
+    logger.info("\nProfiling canvas operations...")
+    cProfile.run("canvases[0].render()", "canvas.prof")
+    s = io.StringIO()
+    ps = pstats.Stats("canvas.prof", stream=s).sort_stats("cumtime")
+    ps.print_stats()
+    print(s.getvalue())
 
-    print("\nProfiling stack operations...")
-    profiler.enable()
-    profile_stack_operations()
-    profiler.disable()
-    stats = pstats.Stats(profiler).sort_stats("cumulative")
-    stats.print_stats(20)
+    logger.info("\nProfiling stack operations...")
+    make_stacks()
+    cProfile.run("stacks[0].render()", "stack.prof")
+    s = io.StringIO()
+    ps = pstats.Stats("stack.prof", stream=s).sort_stats("cumtime")
+    ps.print_stats()
+    print(s.getvalue())
 
-    print("\nProfiling index operations...")
-    profiler.enable()
-    profile_index_operations()
-    profiler.disable()
-    stats = pstats.Stats(profiler).sort_stats("cumulative")
-    stats.print_stats(20)
+    logger.info("\nProfiling index operations...")
+    make_indexes()
+    cProfile.run("indexes[0].render()", "index.prof")
+    s = io.StringIO()
+    ps = pstats.Stats("index.prof", stream=s).sort_stats("cumtime")
+    ps.print_stats()
+    print(s.getvalue())
 
-    print("\nProfiling sequence operations...")
-    profiler.enable()
-    profile_sequence_operations()
-    profiler.disable()
-    stats = pstats.Stats(profiler).sort_stats("cumulative")
-    stats.print_stats(20)
+    logger.info("\nProfiling sequence operations...")
+    make_sequences()
+    cProfile.run("sequences[0].render()", "sequence.prof")
+    s = io.StringIO()
+    ps = pstats.Stats("sequence.prof", stream=s).sort_stats("cumtime")
+    ps.print_stats()
+    print(s.getvalue())
 
 
 if __name__ == "__main__":

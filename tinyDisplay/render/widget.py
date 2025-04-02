@@ -524,7 +524,7 @@ class widget(metaclass=abc.ABCMeta):
         ), f"Requested justification \"{just}\" is invalid.  Valid values are left top ('lt'), left middle ('lm'), left bottom ('lb'), middle top ('mt'), middle middle ('mm'), middle bottom ('mb'), right top ('rt'), right middle ('rm'), and right bottom ('rb')"
 
         if self.image is None:
-            print(f"WIDGET._PLACE 'image' is None in {self.name}")
+            self._logger.error(f"WIDGET._PLACE 'image' is None in {self.name}")
             raise RuntimeError(f"WIDGET._PLACE 'image' is None in {self.name}")
         # if there is an image to place
         if wImage:
@@ -604,10 +604,6 @@ class widget(metaclass=abc.ABCMeta):
                 )
                 return (self.image, False)
 
-        if monotonic() - self._renderTime > self._slowRender:
-            print(
-                f"=== slow data render {self.name} {monotonic() - self._renderTime:0.3f} ==="
-            )
         if force:
             self.resetMovement()
 
@@ -629,11 +625,6 @@ class widget(metaclass=abc.ABCMeta):
                 return (img, False)
 
         self._updateTimers(force)
-
-        if monotonic() - self._renderTime > self._slowRender:
-            print(
-                f"=== slow render {self.name} {monotonic() - self._renderTime:0.3f} ==="
-            )
 
         return (img, changed)
 
@@ -1512,10 +1503,10 @@ class image(widget):
     def _fetchURL(self, url):
         try:
             img = Image.open(urlopen(url))
-            print(f"=== Fetch succeeded for {url} ===")
+            self._logger.info(f"=== Fetch succeeded for {url} ===")
             self._response.put((url, img))
         except Exception as ex:
-            print(f"=== Fetch failed for {url} ===")
+            self._logger.error(f"=== Fetch failed for {url} ===")
             self._response.put((url, ex))
 
     def _gatherURLResponses(self):
@@ -1556,7 +1547,7 @@ class image(widget):
         self._gatherURLResponses()
 
         if typeImage in ["url", "file"] and source in self._cache:
-            print(f"=== Cache Hit: {source}: {self._cache[source]}")
+            self._logger.debug(f"=== Cache Hit: {source}: {self._cache[source]}")
             img = self._cache[source]
         else:
             # Retrieve image

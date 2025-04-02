@@ -9,13 +9,15 @@ Collection widgets to present, and animate the display canvases.
 """
 import bisect
 from inspect import currentframe, getargvalues, getfullargspec, isclass
+import logging
 
 from PIL import Image
 
 from tinyDisplay.render import collection
-from tinyDisplay.render.widget import image, widget
+from tinyDisplay.render.widget import image, widget, PARAMS
 from tinyDisplay.utility import getArgDecendents, getNotDynamicDecendents
 
+logger = logging.getLogger("tinyDisplay")
 
 class canvas(widget):
     """
@@ -45,7 +47,7 @@ class canvas(widget):
         self._tick = 0  # Add tick counter
 
         if not hasattr(self, "size"):
-            print(f"CANVAS {self.name} has no size")
+            logger.error(f"CANVAS {self.name} has no size")
 
     @staticmethod
     def _convertPlacement(p):

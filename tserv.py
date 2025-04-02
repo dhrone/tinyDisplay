@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
+import argparse
 import json
+import logging
 import webbrowser
 from io import BytesIO
 from pathlib import Path
@@ -14,12 +16,30 @@ from pyattention.collection import collection
 from pyattention.media import volumio
 from pyattention.source import rss, system
 
+from tinyDisplay import setup_logging
 from tinyDisplay.cfg import _tdLoader, load
 from tinyDisplay.exceptions import NoResult
 from tinyDisplay.render.collection import canvas, index, stack
 from tinyDisplay.render.widget import image, text
 from tinyDisplay.utility import animate, dataset
 
+# Parse command line arguments
+parser = argparse.ArgumentParser(description="tinyDisplay web server")
+parser.add_argument(
+    "--log-level", 
+    choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    default="INFO",
+    help="Set the logging level"
+)
+parser.add_argument(
+    "--log-file",
+    help="Path to log file (logs to console if not specified)"
+)
+args = parser.parse_args()
+
+# Setup logger
+log_level = getattr(logging, args.log_level)
+logger = setup_logging(log_level=log_level, log_file=args.log_file)
 
 app = Flask(__name__)
 
@@ -64,7 +84,7 @@ class MakeAnimation:
         self._pageFile = pageFile
         self._main = load(pageFile, debug=debug, demo=demo)
         self._animate = animate(cps=fps, function=self.render, queueSize=100)
-        print(f"animate started with {self._animate._speed}")
+        logger.debug(f"animate started with {self._animate._speed}")
         self._dataQ = dataQ
         self._rc = 0
 
@@ -113,7 +133,7 @@ class MakeAnimation:
                             "pl", {"playlist": ditem["vol"]["pushQueue"]}
                         )
                     if "pushState" in ditem["vol"]:
-                        # print (f"RECEIVED\n========\n{json.dumps(v, indent=4)}")
+                        # logger.debug(f"RECEIVED\n========\n{json.dumps(v, indent=4)}")
                         self._main._dataset.update(
                             "db", ditem["vol"]["pushState"]
                         )
@@ -132,32 +152,28 @@ class MakeAnimation:
                             self._main._dataset.update("wea", wd)
 
                         else:
-                            print(
+                            logger.warning(
                                 f"Weather: Expected four data elements: {len(ditem['wea'])}"
                             )
                     else:
-                        print(
+                        logger.warning(
                             f"Weather: Received message but no data: {ditem['wea']}"
                         )
 
-        if monotonic() - self._renderTime > data_expectation:
-            print(
-                f"=== slow data colleciton {monotonic()-self._renderTime:.4f} > {data_expectation} ==="
-            )
         self._renderTime = monotonic()
         self._rc += 1
         if self._rc % 600 == 0:  # Once per minute
             mt = monotonic()
-            print(
+            logger.debug(
                 f"Render #{self._rc}: loop time {mt-self._timer:.3f}  queue size {self._animate.qsize}"
             )
-            print(f"==============================================")
-            print(f"=                 CURRENT DATA               =")
-            print(f"==============================================")
-            print(f"{json.dumps(self._main._dataset.db, indent=4)}")
-            print(f"========\n{json.dumps(self._main._dataset.wea, indent=4)}")
-            print(f"========\n{json.dumps(self._main._dataset.sys, indent=4)}")
-            print(f"==============================================")
+            logger.debug("==============================================")
+            logger.debug("=                 CURRENT DATA               =")
+            logger.debug("==============================================")
+            logger.debug(f"{json.dumps(self._main._dataset.db, indent=4)}")
+            logger.debug(f"========\n{json.dumps(self._main._dataset.wea, indent=4)}")
+            logger.debug(f"========\n{json.dumps(self._main._dataset.sys, indent=4)}")
+            logger.debug("==============================================")
             self._timer = mt
         img = self._main.render()[0]
         result = None
@@ -170,32 +186,33 @@ class MakeAnimation:
                 )
                 result = get_pil_image_data(img)
 
-        if monotonic() - self._renderTime > render_expectation:
-            print(
-                f"=== slow render {monotonic()-self._renderTime:.4f} > {render_expectation} ==="
-            )
-
         return result
 
 
-pf = "tests/reference/pageFiles/sampleMedia.yaml"
-fps = 10
-resize = 2
-col = collection()
-srcV = volumio("http://volumio.local", loop=col.tloop)
-srcS = system(loop=col.tloop)
-srcW = rss(
-    "http://rss.accuweather.com/rss/liveweather_rss.asp?locCode=18-327659_1_al",
-    loop=col.tloop,
-    frequency=7200,
-)  # Poll 4x per day
-col.register("vol", srcV)
-col.register("sys", srcS)
-col.register("wea", srcW)
-ma = MakeAnimation(pf, fps=fps, resize=resize, dataQ=col, debug=True)
-
-Thread(target=lambda: app.run(host="0.0.0.0", debug=False)).start()
-
-webbrowser.get("open -a /Applications/Google\ Chrome.app %s").open(
-    "http://localhost:5000"
-)
+if __name__ == "__main__":
+    logger.info("Starting tinyDisplay server")
+    
+    pf = "tests/reference/pageFiles/sampleMedia.yaml"
+    fps = 10
+    resize = 2
+    col = collection()
+    srcV = volumio("http://volumio.local", loop=col.tloop)
+    srcS = system(loop=col.tloop)
+    srcW = rss(
+        "http://rss.accuweather.com/rss/liveweather_rss.asp?locCode=18-327659_1_al",
+        loop=col.tloop,
+        frequency=7200,
+    )  # Poll 4x per day
+    col.register("vol", srcV)
+    col.register("sys", srcS)
+    col.register("wea", srcW)
+    
+    logger.info(f"Loading page file: {pf}")
+    ma = MakeAnimation(pf, fps=fps, resize=resize, dataQ=col, debug=True)
+    
+    logger.info("Starting web server")
+    Thread(target=lambda: app.run(host="0.0.0.0", debug=False)).start()
+    
+    webbrowser.get("open -a /Applications/Google\ Chrome.app %s").open(
+        "http://localhost:5000"
+    )
