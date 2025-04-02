@@ -685,6 +685,9 @@ class text(widget):
         self._lineSpacing = lineSpacing
         self._antiAlias = antiAlias
         self._wrap = wrap
+        self._last_value = None
+        self._last_tSize = None
+        self._word_width_cache = {}  # Cache word widths
 
         self._tsDraw = ImageDraw.Draw(Image.new(self._mode, (0, 0), 0))
         self._tsDraw.fontmode = self._fontMode
@@ -712,16 +715,32 @@ class text(widget):
         vl = value.split(" ")
         lines = []
         line = ""
+        
+        # Get word widths with caching
+        word_widths = {}
         for w in vl:
-            tl = line + " " + w if len(line) > 0 else w
-            if self._sizeLine(tl)[0] <= width:
-                line = tl
+            if w not in self._word_width_cache:
+                self._word_width_cache[w] = self._sizeLine(w)[0]
+            word_widths[w] = self._word_width_cache[w]
+        
+        for w in vl:
+            # If the line is empty, just add the word
+            if len(line) == 0:
+                line = w
+                continue
+                
+            # Check if adding this word would exceed width
+            # Calculate without calling _sizeLine by using cached word widths
+            current_width = self._sizeLine(line)[0]
+            space_width = self._sizeLine(" ")[0]
+            word_width = word_widths[w]
+            
+            if current_width + space_width + word_width <= width:
+                line = line + " " + w
             else:
-                if len(line) == 0:
-                    lines.append(tl)
-                else:
-                    lines.append(line)
-                    line = w
+                lines.append(line)
+                line = w
+        
         if len(line) > 0:
             lines.append(line)
 
@@ -730,6 +749,14 @@ class text(widget):
     def _sizeLine(self, value):
         if value == "" or value is None:
             return (0, 0)
+            
+        # Return cached size if text hasn't changed
+        if hasattr(self, '_size_cache') and value in self._size_cache:
+            return self._size_cache[value]
+            
+        # Initialize cache if needed
+        if not hasattr(self, '_size_cache'):
+            self._size_cache = {}
 
         if "getmetrics" in dir(self._font):
             # Bitmap font path
@@ -755,27 +782,31 @@ class text(widget):
             tSize = (bbox[2] - bbox[0], bbox[3] - bbox[1])
 
         tSize = (0, 0) if tSize[0] == 0 else tSize
+        
+        # Cache the result
+        self._size_cache[value] = tSize
         return tSize
 
     def _render(self, force=False, newData=False, *args, **kwargs):
         # If the string to render has not changed then return current image
-        if not newData and not force:
-            return (self.image, False)
-
         value = str(self._value)
+        
+        # Quick return if nothing changed
+        if not newData and not force and value == self._last_value and self.image:
+            return (self.image, False)
+            
         self._reprVal = f"'{value}'"
+        self._last_value = value
 
-        tBB = self._tsDraw.textbbox(
-            (0, 0), value, font=self.font, spacing=self._lineSpacing
-        )
-        tSize = (tBB[2], tBB[3])
-        tSize = (0, 0) if tSize[0] == 0 else tSize
+        # Only calculate size if needed (when value or force changed)
         if self._wrap and self._width is not None:
             # Wrap only if a width was requested, otherwise ignore
             value = self._makeWrapped(value, self._width)
 
         tSize = self._sizeLine(value)
-
+        self._last_tSize = tSize
+        
+        # Only create a new text image if text has changed or force is true
         img = Image.new(self._mode, tSize, self._background)
         if img.size[0] != 0:
             d = ImageDraw.Draw(img)
@@ -785,7 +816,6 @@ class text(widget):
                 (0, 0),
                 value,
                 font=self.font,
-                # fill=self._dV["foreground"],
                 fill=self._foreground,
                 spacing=self._lineSpacing,
                 align=just,
