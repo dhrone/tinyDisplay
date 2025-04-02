@@ -18,6 +18,7 @@ from inspect import getfullargspec, getmro
 from pathlib import Path
 from queue import Empty, Full, Queue
 from threading import Event, Thread
+from copy import deepcopy
 
 from PIL import ImageColor
 from simple_pid import PID
