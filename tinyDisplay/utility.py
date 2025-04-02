@@ -1434,9 +1434,14 @@ def image2Text(img, background="black"):
             else:
                 v = " " if pixel == background else "*"
             s += v
+        # Ensure consistent line lengths by limiting to img.size[0]
         retval += f"\n|{s[0:img.size[0]]}|"
     retval += "\n" + ("-" * (img.size[0] + 2))
-    return retval
+    
+    # Standardize line endings and remove trailing spaces to make comparisons more robust
+    lines = retval.splitlines()
+    sanitized_lines = [line.rstrip() for line in lines]
+    return "\n".join(sanitized_lines)
 
 
 def compareImage(i1, i2, debug=False):
