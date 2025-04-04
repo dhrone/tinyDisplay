@@ -1,0 +1,556 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Image Comparison</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { color: #333; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 30px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            .image-container { display: flex; flex-direction: column; align-items: center; }
+            .image-container img { border: 1px solid #ccc; margin: 10px; }
+            .image-label { font-weight: bold; margin-bottom: 5px; }
+            .diff { background-color: #ffe6e6; }
+            .text-content { font-family: monospace; white-space: pre; }
+            .pixel-info { font-size: 0.8em; color: #555; }
+        </style>
+    </head>
+    <body>
+        <h1>Image Comparison: Rendered vs Reference</h1>
+        <p>This page shows comparisons between rendered images and their reference images.</p>
+        <table>
+            <tr>
+                <th>Test Case</th>
+                <th>Rendered Image</th>
+                <th>Reference Image</th>
+                <th>Rendered Text</th>
+                <th>Reference Text</th>
+            </tr>
+    
+            <tr>
+                <td>basicMedia.yaml → basicMediaArtist.png<br>Ticks: 1<br><span class="pixel-info">Rendered: 99x16, Reference: 100x16</span></td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Rendered Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASkAAAAwCAYAAABNN4xlAAAByUlEQVR4nO3dQVLDMAwFUML0/lcOWy/qqYOt5Cd9bwd4VBMHjURTe9v3ff95Y9u27d332/HtmF6cXsxenJ6Z8dXzmYlfcT17Y1qrXpdrrVqvVfdbxev+fhoAcCVJCoj2ar+YaX9G4lylej4V8WfWomIdyTTSzs/ErG7/R+avkgKiSVJAtFfvB2kt24zq+Ve/kzhj1TqeOWfGJfxtrro3enFUUkA0SQqI1m33Wme2fhVtxV1aqmp3mSf/c1UbXtHitVRSQDRJCog21O4dVf25tmpHPwd35hzOvCZawntZdd+mrbtKCogmSQEAAAAAAAAAC2xP2ni/4kHHim0oRiRfc9u2cCbPSQHRJCkgWvcghtZdyvvkubUqzhk8U9p8eDaVFBBNkgKiTe3MmXDM+sz2FAlbshz1pOt8NA7fSSUFRJOkgGjLduZcVfbPvO5I/JH25+7n9N3lOs+M53uopIBokhQQbVm7l7Z5+4zq8+muatl68R3oQDKVFBBNkgKiDbV7q87FOxrHOz7PYO2YoZICoklSQLRlO3Ou2nmy4sHFVQ9tJuzMuer3PdpWV19nLSE9KikgmiQFAAAAwNkede4e8Dz+cQ5Ek6SAaH9NIJB8RFnZuQAAAABJRU5ErkJggg==" alt="Rendered Image">
+                    </div>
+                </td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Reference Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAAwAQAAAACDZXqMAAABCklEQVR4nO2TP07DMBjFf8GV3IVkRgKlxzBSJXMXLhDBwla3UyfIBeAsQWJg4wRIDkZibbdYyh+GMiRSJVIpKQu/0e/pe3qfbcpQO6NErUStXK3FQ0GLxmhX05gTetHX9mU8QAop1Y23zbQtT/CsmPSe1tNWbQBIIHmbwRzVlksg4WzopqQQwgpSgM+unBtIeRm6KcjKrUFaEPcQZG05NvLAaf90aAzAOVh0CSD3uQa+03wDP+/HSwP4I4TypJ1RZVAARIUNNYts9FCe5zA7jUD6PIJXEdyNH6otgN+tVxiO0fR6ebFdd86W0z22QUPjaGEfr9xtA9LH28sP9d5kI4f+Dbt/+hvDNv0G+WRSV1qttoQAAAAASUVORK5CYII=" alt="Reference Image">
+                    </div>
+                </td>
+                <td><div class="text-content">-----------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |
+|                                                                                                   |
+|                                                                                                   |
+|***              *      *     ****             *                                                   |
+|*  *                    *     *   *                                                                |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |
+|                                                                                                   |
+|***                                                                                                |
+-----------------------------------------------------------------------------------------------------</div></td>
+                <td><div class="text-content">------------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   *** |
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       * |
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     *  |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *   |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *   |
+|                                                                                                    |
+|                                                                                                    |
+|***              *      *     ****             *                                                    |
+|*  *                    *     *   *                                                                 |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                              |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                             |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                             |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                 |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                              |
+|                                                                                                    |
+|***                                                                                                 |
+------------------------------------------------------------------------------------------------------</div></td>
+            </tr>
+            
+            <tr>
+                <td>basicMedia.yaml → basicMediaArtist.png<br>Ticks: 15<br><span class="pixel-info">Rendered: 99x16, Reference: 100x16</span></td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Rendered Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASkAAAAwCAYAAABNN4xlAAAByUlEQVR4nO3dQVLDMAwFUML0/lcOWy/qqYOt5Cd9bwd4VBMHjURTe9v3ff95Y9u27d332/HtmF6cXsxenJ6Z8dXzmYlfcT17Y1qrXpdrrVqvVfdbxev+fhoAcCVJCoj2ar+YaX9G4lylej4V8WfWomIdyTTSzs/ErG7/R+avkgKiSVJAtFfvB2kt24zq+Ve/kzhj1TqeOWfGJfxtrro3enFUUkA0SQqI1m33Wme2fhVtxV1aqmp3mSf/c1UbXtHitVRSQDRJCog21O4dVf25tmpHPwd35hzOvCZawntZdd+mrbtKCogmSQEAAAAAAAAAC2xP2ni/4kHHim0oRiRfc9u2cCbPSQHRJCkgWvcghtZdyvvkubUqzhk8U9p8eDaVFBBNkgKiTe3MmXDM+sz2FAlbshz1pOt8NA7fSSUFRJOkgGjLduZcVfbPvO5I/JH25+7n9N3lOs+M53uopIBokhQQbVm7l7Z5+4zq8+muatl68R3oQDKVFBBNkgKiDbV7q87FOxrHOz7PYO2YoZICoklSQLRlO3Ou2nmy4sHFVQ9tJuzMuer3PdpWV19nLSE9KikgmiQFAAAAwNkede4e8Dz+cQ5Ek6SAaH9NIJB8RFnZuQAAAABJRU5ErkJggg==" alt="Rendered Image">
+                    </div>
+                </td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Reference Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAAwAQAAAACDZXqMAAABCklEQVR4nO2TP07DMBjFf8GV3IVkRgKlxzBSJXMXLhDBwla3UyfIBeAsQWJg4wRIDkZibbdYyh+GMiRSJVIpKQu/0e/pe3qfbcpQO6NErUStXK3FQ0GLxmhX05gTetHX9mU8QAop1Y23zbQtT/CsmPSe1tNWbQBIIHmbwRzVlksg4WzopqQQwgpSgM+unBtIeRm6KcjKrUFaEPcQZG05NvLAaf90aAzAOVh0CSD3uQa+03wDP+/HSwP4I4TypJ1RZVAARIUNNYts9FCe5zA7jUD6PIJXEdyNH6otgN+tVxiO0fR6ebFdd86W0z22QUPjaGEfr9xtA9LH28sP9d5kI4f+Dbt/+hvDNv0G+WRSV1qttoQAAAAASUVORK5CYII=" alt="Reference Image">
+                    </div>
+                </td>
+                <td><div class="text-content">-----------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |
+|                                                                                                   |
+|                                                                                                   |
+|***              *      *     ****             *                                                   |
+|*  *                    *     *   *                                                                |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |
+|                                                                                                   |
+|***                                                                                                |
+-----------------------------------------------------------------------------------------------------</div></td>
+                <td><div class="text-content">------------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   *** |
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       * |
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     *  |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *   |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *   |
+|                                                                                                    |
+|                                                                                                    |
+|***              *      *     ****             *                                                    |
+|*  *                    *     *   *                                                                 |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                              |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                             |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                             |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                 |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                              |
+|                                                                                                    |
+|***                                                                                                 |
+------------------------------------------------------------------------------------------------------</div></td>
+            </tr>
+            
+            <tr>
+                <td>basicMedia.yaml → basicMediaAlbum.png<br>Ticks: 16<br><span class="pixel-info">Rendered: 99x16, Reference: 100x16</span></td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Rendered Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASkAAAAwCAYAAABNN4xlAAAByUlEQVR4nO3dQVLDMAwFUML0/lcOWy/qqYOt5Cd9bwd4VBMHjURTe9v3ff95Y9u27d332/HtmF6cXsxenJ6Z8dXzmYlfcT17Y1qrXpdrrVqvVfdbxev+fhoAcCVJCoj2ar+YaX9G4lylej4V8WfWomIdyTTSzs/ErG7/R+avkgKiSVJAtFfvB2kt24zq+Ve/kzhj1TqeOWfGJfxtrro3enFUUkA0SQqI1m33Wme2fhVtxV1aqmp3mSf/c1UbXtHitVRSQDRJCog21O4dVf25tmpHPwd35hzOvCZawntZdd+mrbtKCogmSQEAAAAAAAAAC2xP2ni/4kHHim0oRiRfc9u2cCbPSQHRJCkgWvcghtZdyvvkubUqzhk8U9p8eDaVFBBNkgKiTe3MmXDM+sz2FAlbshz1pOt8NA7fSSUFRJOkgGjLduZcVfbPvO5I/JH25+7n9N3lOs+M53uopIBokhQQbVm7l7Z5+4zq8+muatl68R3oQDKVFBBNkgKiDbV7q87FOxrHOz7PYO2YoZICoklSQLRlO3Ou2nmy4sHFVQ9tJuzMuer3PdpWV19nLSE9KikgmiQFAAAAwNkede4e8Dz+cQ5Ek6SAaH9NIJB8RFnZuQAAAABJRU5ErkJggg==" alt="Rendered Image">
+                    </div>
+                </td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Reference Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAAwAQAAAACDZXqMAAAA+ElEQVR4nO2QsUrEQBiEv7iBvSpnKwjxCaxXOIiPFHyBW66y0ryOXQrB8p5ASG4F25RZSPa3sMkVJwkuZ+O08zHDDENWOGtUMCoYFwr13DOR2MIFxF4wS3OxT+sBKqgYH3wjq6md4tmRzk6biY0dACWU+xvYYKb2AJRcxV5KBRnsoAL4OLZbCxWvsZeCHt0j6AbUEyT11M6tXpj2ryNJV8D3q/o0FffetL318dKWYNtaLC6YZt277gylSKehIHm7RoMesnOUNplmKyS9Cpq1NL9KW4Cp5J5yP6patasfsIil+cG8y4tcehnvfN6fwqKW/o3EzqHiLv0C2qNQbjSX2ggAAAAASUVORK5CYII=" alt="Reference Image">
+                    </div>
+                </td>
+                <td><div class="text-content">-----------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |
+|                                                                                                   |
+|                                                                                                   |
+|***              *      *     ****             *                                                   |
+|*  *                    *     *   *                                                                |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |
+|                                                                                                   |
+|***                                                                                                |
+-----------------------------------------------------------------------------------------------------</div></td>
+                <td><div class="text-content">------------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   *** |
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       * |
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     *  |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *   |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *   |
+|                                                                                                    |
+|                                                                                                    |
+|****  **             *         *                                                                    |
+|*   *  *             *         *                                                                    |
+|*   *  *   ***  ***  *  * *** ***   *** * **                                                        |
+|****   *      **     * * *     *       ***  *                                                       |
+|*   *  *   *****     **   ***  *    *****                                                           |
+|*   *  *  *   **   * * *     * *  **   **                                                           |
+|****  ***  **** ***  *  *****   **  *****                                                           |
+|                                                                                                    |
+|***                                                                                                 |
+------------------------------------------------------------------------------------------------------</div></td>
+            </tr>
+            
+            <tr>
+                <td>basicMedia.yaml → basicMediaTitle.png<br>Ticks: 31<br><span class="pixel-info">Rendered: 99x16, Reference: 100x16</span></td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Rendered Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASkAAAAwCAYAAABNN4xlAAAByUlEQVR4nO3dQVLDMAwFUML0/lcOWy/qqYOt5Cd9bwd4VBMHjURTe9v3ff95Y9u27d332/HtmF6cXsxenJ6Z8dXzmYlfcT17Y1qrXpdrrVqvVfdbxev+fhoAcCVJCoj2ar+YaX9G4lylej4V8WfWomIdyTTSzs/ErG7/R+avkgKiSVJAtFfvB2kt24zq+Ve/kzhj1TqeOWfGJfxtrro3enFUUkA0SQqI1m33Wme2fhVtxV1aqmp3mSf/c1UbXtHitVRSQDRJCog21O4dVf25tmpHPwd35hzOvCZawntZdd+mrbtKCogmSQEAAAAAAAAAC2xP2ni/4kHHim0oRiRfc9u2cCbPSQHRJCkgWvcghtZdyvvkubUqzhk8U9p8eDaVFBBNkgKiTe3MmXDM+sz2FAlbshz1pOt8NA7fSSUFRJOkgGjLduZcVfbPvO5I/JH25+7n9N3lOs+M53uopIBokhQQbVm7l7Z5+4zq8+muatl68R3oQDKVFBBNkgKiDbV7q87FOxrHOz7PYO2YoZICoklSQLRlO3Ou2nmy4sHFVQ9tJuzMuer3PdpWV19nLSE9KikgmiQFAAAAwNkede4e8Dz+cQ5Ek6SAaH9NIJB8RFnZuQAAAABJRU5ErkJggg==" alt="Rendered Image">
+                    </div>
+                </td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Reference Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAAwAQAAAACDZXqMAAABNklEQVR4nO2UsWrDMBRFj6KAMsV0LJi4v5BNQ0Df0j9IO2WLkqlT609SoZBu/QUbB7Kqmw221CEZnM0pnkrv8uDdy33cJ55o56ayWgYtg66CkW81PURrqkC0EwZhqOxkG4AccrrnpoizPj2lYc90sNtAWecBWMP66wFW6D7dAmvux05KDnPYQw5wvKZLCzkfYycF1VUvoAqQryBcn86sutHtH1fIwrkqGQCkvfRldD3VyOstLlWn16+Z/sZt8FDh0q1DuFTULWS7QwHRkqLapM68qd7c2EMnxiPFBgClLEeWKxCeU1iqp+T9brd63Iw+tFzA1gHQdBb4BKKlk4c2qY0/3+/od0qxmxE3vaYSFmhEOSsXN7sNQfQm3TpQMmgg+3YpRE8WVJvE6E1l9d/4HKIdoho36Q+IaGucU1CXjAAAAABJRU5ErkJggg==" alt="Reference Image">
+                    </div>
+                </td>
+                <td><div class="text-content">-----------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |
+|                                                                                                   |
+|                                                                                                   |
+|***              *      *     ****             *                                                   |
+|*  *                    *     *   *                                                                |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |
+|                                                                                                   |
+|***                                                                                                |
+-----------------------------------------------------------------------------------------------------</div></td>
+                <td><div class="text-content">------------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   *** |
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       * |
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     *  |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *   |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *   |
+|                                                                                                    |
+|                                                                                                    |
+| ****                  *  ***             *                       ****                              |
+|*                     *  *   *                                   *                                  |
+|*    *   * ***       *   *   ** **       **  * **       ***      *     ***  ***  ***  *** * **      |
+| *** *   **   *      *   *   ***  *       *  **  *         *      *** *   *    **    *   ***  *     |
+|    **   ******      *   *   **           *  *   *      ****         ****** **** *** *   **   *     |
+|    **  ***           *  *   **           *  *   *     *   *         **    *   *    **   **   *     |
+|****  ** * ***         *  *** *          *** *   *      ****     ****  ***  ********  *** *   *     |
+|                                                                                                    |
+|***                                                                                                 |
+------------------------------------------------------------------------------------------------------</div></td>
+            </tr>
+            
+            <tr>
+                <td>basicMedia.yaml → basicMediaTitleScroll1.png<br>Ticks: 36<br><span class="pixel-info">Rendered: 99x16, Reference: 100x16</span></td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Rendered Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASkAAAAwCAYAAABNN4xlAAAByUlEQVR4nO3dQVLDMAwFUML0/lcOWy/qqYOt5Cd9bwd4VBMHjURTe9v3ff95Y9u27d332/HtmF6cXsxenJ6Z8dXzmYlfcT17Y1qrXpdrrVqvVfdbxev+fhoAcCVJCoj2ar+YaX9G4lylej4V8WfWomIdyTTSzs/ErG7/R+avkgKiSVJAtFfvB2kt24zq+Ve/kzhj1TqeOWfGJfxtrro3enFUUkA0SQqI1m33Wme2fhVtxV1aqmp3mSf/c1UbXtHitVRSQDRJCog21O4dVf25tmpHPwd35hzOvCZawntZdd+mrbtKCogmSQEAAAAAAAAAC2xP2ni/4kHHim0oRiRfc9u2cCbPSQHRJCkgWvcghtZdyvvkubUqzhk8U9p8eDaVFBBNkgKiTe3MmXDM+sz2FAlbshz1pOt8NA7fSSUFRJOkgGjLduZcVfbPvO5I/JH25+7n9N3lOs+M53uopIBokhQQbVm7l7Z5+4zq8+muatl68R3oQDKVFBBNkgKiDbV7q87FOxrHOz7PYO2YoZICoklSQLRlO3Ou2nmy4sHFVQ9tJuzMuer3PdpWV19nLSE9KikgmiQFAAAAwNkede4e8Dz+cQ5Ek6SAaH9NIJB8RFnZuQAAAABJRU5ErkJggg==" alt="Rendered Image">
+                    </div>
+                </td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Reference Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAAwAQAAAACDZXqMAAABMklEQVR4nO2UMUvDQBiGn/MKcTGdhWD6F9wyCJefVJyc7LWTU83fcTtBqFt/gXA1ha4pLi0k+RyqkG5XiYv4Lgff+/Ae73dw1LEpbabbTLdZ2Rr9uKMjsaZsEXtGkEKxjd0DFFDQ3O69nHftAXtmDILTArGmAmAM4+UIbsi6dg2Muey7KQXEMIMCYH1srywUvPTdFKKmfIDIg56Dcl07tdGJaf86klSHM0srgOR7nrZd6nfWq5yPjwb+J2nBWEzZwkWOWnioYwNRDWD8xMlUkvveL0Xm1MoR44e7BJKh86At6dYlGGJk6hj33FRV6K/ne10Dkh+arq6MnzyJpbEnpAVjUaNyPlxneD0AeI5UrqpT04Iw0dtNC3Jn3gFKCyxrkNXkTRaiZQQUf+FzEBtC9dv0ExPPa+Esnvr/AAAAAElFTkSuQmCC" alt="Reference Image">
+                    </div>
+                </td>
+                <td><div class="text-content">-----------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |
+|                                                                                                   |
+|                                                                                                   |
+|***              *      *     ****             *                                                   |
+|*  *                    *     *   *                                                                |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |
+|                                                                                                   |
+|***                                                                                                |
+-----------------------------------------------------------------------------------------------------</div></td>
+                <td><div class="text-content">------------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   *** |
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       * |
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     *  |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *   |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *   |
+|                                                                                                    |
+|                                                                                                    |
+|****                  *  ***             *                       ****                               |
+|                     *  *   *                                   *                                   |
+|    *   * ***       *   *   ** **       **  * **       ***      *     ***  ***  ***  *** * **       |
+|*** *   **   *      *   *   ***  *       *  **  *         *      *** *   *    **    *   ***  *     *|
+|   **   ******      *   *   **           *  *   *      ****         ****** **** *** *   **   *     *|
+|   **  ***           *  *   **           *  *   *     *   *         **    *   *    **   **   *     *|
+|***  ** * ***         *  *** *          *** *   *      ****     ****  ***  ********  *** *   *      |
+|                                                                                                    |
+|***                                                                                                 |
+------------------------------------------------------------------------------------------------------</div></td>
+            </tr>
+            
+            <tr>
+                <td>basicMedia.yaml → basicMediaArtistAlert.png<br>Ticks: 5<br><span class="pixel-info">Rendered: 99x16, Reference: 100x16</span></td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Rendered Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASkAAAAwCAYAAABNN4xlAAAByUlEQVR4nO3dQVLDMAwFUML0/lcOWy/qqYOt5Cd9bwd4VBMHjURTe9v3ff95Y9u27d332/HtmF6cXsxenJ6Z8dXzmYlfcT17Y1qrXpdrrVqvVfdbxev+fhoAcCVJCoj2ar+YaX9G4lylej4V8WfWomIdyTTSzs/ErG7/R+avkgKiSVJAtFfvB2kt24zq+Ve/kzhj1TqeOWfGJfxtrro3enFUUkA0SQqI1m33Wme2fhVtxV1aqmp3mSf/c1UbXtHitVRSQDRJCog21O4dVf25tmpHPwd35hzOvCZawntZdd+mrbtKCogmSQEAAAAAAAAAC2xP2ni/4kHHim0oRiRfc9u2cCbPSQHRJCkgWvcghtZdyvvkubUqzhk8U9p8eDaVFBBNkgKiTe3MmXDM+sz2FAlbshz1pOt8NA7fSSUFRJOkgGjLduZcVfbPvO5I/JH25+7n9N3lOs+M53uopIBokhQQbVm7l7Z5+4zq8+muatl68R3oQDKVFBBNkgKiDbV7q87FOxrHOz7PYO2YoZICoklSQLRlO3Ou2nmy4sHFVQ9tJuzMuer3PdpWV19nLSE9KikgmiQFAAAAwNkede4e8Dz+cQ5Ek6SAaH9NIJB8RFnZuQAAAABJRU5ErkJggg==" alt="Rendered Image">
+                    </div>
+                </td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Reference Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAAwAQAAAACDZXqMAAABG0lEQVR4nMWUMU7DMBhGn+OgsNCysQTBFdg8IPlMZWICpxMbOUGvQiohwcYVgozE2jI1UpKfAYRSqVUSSMQb/T19nzzYlBPrndG10bXxtdX3GxqIs75GXEAnumrvrgBIIaW6KnI5bMYhBXPCzm3dNPIb453Rsgdn/Ip44NGAFCaQqJ2cOkh5HHyUqPJ3+2Ltop5tPdCJxFiRjdTfJ7F6Km8l7tfWUztSOYWaTcP5T3QRBctftrVp4gDiNm3Y0dcVwBtAVE7XgBaRFbre0oYdZWG9M6USKMKPZ6BSSh1TBdvasKMsL+FcFIBc/7mtCyHYLAHQAuuTRvRSHDyMM0o+y+JZduZ2p+M8GcTZcsK+X7AcZ/Rf+HqnbQx7008uv4lDRI/6SgAAAABJRU5ErkJggg==" alt="Reference Image">
+                    </div>
+                </td>
+                <td><div class="text-content">-----------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |
+|                                                                                                   |
+|                                                                                                   |
+|***              *      *     ****             *                                                   |
+|*  *                    *     *   *                                                                |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |
+|                                                                                                   |
+|***                                                                                                |
+-----------------------------------------------------------------------------------------------------</div></td>
+                <td><div class="text-content">------------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   *** |
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       * |
+|*  ** * * *   *   *****************************************************************   * * **     *  |
+|*   * * * * * *   *                                                              *    * * *     *   |
+|*   * ***  * *    *                                                              **   *** *     *   |
+|                  *  *** *    ********* *****                    *   * *** ***** *                  |
+|                  * *   **    *    *   *  *                      *   **   *  *   *                  |
+|***              ** *   **    *    *   *  *                      *   **   *  *   *                  |
+|*  *              * *   **    **** ****   *       **********     ******   *  *   *                  |
+|*   * *** *   * *** ******    *    * *    *                      *   **   *  *   *                  |
+|*   *    **   *  ** *   **    *    *  *   *                      *   **   *  *   *                  |
+|*   * *****   *  ** *   ************   *  *                      *   * ***   *   *                  |
+|*  * *   * * *   **                                                              *                  |
+|***   ****  *   ******************************************************************                  |
+|                                                                                                    |
+|***                                                                                                 |
+------------------------------------------------------------------------------------------------------</div></td>
+            </tr>
+            
+            <tr>
+                <td>basicMedia.yaml → basicMediaArtist.png<br>Ticks: 6<br><span class="pixel-info">Rendered: 99x16, Reference: 100x16</span></td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Rendered Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASkAAAAwCAYAAABNN4xlAAAByUlEQVR4nO3dQVLDMAwFUML0/lcOWy/qqYOt5Cd9bwd4VBMHjURTe9v3ff95Y9u27d332/HtmF6cXsxenJ6Z8dXzmYlfcT17Y1qrXpdrrVqvVfdbxev+fhoAcCVJCoj2ar+YaX9G4lylej4V8WfWomIdyTTSzs/ErG7/R+avkgKiSVJAtFfvB2kt24zq+Ve/kzhj1TqeOWfGJfxtrro3enFUUkA0SQqI1m33Wme2fhVtxV1aqmp3mSf/c1UbXtHitVRSQDRJCog21O4dVf25tmpHPwd35hzOvCZawntZdd+mrbtKCogmSQEAAAAAAAAAC2xP2ni/4kHHim0oRiRfc9u2cCbPSQHRJCkgWvcghtZdyvvkubUqzhk8U9p8eDaVFBBNkgKiTe3MmXDM+sz2FAlbshz1pOt8NA7fSSUFRJOkgGjLduZcVfbPvO5I/JH25+7n9N3lOs+M53uopIBokhQQbVm7l7Z5+4zq8+muatl68R3oQDKVFBBNkgKiDbV7q87FOxrHOz7PYO2YoZICoklSQLRlO3Ou2nmy4sHFVQ9tJuzMuer3PdpWV19nLSE9KikgmiQFAAAAwNkede4e8Dz+cQ5Ek6SAaH9NIJB8RFnZuQAAAABJRU5ErkJggg==" alt="Rendered Image">
+                    </div>
+                </td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Reference Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAAwAQAAAACDZXqMAAABCklEQVR4nO2TP07DMBjFf8GV3IVkRgKlxzBSJXMXLhDBwla3UyfIBeAsQWJg4wRIDkZibbdYyh+GMiRSJVIpKQu/0e/pe3qfbcpQO6NErUStXK3FQ0GLxmhX05gTetHX9mU8QAop1Y23zbQtT/CsmPSe1tNWbQBIIHmbwRzVlksg4WzopqQQwgpSgM+unBtIeRm6KcjKrUFaEPcQZG05NvLAaf90aAzAOVh0CSD3uQa+03wDP+/HSwP4I4TypJ1RZVAARIUNNYts9FCe5zA7jUD6PIJXEdyNH6otgN+tVxiO0fR6ebFdd86W0z22QUPjaGEfr9xtA9LH28sP9d5kI4f+Dbt/+hvDNv0G+WRSV1qttoQAAAAASUVORK5CYII=" alt="Reference Image">
+                    </div>
+                </td>
+                <td><div class="text-content">-----------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |
+|                                                                                                   |
+|                                                                                                   |
+|***              *      *     ****             *                                                   |
+|*  *                    *     *   *                                                                |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |
+|                                                                                                   |
+|***                                                                                                |
+-----------------------------------------------------------------------------------------------------</div></td>
+                <td><div class="text-content">------------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   *** |
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       * |
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     *  |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *   |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *   |
+|                                                                                                    |
+|                                                                                                    |
+|***              *      *     ****             *                                                    |
+|*  *                    *     *   *                                                                 |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                              |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                             |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                             |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                 |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                              |
+|                                                                                                    |
+|***                                                                                                 |
+------------------------------------------------------------------------------------------------------</div></td>
+            </tr>
+            
+            <tr>
+                <td>basicMedia.yaml → basicMediaArtist.png<br>Ticks: 10<br><span class="pixel-info">Rendered: 99x16, Reference: 100x16</span></td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Rendered Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASkAAAAwCAYAAABNN4xlAAAByUlEQVR4nO3dQVLDMAwFUML0/lcOWy/qqYOt5Cd9bwd4VBMHjURTe9v3ff95Y9u27d332/HtmF6cXsxenJ6Z8dXzmYlfcT17Y1qrXpdrrVqvVfdbxev+fhoAcCVJCoj2ar+YaX9G4lylej4V8WfWomIdyTTSzs/ErG7/R+avkgKiSVJAtFfvB2kt24zq+Ve/kzhj1TqeOWfGJfxtrro3enFUUkA0SQqI1m33Wme2fhVtxV1aqmp3mSf/c1UbXtHitVRSQDRJCog21O4dVf25tmpHPwd35hzOvCZawntZdd+mrbtKCogmSQEAAAAAAAAAC2xP2ni/4kHHim0oRiRfc9u2cCbPSQHRJCkgWvcghtZdyvvkubUqzhk8U9p8eDaVFBBNkgKiTe3MmXDM+sz2FAlbshz1pOt8NA7fSSUFRJOkgGjLduZcVfbPvO5I/JH25+7n9N3lOs+M53uopIBokhQQbVm7l7Z5+4zq8+muatl68R3oQDKVFBBNkgKiDbV7q87FOxrHOz7PYO2YoZICoklSQLRlO3Ou2nmy4sHFVQ9tJuzMuer3PdpWV19nLSE9KikgmiQFAAAAwNkede4e8Dz+cQ5Ek6SAaH9NIJB8RFnZuQAAAABJRU5ErkJggg==" alt="Rendered Image">
+                    </div>
+                </td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Reference Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAAwAQAAAACDZXqMAAABCklEQVR4nO2TP07DMBjFf8GV3IVkRgKlxzBSJXMXLhDBwla3UyfIBeAsQWJg4wRIDkZibbdYyh+GMiRSJVIpKQu/0e/pe3qfbcpQO6NErUStXK3FQ0GLxmhX05gTetHX9mU8QAop1Y23zbQtT/CsmPSe1tNWbQBIIHmbwRzVlksg4WzopqQQwgpSgM+unBtIeRm6KcjKrUFaEPcQZG05NvLAaf90aAzAOVh0CSD3uQa+03wDP+/HSwP4I4TypJ1RZVAARIUNNYts9FCe5zA7jUD6PIJXEdyNH6otgN+tVxiO0fR6ebFdd86W0z22QUPjaGEfr9xtA9LH28sP9d5kI4f+Dbt/+hvDNv0G+WRSV1qttoQAAAAASUVORK5CYII=" alt="Reference Image">
+                    </div>
+                </td>
+                <td><div class="text-content">-----------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |
+|                                                                                                   |
+|                                                                                                   |
+|***              *      *     ****             *                                                   |
+|*  *                    *     *   *                                                                |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |
+|                                                                                                   |
+|***                                                                                                |
+-----------------------------------------------------------------------------------------------------</div></td>
+                <td><div class="text-content">------------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   *** |
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       * |
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     *  |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *   |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *   |
+|                                                                                                    |
+|                                                                                                    |
+|***              *      *     ****             *                                                    |
+|*  *                    *     *   *                                                                 |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                              |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                             |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                             |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                 |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                              |
+|                                                                                                    |
+|***                                                                                                 |
+------------------------------------------------------------------------------------------------------</div></td>
+            </tr>
+            
+            <tr>
+                <td>basicMedia.yaml → basicMediaArtistAlert.png<br>Ticks: 15<br><span class="pixel-info">Rendered: 99x16, Reference: 100x16</span></td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Rendered Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASkAAAAwCAYAAABNN4xlAAAByUlEQVR4nO3dQVLDMAwFUML0/lcOWy/qqYOt5Cd9bwd4VBMHjURTe9v3ff95Y9u27d332/HtmF6cXsxenJ6Z8dXzmYlfcT17Y1qrXpdrrVqvVfdbxev+fhoAcCVJCoj2ar+YaX9G4lylej4V8WfWomIdyTTSzs/ErG7/R+avkgKiSVJAtFfvB2kt24zq+Ve/kzhj1TqeOWfGJfxtrro3enFUUkA0SQqI1m33Wme2fhVtxV1aqmp3mSf/c1UbXtHitVRSQDRJCog21O4dVf25tmpHPwd35hzOvCZawntZdd+mrbtKCogmSQEAAAAAAAAAC2xP2ni/4kHHim0oRiRfc9u2cCbPSQHRJCkgWvcghtZdyvvkubUqzhk8U9p8eDaVFBBNkgKiTe3MmXDM+sz2FAlbshz1pOt8NA7fSSUFRJOkgGjLduZcVfbPvO5I/JH25+7n9N3lOs+M53uopIBokhQQbVm7l7Z5+4zq8+muatl68R3oQDKVFBBNkgKiDbV7q87FOxrHOz7PYO2YoZICoklSQLRlO3Ou2nmy4sHFVQ9tJuzMuer3PdpWV19nLSE9KikgmiQFAAAAwNkede4e8Dz+cQ5Ek6SAaH9NIJB8RFnZuQAAAABJRU5ErkJggg==" alt="Rendered Image">
+                    </div>
+                </td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Reference Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAAwAQAAAACDZXqMAAABG0lEQVR4nMWUMU7DMBhGn+OgsNCysQTBFdg8IPlMZWICpxMbOUGvQiohwcYVgozE2jI1UpKfAYRSqVUSSMQb/T19nzzYlBPrndG10bXxtdX3GxqIs75GXEAnumrvrgBIIaW6KnI5bMYhBXPCzm3dNPIb453Rsgdn/Ip44NGAFCaQqJ2cOkh5HHyUqPJ3+2Ltop5tPdCJxFiRjdTfJ7F6Km8l7tfWUztSOYWaTcP5T3QRBctftrVp4gDiNm3Y0dcVwBtAVE7XgBaRFbre0oYdZWG9M6USKMKPZ6BSSh1TBdvasKMsL+FcFIBc/7mtCyHYLAHQAuuTRvRSHDyMM0o+y+JZduZ2p+M8GcTZcsK+X7AcZ/Rf+HqnbQx7008uv4lDRI/6SgAAAABJRU5ErkJggg==" alt="Reference Image">
+                    </div>
+                </td>
+                <td><div class="text-content">-----------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |
+|                                                                                                   |
+|                                                                                                   |
+|***              *      *     ****             *                                                   |
+|*  *                    *     *   *                                                                |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |
+|                                                                                                   |
+|***                                                                                                |
+-----------------------------------------------------------------------------------------------------</div></td>
+                <td><div class="text-content">------------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   *** |
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       * |
+|*  ** * * *   *   *****************************************************************   * * **     *  |
+|*   * * * * * *   *                                                              *    * * *     *   |
+|*   * ***  * *    *                                                              **   *** *     *   |
+|                  *  *** *    ********* *****                    *   * *** ***** *                  |
+|                  * *   **    *    *   *  *                      *   **   *  *   *                  |
+|***              ** *   **    *    *   *  *                      *   **   *  *   *                  |
+|*  *              * *   **    **** ****   *       **********     ******   *  *   *                  |
+|*   * *** *   * *** ******    *    * *    *                      *   **   *  *   *                  |
+|*   *    **   *  ** *   **    *    *  *   *                      *   **   *  *   *                  |
+|*   * *****   *  ** *   ************   *  *                      *   * ***   *   *                  |
+|*  * *   * * *   **                                                              *                  |
+|***   ****  *   ******************************************************************                  |
+|                                                                                                    |
+|***                                                                                                 |
+------------------------------------------------------------------------------------------------------</div></td>
+            </tr>
+            
+            <tr>
+                <td>basicMedia.yaml → pydPiper_splash.png<br>Ticks: 46<br><span class="pixel-info">Rendered: 99x16, Reference: 100x16</span></td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Rendered Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASkAAAAwCAYAAABNN4xlAAAByUlEQVR4nO3dQVLDMAwFUML0/lcOWy/qqYOt5Cd9bwd4VBMHjURTe9v3ff95Y9u27d332/HtmF6cXsxenJ6Z8dXzmYlfcT17Y1qrXpdrrVqvVfdbxev+fhoAcCVJCoj2ar+YaX9G4lylej4V8WfWomIdyTTSzs/ErG7/R+avkgKiSVJAtFfvB2kt24zq+Ve/kzhj1TqeOWfGJfxtrro3enFUUkA0SQqI1m33Wme2fhVtxV1aqmp3mSf/c1UbXtHitVRSQDRJCog21O4dVf25tmpHPwd35hzOvCZawntZdd+mrbtKCogmSQEAAAAAAAAAC2xP2ni/4kHHim0oRiRfc9u2cCbPSQHRJCkgWvcghtZdyvvkubUqzhk8U9p8eDaVFBBNkgKiTe3MmXDM+sz2FAlbshz1pOt8NA7fSSUFRJOkgGjLduZcVfbPvO5I/JH25+7n9N3lOs+M53uopIBokhQQbVm7l7Z5+4zq8+muatl68R3oQDKVFBBNkgKiDbV7q87FOxrHOz7PYO2YoZICoklSQLRlO3Ou2nmy4sHFVQ9tJuzMuer3PdpWV19nLSE9KikgmiQFAAAAwNkede4e8Dz+cQ5Ek6SAaH9NIJB8RFnZuQAAAABJRU5ErkJggg==" alt="Rendered Image">
+                    </div>
+                </td>
+                <td>
+                    <div class="image-container">
+                        <div class="image-label">Reference Image</div>
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAAwAQAAAACDZXqMAAAA+ElEQVR4nLWUy23DMBBEZ00CvEUNGKDL8E0lJUAKsOgK4o7kTnhIAdQtAhhNDooEyA5sylnPhR88zGC5xApRoG5TQgGFmL2PcFPstg77FtkBQG87keaCcVk5FBwVaEiSZnC54kKDeuif2Hl57K126PSwN+SYtCutvq4u68fdVmGULQAK0NtXAYBOdsezvcB0QpEBTzKQgSbVZnBkm1/gA01y8UCmJz/vqR1X885PCrD3DfCxxu2fmDAruhVjU0P3+j2tWk9m1EwwCfENHOAb+ATfuN/5oNxTxKr10+wx8xQKy6Gk/pGAOG6POm4lioe5HMwlZ9TPrPQHkUGuKFm4LV8AAAAASUVORK5CYII=" alt="Reference Image">
+                    </div>
+                </td>
+                <td><div class="text-content">-----------------------------------------------------------------------------------------------------
+|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|
+|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|
+|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |
+|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |
+|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |
+|                                                                                                   |
+|                                                                                                   |
+|***              *      *     ****             *                                                   |
+|*  *                    *     *   *                                                                |
+|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |
+|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |
+|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |
+|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |
+|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |
+|                                                                                                   |
+|***                                                                                                |
+-----------------------------------------------------------------------------------------------------</div></td>
+                <td><div class="text-content">------------------------------------------------------------------------------------------------------
+|****************************************************************************************************|
+|*********************************************************************************************       |
+|******************       **************   **       ******************************************  ***  |
+|*******************  ***  **************  ***  ***  *****************************************  ***  |
+|*******************  ***  **************  ***  ***  **  *************************************       |
+|**       **********  ***  **************  ***  ***  **  *************************************  *****|
+|**  ***  **********  ***  **************  ***  ***  *****************************************  *****|
+|**  ***  **********      ************     ***      **   ************     **  *    ***********  *****|
+|**       **********  ******  ***  **  **  ***  *******  **  *    **  ***  **   **  *********   *****|
+|**  ***  **********  ******  ***  *  ***  ***  *******  ***  ***  *       **  *************    *****|
+|**  ***  **********  ******  ***  *  ***  ***  *******  ***  ***  *  *******  *************    *****|
+|**  ***  **********  ******  ***  *  ***  ***  *******  ***  ***  *  ***  **  *************   ******|
+|**  **   *********    ******      **    *  *    *****    **      ***     **    *********************|
+|*   **   ***********************  *************************  ***************************************|
+|*   **  *******************  ***  *************************  ***************************************|
+|*  *************************     *************************    **************************************|
+------------------------------------------------------------------------------------------------------</div></td>
+            </tr>
+            
+        </table>
+    </body>
+    </html>
+    

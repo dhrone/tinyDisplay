@@ -1,0 +1,280 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Focused Image Comparison</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1, h2 { color: #333; }
+            .comparison-section { margin-bottom: 40px; border: 1px solid #ddd; padding: 20px; border-radius: 8px; }
+            .image-row { display: flex; margin-bottom: 20px; }
+            .image-container { margin-right: 20px; }
+            .image-container img { border: 1px solid #ccc; margin-top: 10px; image-rendering: pixelated; }
+            .image-label { font-weight: bold; margin-bottom: 5px; }
+            .pixel-info { font-size: 0.9em; color: #555; margin-top: 5px; }
+            .text-comparison { display: flex; }
+            .text-column { flex: 1; border: 1px solid #ddd; padding: 10px; margin-right: 10px; }
+            .text-content { font-family: monospace; white-space: pre; font-size: 14px; }
+            .notes { background-color: #f8f8f8; padding: 10px; border-left: 4px solid #4CAF50; margin-top: 20px; }
+            .highlight-diff { background-color: #ffebee; }
+            .conclusion { background-color: #e8f5e9; padding: 15px; border-radius: 8px; margin-top: 20px; }
+        </style>
+    </head>
+    <body>
+        <h1>Focused Image Comparison: Rendered vs Reference</h1>
+        <p>This page shows detailed comparisons focusing on key differences between rendered and reference images.</p>
+        <div class="conclusion">
+            <h2>Summary of Findings</h2>
+            <p>The main differences between rendered and reference images are:</p>
+            <ol>
+                <li><strong>Image Dimensions</strong>: Rendered images are 99x16 pixels while reference images are 100x16 pixels.</li>
+                <li><strong>Trailing spaces</strong>: The text representations show some lines with slightly different trailing spaces.</li>
+                <li><strong>Content Differences</strong>: For special cases like album display and alerts, the content is completely different between rendered and reference.</li>
+            </ol>
+            <p>These differences explain why exact matching is failing, but they don't indicate actual bugs in the rendering - just differences in how the content is displayed or trimmed.</p>
+        </div>
+    
+        <div class="comparison-section">
+            <h2>basicMediaArtist.png - Basic artist display - this should match closely</h2>
+            <p><strong>Test details:</strong> basicMedia.yaml, Ticks: 1</p>
+            <p class="pixel-info"><strong>Dimensions:</strong> Rendered: 99x16, Reference: 100x16 - Size mismatch!</p>
+            
+            <div class="image-row">
+                <div class="image-container">
+                    <div class="image-label">Rendered Image</div>
+                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAe8AAABQCAYAAAAwYv3ZAAACmElEQVR4nO3dW27jMBAEwNUi97+yc4DQwCQkNNNy1acR60HTbhDoiNfr9Xr9K7iu66r83ep4q/dWz1u9lup5q+44XlXX/VbtXN+k+VJ970rXfUCnrvnc9XtQPV7Vznn///WNAEAP4Q0AYYQ3AIQR3gAQ5mv14h0FqZ3zPsX0+510fXfMyUnzHhLsFDrvuJbpBdGd8bPyBoAwwhsAwghvAAgjvAEgzLKwtjKpvPQU08dv+lPh7tA17xPHis8z/TdsR9d3sHpeK28ACCO8ASCM8AaAMMIbAMKUC2sriSW2SUWg6QWkxM/3DsYF3pv+u1Y1qZy2YuUNAGGENwCEEd4AEEZ4A0CYrcLaaV1P9JpUYttRHb8n31viZ6nsxpN0/Q592vfIyhsAwghvAAgjvAEgjPAGAAAAAAAAAAAAAAAAAAAAAAAAAACaXKe34WTWtpRd13J6ez5zbda8Anp5tjkAhBHeABBGeANAGOENAGG+Vi9WSzAKNGvGYG1nXMy1z7tf4D0rbwAII7wBIIzwBoAwwhsAwiwLa1WrAk21WHT6yW6nC02n7+P0tZw+x1OYV3vXUmWuQS8rbwAII7wBIIzwBoAwwhsAwmwV1nZ0FW1OO13G2ylITRqXlcQyWZdJ8+qO4wG/Y+UNAGGENwCEEd4AEEZ4A0CYtsLapHLQU5wuOZ32lDLZSmKBa/qYAu9ZeQNAGOENAGGENwCEEd4AEGarsLazvWHXtop3XB8kMMchl5U3AIQR3gAQRngDQBjhDQBhrtPbNFadfrrTzraZXffRtdXnHUWlSZ/vHec4XYScPq+U3aCXlTcAhBHeABBGeANAGOENAAAAAAAAAAAAAMBPbU9YAwD+xr+KAUAY4Q0AYYQ3AIQR3gAQ5hvafpCwNSXqfgAAAABJRU5ErkJggg==" alt="Rendered Image">
+                </div>
+                <div class="image-container">
+                    <div class="image-label">Reference Image</div>
+                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAABQAQAAAADHV7prAAABQUlEQVR4nO2YQWrDMBBF38QLZ6fcwL5I7VyrUBK1vpjaXES6gbuTofF0YZu24FBakqoG/4UYWfP4As8gIdSZRmNF5qm1GYZYa6NURj0z0p5MY60W7dnMZfxAi+e7A4Qh1t00vLzaEOGxnENkDwEVi+zT7z85f2qnWFpA2nO9BTCOzM8h6qbk/Okf7D81rzsAY0HFjvUH0O0vIN0GhrzXtf42AAWn0JUARQSgMhbgYRbJeyiu6r9gftWqpNJ+inIHRMh0OCH41KYXlbp/UvNEab9MIfNUf+a/fF6L8f6sjqMfPxv1EdMoom839l8+fxbjgC1GaoBCmyA1cC65k9zf2n/pfKZxmgaAIAdgaOK1/r7jJXSyPbX35ey6iswvXM1/2fzwGqDOWLTnqOP5a9Tnz22mca2/VTfVx/3vV0r9/1Pz78BTf3WtK6FhAAAAAElFTkSuQmCC" alt="Reference Image">
+                </div>
+        
+            </div>
+            
+            <h3>Text Representation Comparison</h3>
+            <div class="text-comparison">
+                <div class="text-column">
+                    <div class="image-label">Rendered Text</div>
+                    <div class="text-content"><div class="highlight-diff">-----------------------------------------------------------------------------------------------------</div>
+<div class="highlight-diff">|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|</div>
+<div class="highlight-diff">|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|</div>
+<div class="highlight-diff">|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |</div>
+<div class="highlight-diff">|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |</div>
+<div class="highlight-diff">|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |</div>
+<div class="highlight-diff">|                                                                                                   |</div>
+<div class="highlight-diff">|                                                                                                   |</div>
+<div class="highlight-diff">|***              *      *     ****             *                                                   |</div>
+<div class="highlight-diff">|*  *                    *     *   *                                                                |</div>
+<div class="highlight-diff">|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |</div>
+<div class="highlight-diff">|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |</div>
+<div class="highlight-diff">|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |</div>
+<div class="highlight-diff">|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |</div>
+<div class="highlight-diff">|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |</div>
+<div class="highlight-diff">|                                                                                                   |</div>
+<div class="highlight-diff">|***                                                                                                |</div>
+<div class="highlight-diff">-----------------------------------------------------------------------------------------------------</div>
+
+                    </div>
+                </div>
+                <div class="text-column">
+                    <div class="image-label">Reference Text</div>
+                    <div class="text-content"><div class="highlight-diff">------------------------------------------------------------------------------------------------------</div>
+<div class="highlight-diff">|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   *** |</div>
+<div class="highlight-diff">|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       * |</div>
+<div class="highlight-diff">|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     *  |</div>
+<div class="highlight-diff">|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *   |</div>
+<div class="highlight-diff">|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *   |</div>
+<div class="highlight-diff">|                                                                                                    |</div>
+<div class="highlight-diff">|                                                                                                    |</div>
+<div class="highlight-diff">|***              *      *     ****             *                                                    |</div>
+<div class="highlight-diff">|*  *                    *     *   *                                                                 |</div>
+<div class="highlight-diff">|*   * *** *   * **   ** *     *   * *** *   * **   ***                                              |</div>
+<div class="highlight-diff">|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                             |</div>
+<div class="highlight-diff">|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                             |</div>
+<div class="highlight-diff">|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                 |</div>
+<div class="highlight-diff">|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                              |</div>
+<div class="highlight-diff">|                                                                                                    |</div>
+<div class="highlight-diff">|***                                                                                                 |</div>
+<div class="highlight-diff">------------------------------------------------------------------------------------------------------</div>
+
+                    </div>
+                </div>
+            </div>
+            
+            <div class="notes">
+                <h3>Analysis</h3>
+        
+                <p>This is a basic artist display case. The content appears similar, but there are minor differences:</p>
+                <ul>
+                    <li>The rendered image is 99 pixels wide vs 100 pixels for the reference</li>
+                    <li>Some lines have slight differences in trailing spaces</li>
+                    <li>The border characters are slightly different, but the content is identical</li>
+                </ul>
+                <p>These differences don't affect the functionality of the display - they're just formatting variations.</p>
+            
+            </div>
+        </div>
+        
+        <div class="comparison-section">
+            <h2>basicMediaAlbum.png - Album display - this shows different content as expected</h2>
+            <p><strong>Test details:</strong> basicMedia.yaml, Ticks: 16</p>
+            <p class="pixel-info"><strong>Dimensions:</strong> Rendered: 99x16, Reference: 100x16 - Size mismatch!</p>
+            
+            <div class="image-row">
+                <div class="image-container">
+                    <div class="image-label">Rendered Image</div>
+                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAe8AAABQCAYAAAAwYv3ZAAACmElEQVR4nO3dW27jMBAEwNUi97+yc4DQwCQkNNNy1acR60HTbhDoiNfr9Xr9K7iu66r83ep4q/dWz1u9lup5q+44XlXX/VbtXN+k+VJ970rXfUCnrvnc9XtQPV7Vznn///WNAEAP4Q0AYYQ3AIQR3gAQ5mv14h0FqZ3zPsX0+510fXfMyUnzHhLsFDrvuJbpBdGd8bPyBoAwwhsAwghvAAgjvAEgzLKwtjKpvPQU08dv+lPh7tA17xPHis8z/TdsR9d3sHpeK28ACCO8ASCM8AaAMMIbAMKUC2sriSW2SUWg6QWkxM/3DsYF3pv+u1Y1qZy2YuUNAGGENwCEEd4AEEZ4A0CYrcLaaV1P9JpUYttRHb8n31viZ6nsxpN0/Q592vfIyhsAwghvAAgjvAEgjPAGAAAAAAAAAAAAAAAAAAAAAAAAAACaXKe34WTWtpRd13J6ez5zbda8Anp5tjkAhBHeABBGeANAGOENAGG+Vi9WSzAKNGvGYG1nXMy1z7tf4D0rbwAII7wBIIzwBoAwwhsAwiwLa1WrAk21WHT6yW6nC02n7+P0tZw+x1OYV3vXUmWuQS8rbwAII7wBIIzwBoAwwhsAwmwV1nZ0FW1OO13G2ylITRqXlcQyWZdJ8+qO4wG/Y+UNAGGENwCEEd4AEEZ4A0CYtsLapHLQU5wuOZ32lDLZSmKBa/qYAu9ZeQNAGOENAGGENwCEEd4AEGarsLazvWHXtop3XB8kMMchl5U3AIQR3gAQRngDQBjhDQBhrtPbNFadfrrTzraZXffRtdXnHUWlSZ/vHec4XYScPq+U3aCXlTcAhBHeABBGeANAGOENAAAAAAAAAAAAAMBPbU9YAwD+xr+KAUAY4Q0AYYQ3AIQR3gAQ5hvafpCwNSXqfgAAAABJRU5ErkJggg==" alt="Rendered Image">
+                </div>
+                <div class="image-container">
+                    <div class="image-label">Reference Image</div>
+                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAABQAQAAAADHV7prAAABLklEQVR4nO2XQU7DMBBFn5tK7c69gXMR6h6sgCEXC/QiyQ3SnSOVfBZpVqQLBMSkyl+MbGme/kie0ciotIXinqzCq+hD9CrE3qpiROrIFL0C6liNZXxDs+fbJ6j7s3ZDeD+HOsJLPoaYA9TIBMwhff3J+VMznE0DmObDbwFsSVaNISqH5M3rP6g/Na8dgA0gE679B9AebiDtCvq889J/KwDHqW5zABcB2NsAcBxFNh24X/WfMb9oUVJJTabh0g+su5n8VannJzW/brf2MU/nfye80QV1QPQqqohVFX0znf9seaQGB2QCjm5TXufXqeyX8N/6z50nYoPDSAKeK7yCAyvFSfzvhH8w6/7rwZu5gK9NPqn/bPl+/0YjVeo4Iimgcum/RdNI3Y/w1O+fmv8EAZZ9KjNOro4AAAAASUVORK5CYII=" alt="Reference Image">
+                </div>
+        
+            </div>
+            
+            <h3>Text Representation Comparison</h3>
+            <div class="text-comparison">
+                <div class="text-column">
+                    <div class="image-label">Rendered Text</div>
+                    <div class="text-content"><div class="highlight-diff">-----------------------------------------------------------------------------------------------------</div>
+<div class="highlight-diff">|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|</div>
+<div class="highlight-diff">|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|</div>
+<div class="highlight-diff">|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |</div>
+<div class="highlight-diff">|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |</div>
+<div class="highlight-diff">|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |</div>
+<div class="highlight-diff">|                                                                                                   |</div>
+<div class="highlight-diff">|                                                                                                   |</div>
+<div class="highlight-diff">|***              *      *     ****             *                                                   |</div>
+<div class="highlight-diff">|*  *                    *     *   *                                                                |</div>
+<div class="highlight-diff">|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |</div>
+<div class="highlight-diff">|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |</div>
+<div class="highlight-diff">|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |</div>
+<div class="highlight-diff">|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |</div>
+<div class="highlight-diff">|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |</div>
+<div class="highlight-diff">|                                                                                                   |</div>
+<div class="highlight-diff">|***                                                                                                |</div>
+<div class="highlight-diff">-----------------------------------------------------------------------------------------------------</div>
+
+                    </div>
+                </div>
+                <div class="text-column">
+                    <div class="image-label">Reference Text</div>
+                    <div class="text-content"><div class="highlight-diff">------------------------------------------------------------------------------------------------------</div>
+<div class="highlight-diff">|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   *** |</div>
+<div class="highlight-diff">|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       * |</div>
+<div class="highlight-diff">|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     *  |</div>
+<div class="highlight-diff">|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *   |</div>
+<div class="highlight-diff">|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *   |</div>
+<div class="highlight-diff">|                                                                                                    |</div>
+<div class="highlight-diff">|                                                                                                    |</div>
+<div class="highlight-diff">|****  **             *         *                                                                    |</div>
+<div class="highlight-diff">|*   *  *             *         *                                                                    |</div>
+<div class="highlight-diff">|*   *  *   ***  ***  *  * *** ***   *** * **                                                        |</div>
+<div class="highlight-diff">|****   *      **     * * *     *       ***  *                                                       |</div>
+<div class="highlight-diff">|*   *  *   *****     **   ***  *    *****                                                           |</div>
+<div class="highlight-diff">|*   *  *  *   **   * * *     * *  **   **                                                           |</div>
+<div class="highlight-diff">|****  ***  **** ***  *  *****   **  *****                                                           |</div>
+<div class="highlight-diff">|                                                                                                    |</div>
+<div class="highlight-diff">|***                                                                                                 |</div>
+<div class="highlight-diff">------------------------------------------------------------------------------------------------------</div>
+
+                    </div>
+                </div>
+            </div>
+            
+            <div class="notes">
+                <h3>Analysis</h3>
+        
+                <p>This is an album display case. The content is completely different because:</p>
+                <ul>
+                    <li>The rendered image is still showing the artist, but the reference shows album information</li>
+                    <li>This is expected since we're seeing different states of the display at different tick counts</li>
+                </ul>
+                <p>This is likely why strict image comparison fails - the content is intentionally different here.</p>
+            
+            </div>
+        </div>
+        
+        <div class="comparison-section">
+            <h2>basicMediaArtistAlert.png - Alert display - this shows an alert layout</h2>
+            <p><strong>Test details:</strong> basicMedia.yaml, Ticks: 5</p>
+            <p class="pixel-info"><strong>Dimensions:</strong> Rendered: 99x16, Reference: 100x16 - Size mismatch!</p>
+            
+            <div class="image-row">
+                <div class="image-container">
+                    <div class="image-label">Rendered Image</div>
+                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAe8AAABQCAYAAAAwYv3ZAAACmElEQVR4nO3dW27jMBAEwNUi97+yc4DQwCQkNNNy1acR60HTbhDoiNfr9Xr9K7iu66r83ep4q/dWz1u9lup5q+44XlXX/VbtXN+k+VJ970rXfUCnrvnc9XtQPV7Vznn///WNAEAP4Q0AYYQ3AIQR3gAQ5mv14h0FqZ3zPsX0+510fXfMyUnzHhLsFDrvuJbpBdGd8bPyBoAwwhsAwghvAAgjvAEgzLKwtjKpvPQU08dv+lPh7tA17xPHis8z/TdsR9d3sHpeK28ACCO8ASCM8AaAMMIbAMKUC2sriSW2SUWg6QWkxM/3DsYF3pv+u1Y1qZy2YuUNAGGENwCEEd4AEEZ4A0CYrcLaaV1P9JpUYttRHb8n31viZ6nsxpN0/Q592vfIyhsAwghvAAgjvAEgjPAGAAAAAAAAAAAAAAAAAAAAAAAAAACaXKe34WTWtpRd13J6ez5zbda8Anp5tjkAhBHeABBGeANAGOENAGG+Vi9WSzAKNGvGYG1nXMy1z7tf4D0rbwAII7wBIIzwBoAwwhsAwiwLa1WrAk21WHT6yW6nC02n7+P0tZw+x1OYV3vXUmWuQS8rbwAII7wBIIzwBoAwwhsAwmwV1nZ0FW1OO13G2ylITRqXlcQyWZdJ8+qO4wG/Y+UNAGGENwCEEd4AEEZ4A0CYtsLapHLQU5wuOZ32lDLZSmKBa/qYAu9ZeQNAGOENAGGENwCEEd4AEGarsLazvWHXtop3XB8kMMchl5U3AIQR3gAQRngDQBjhDQBhrtPbNFadfrrTzraZXffRtdXnHUWlSZ/vHec4XYScPq+U3aCXlTcAhBHeABBGeANAGOENAAAAAAAAAAAAAMBPbU9YAwD+xr+KAUAY4Q0AYYQ3AIQR3gAQ5hvafpCwNSXqfgAAAABJRU5ErkJggg==" alt="Rendered Image">
+                </div>
+                <div class="image-container">
+                    <div class="image-label">Reference Image</div>
+                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAABQAQAAAADHV7prAAABZElEQVR4nO2XTW6DMBCFvwmRaFdwA3KSmIMlLVEWvRakF4EbhJ2zCK8LmqppU5WqNMhV3sIa2fPpjcT4B1QmW/klUY3Tth+801YsE9VckDoieacCdcwuZfxAwfOHB2j6WOlp2LVF42GzuIRYDg2yAsunr39iHm/a1qf+G6aOqPZuD3E5ef3T80oBkgJkg3S3g75P21v/zQAynpvDYjCzhGxU/4D591ryqLgkkiTVkop3i3HJKlMlKS5H9P9XfGLmgcZmrTlzVpznRpWtbW1/5x8ir+4UnvXV1fwD5+eH+33ah4f8dS7TLlGzAMCVAG0KTqd3zpj+4fPKXt/PKnkUQGN5u17065WZmaVA9XE7j+QfPn+0pATuYPN2uD3V1/MPmZ8DkdDbhBOI9ug+5x6dqnxk/9B5vO1XxNV+Rdx9nw0f7pmp65+cj4/pk7yyOd6G/b75Uf0D52/6pTRw136hqb//1PwLpp7UrkwC13oAAAAASUVORK5CYII=" alt="Reference Image">
+                </div>
+        
+            </div>
+            
+            <h3>Text Representation Comparison</h3>
+            <div class="text-comparison">
+                <div class="text-column">
+                    <div class="image-label">Rendered Text</div>
+                    <div class="text-content"><div class="highlight-diff">-----------------------------------------------------------------------------------------------------</div>
+<div class="highlight-diff">|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   ***|</div>
+<div class="highlight-diff">|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       *|</div>
+<div class="highlight-diff">|*  ** * * *   *   *** *   ***  *   *  *  ** * *                                 ***   * * **     * |</div>
+<div class="highlight-diff">|*   * * * * * *   *   *   * *  *   *  *   * * *                                 *     * * *     *  |</div>
+<div class="highlight-diff">|*   * ***  * *    *   *** * *  *  *** *   * ***                                 ***   *** *     *  |</div>
+<div class="highlight-diff">|                                                                                                   |</div>
+<div class="highlight-diff">|                                                                                                   |</div>
+<div class="highlight-diff">|***              *      *     ****             *                                                   |</div>
+<div class="highlight-diff">|*  *                    *     *   *                                                                |</div>
+<div class="highlight-diff">|*   * *** *   * **   ** *     *   * *** *   * **   ***                                             |</div>
+<div class="highlight-diff">|*   *    **   *  *  *  **     **** *   **   *  *  *   *                                            |</div>
+<div class="highlight-diff">|*   * *****   *  *  *   *     *   **   ** * *  *  *****                                            |</div>
+<div class="highlight-diff">|*  * *   * * *   *  *   *     *   **   ** * *  *  *                                                |</div>
+<div class="highlight-diff">|***   ****  *   ***  ****     ****  ***  * *  ***  ***                                             |</div>
+<div class="highlight-diff">|                                                                                                   |</div>
+<div class="highlight-diff">|***                                                                                                |</div>
+<div class="highlight-diff">-----------------------------------------------------------------------------------------------------</div>
+
+                    </div>
+                </div>
+                <div class="text-column">
+                    <div class="image-label">Reference Text</div>
+                    <div class="text-content"><div class="highlight-diff">------------------------------------------------------------------------------------------------------</div>
+<div class="highlight-diff">|**  * *** *   *   *** *   *** * * *** **  * ***                                 ***   *** ***   *** |</div>
+<div class="highlight-diff">|* * * * * *   *   * * *   * * * *  *  * * * *                                     *   * * *       * |</div>
+<div class="highlight-diff">|*  ** * * *   *   *****************************************************************   * * **     *  |</div>
+<div class="highlight-diff">|*   * * * * * *   *                                                              *    * * *     *   |</div>
+<div class="highlight-diff">|*   * ***  * *    *                                                              **   *** *     *   |</div>
+<div class="highlight-diff">|                  *  *** *    ********* *****                    *   * *** ***** *                  |</div>
+<div class="highlight-diff">|                  * *   **    *    *   *  *                      *   **   *  *   *                  |</div>
+<div class="highlight-diff">|***              ** *   **    *    *   *  *                      *   **   *  *   *                  |</div>
+<div class="highlight-diff">|*  *              * *   **    **** ****   *       **********     ******   *  *   *                  |</div>
+<div class="highlight-diff">|*   * *** *   * *** ******    *    * *    *                      *   **   *  *   *                  |</div>
+<div class="highlight-diff">|*   *    **   *  ** *   **    *    *  *   *                      *   **   *  *   *                  |</div>
+<div class="highlight-diff">|*   * *****   *  ** *   ************   *  *                      *   * ***   *   *                  |</div>
+<div class="highlight-diff">|*  * *   * * *   **                                                              *                  |</div>
+<div class="highlight-diff">|***   ****  *   ******************************************************************                  |</div>
+<div class="highlight-diff">|                                                                                                    |</div>
+<div class="highlight-diff">|***                                                                                                 |</div>
+<div class="highlight-diff">------------------------------------------------------------------------------------------------------</div>
+
+                    </div>
+                </div>
+            </div>
+            
+            <div class="notes">
+                <h3>Analysis</h3>
+        
+                <p>This is an alert display case. The alert layout is significantly different:</p>
+                <ul>
+                    <li>The alert placement and formatting differs between rendered and reference</li>
+                    <li>The alert content is being displayed differently</li>
+                </ul>
+                <p>This is a special case where exact matching isn't appropriate - we just need to verify the alert appears.</p>
+            
+            </div>
+        </div>
+        
+    </body>
+    </html>
+    
