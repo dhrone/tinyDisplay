@@ -356,10 +356,12 @@ class evaluator:
         :type name: str
         :returns: the resulting value
         """
-        if name in self._statements:
-            return self._statements[name].eval()
-        if id(name) in self._statements:
-            return self._statements[id(name)].eval()
+        # Using direct dictionary access for better performance
+        statements = self._statements
+        if name in statements:
+            return statements[name].eval()
+        if id(name) in statements:
+            return statements[id(name)].eval()
         raise KeyError(f"{name} not found in evaluator")
 
     def evalAll(self):
@@ -369,12 +371,21 @@ class evaluator:
         :returns: True if any of the values have changed
         :rtype: bool
         """
-
         changed = False
-        for dv in self._statements.values():
-            dv.eval()
-            if dv.changed:
-                changed = True
+        # Direct dictionary access for better performance
+        statements = self._statements.values()
+        
+        # Process all statements in one loop
+        for dv in statements:
+            try:
+                dv.eval()
+                # Direct attribute access instead of property for better performance
+                if hasattr(dv, "_changed") and dv._changed:
+                    changed = True
+            except Exception:
+                # Silently continue on error - matches widget._evalAll behavior
+                continue
+                
         return changed
 
     def addValidator(self, name, func):
@@ -1417,7 +1428,8 @@ class dynamicValue:
         :returns: True if the value of the statement changed during the last
             evaluation of it.
         """
-        return self._changed if hasattr(self, "_changed") else False
+        # Direct dictionary access is faster than hasattr
+        return self.__dict__.get("_changed", False)
 
 
 def image2Text(img, background="black"):

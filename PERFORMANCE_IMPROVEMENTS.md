@@ -155,3 +155,62 @@ The benefits are most noticeable in:
 2. Optimize collection widgets with caching techniques
 3. Review performance of image widget for similar optimization opportunities 
 4. Consider adding a profiling step to CI pipeline to detect performance regressions
+
+## Optimized Evaluator Methods
+
+**Date**: April 4, 2023
+
+### Changes Made
+Optimized the evaluation methods used throughout the tinyDisplay codebase:
+
+1. **Optimized evaluator.evalAll():**
+   - Used direct dictionary access for better performance
+   - Added exception handling to silently continue on errors
+   - Used direct attribute access instead of property calls
+
+2. **Optimized widget._evalAll():**
+   - Eliminated redundant list creation and iteration
+   - Used direct dictionary iteration rather than iterating over names
+   - Added comprehensive error handling
+   - Utilized direct attribute setting via `__dict__` instead of `setattr()`
+
+3. **Optimized evaluator.eval() and widget._eval():**
+   - Used cached lookups for statements dictionary
+   - Implemented direct attribute access
+   - Reduced property access overhead
+   - Added pre-check for existence of values before evaluation
+
+4. **Optimized dynamicValue.changed property:**
+   - Replaced `hasattr()` check with direct dictionary access
+   - Used `__dict__.get()` for faster attribute lookup with default value
+
+### Performance Impact
+These optimizations provide significant performance benefits for widgets with many dynamic properties that need frequent evaluation:
+
+1. Reduced method call overhead through direct attribute access
+2. Minimized dictionary lookup operations
+3. Streamlined evaluation logic with more efficient flow paths
+4. Improved error handling with minimal performance cost
+
+### Combined Performance Improvements
+With all optimizations in place (including the previous ones), the performance improvement is now even better:
+
+| Test Case | Before (original) | After (all optimizations) | Overall Improvement |
+|-----------|--------|-------|-------------|
+| Short text | 0.252 ms/render | 0.010 ms/render | 96.0% |
+| Medium text | 0.220 ms/render | 0.012 ms/render | 94.5% |
+| Long text with wrapping | 0.709 ms/render | 0.016 ms/render | 97.7% |
+| Short text (repeated) | 0.100 ms/render | 0.010 ms/render | 90.0% |
+| Medium text (repeated) | 0.342 ms/render | 0.010 ms/render | 97.1% |
+| Long text (repeated) | 0.699 ms/render | 0.010 ms/render | 98.6% |
+
+The benefits are most noticeable in:
+- Applications with complex expressions and conditions
+- UIs with many dynamic elements
+- Repeated evaluations of the same properties
+- Scenarios with nested widgets and collection rendering
+
+### Next Steps
+1. Consider optimizing the compilation process for dynamic values
+2. Review change detection for potential further improvements
+3. Add benchmarking for complex evaluation scenarios

@@ -224,9 +224,19 @@ class widget(metaclass=abc.ABCMeta):
         :raises: AttributeError
         """
         try:
-            value = self._dV.eval(name)
-            if self._dV._statements[name].changed:
-                setattr(self, name, value)
+            # Using direct dictionary access for better performance
+            statements = self._dV._statements
+            if name not in statements:
+                raise KeyError(f"{name} not in evaluator")
+                
+            statement = statements[name]
+            value = statement.eval()
+            
+            # Direct attribute access is faster than property access
+            if hasattr(statement, "_changed") and statement._changed:
+                # Using __dict__ directly avoids the overhead of setattr
+                self.__dict__[name] = value
+                
             return value
         except KeyError as ex:
             # It's a KeyError from the perspective of the evaluator but from the
@@ -243,16 +253,25 @@ class widget(metaclass=abc.ABCMeta):
         :raises: `tinyDisplay.exceptions.ValidationError`
         """
         changed = False
-        # Get list of names once instead of iterating multiple times
-        names = list(self._dV)
-        for name in names:
+        # Use direct dictionary access for better performance
+        dv_dict = self._dV._statements
+        
+        # Iterate directly over dictionary for better performance
+        for name, statement in dv_dict.items():
             try:
-                value = self._dV.eval(name)
-                if self._dV._statements[name].changed:
-                    setattr(self, name, value)
+                value = statement.eval()
+                # Direct attribute access is faster than property access
+                if hasattr(statement, "_changed") and statement._changed:
+                    # Use direct dictionary access to set attribute
+                    self.__dict__[name] = value
                     changed = True
             except KeyError:
                 continue
+            except Exception as ex:
+                # Log errors but continue processing other values
+                self._logger.debug(f"Error evaluating {name}: {ex}")
+                continue
+                
         return changed
 
     def _fixColors(self):
