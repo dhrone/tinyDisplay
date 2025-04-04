@@ -13,12 +13,11 @@ import math
 import os
 import time
 import warnings
-from collections import deque
+from collections import deque, ChainMap
 from inspect import getfullargspec, getmro
 from pathlib import Path
 from queue import Empty, Full, Queue
 from threading import Event, Thread
-from copy import deepcopy
 
 from PIL import ImageColor
 from simple_pid import PID
@@ -1346,16 +1345,10 @@ class dynamicValue:
             not intended to produce a new value (used by store function)
         :raises ValidationError: If the evaluated value failes its validation test
         """
-
-        d = {**self._dataset, **self._localDataset}
+        # Use ChainMap instead of merging dictionaries
+        d = ChainMap(self._localDataset, self._dataset)
 
         if self.func is not None:
-            errMsg = (
-                f"While evaluating {self.name} with '{self.source}'"
-                if self.name is not None
-                else f"While evaluating '{self.source}'"
-            )
-
             if not self.static or not hasattr(self, "prevValue"):
                 try:
                     ans = self.func(d)
@@ -1363,11 +1356,21 @@ class dynamicValue:
                     raise
                 except (KeyError, TypeError, AttributeError) as ex:
                     if self._debug:
+                        errMsg = (
+                            f"While evaluating {self.name} with '{self.source}'"
+                            if self.name is not None
+                            else f"While evaluating '{self.source}'"
+                        )
                         raise EvaluationError(
                             f"{errMsg} a {ex.__class__.__name__} error occured: {' '.join(ex.args)}"
                         )
                     ans = self.default
                 except Exception as ex:
+                    errMsg = (
+                        f"While evaluating {self.name} with '{self.source}'"
+                        if self.name is not None
+                        else f"While evaluating '{self.source}'"
+                    )
                     raise EvaluationError(
                         f"{errMsg} a {ex.__class__.__name__} error occured: {' '.join(ex.args)}"
                     )
@@ -1376,21 +1379,32 @@ class dynamicValue:
         else:
             ans = self.source
 
-        try:
-            self._changed = (
-                False
-                if hasattr(self, "prevValue") and self.prevValue == ans
-                else True
-            )
-        # If objects are not comparible
-        except:
+        # Streamlined change detection
+        if not hasattr(self, "prevValue"):
+            # First evaluation, always consider it changed
             self._changed = True
+        elif ans is self.prevValue:
+            # Fast path: Same object identity means no change
+            self._changed = False
+        elif type(ans) != type(self.prevValue):
+            # Different types means change
+            self._changed = True
+        else:
+            # Safe comparison with same types
+            try:
+                self._changed = ans != self.prevValue
+            except:
+                # For truly incomparable objects
+                self._changed = True
 
-        if self.validator is not None:
+        if self._changed and self.validator is not None:
             if not self.validator(ans):
-                raise ValidationError(
-                    f"While evaluating {self.name} with '{self.source}': {ans} is not a valid result"
+                errMsg = (
+                    f"While evaluating {self.name} with '{self.source}'"
+                    if self.name is not None
+                    else f"While evaluating '{self.source}'"
                 )
+                raise ValidationError(f"{errMsg}: {ans} is not a valid result")
 
         self.prevValue = ans
         return ans
@@ -1434,14 +1448,9 @@ def image2Text(img, background="black"):
             else:
                 v = " " if pixel == background else "*"
             s += v
-        # Ensure consistent line lengths by limiting to img.size[0]
         retval += f"\n|{s[0:img.size[0]]}|"
     retval += "\n" + ("-" * (img.size[0] + 2))
-    
-    # Standardize line endings and remove trailing spaces to make comparisons more robust
-    lines = retval.splitlines()
-    sanitized_lines = [line.rstrip() for line in lines]
-    return "\n".join(sanitized_lines)
+    return retval
 
 
 def compareImage(i1, i2, debug=False):

@@ -289,14 +289,17 @@ class widget(metaclass=abc.ABCMeta):
         if "image" in self.__dict__:
             # Initialize image attributes cache if needed
             if "_image_attrs" not in self.__dict__:
-                self._image_attrs = set(dir(self.image))
+                # Create a set for faster lookups
+                self.__dict__["_image_attrs"] = set(dir(self.__dict__["image"]))
 
-            if name in self._image_attrs:
-                return getattr(self.image, name)
+            # Use the cached attribute set for faster lookups
+            if name in self.__dict__["_image_attrs"]:
+                # Direct access to image via __dict__ to avoid recursive __getattr__ calls
+                return getattr(self.__dict__["image"], name)
 
         msg = f"{self.__class__.__name__} object {self.name} has no attribute {name}"
         if "image" in self.__dict__:
-            msg += f". image is type({type(self.image)})"
+            msg += f". image is type({type(self.__dict__['image'])})"
         raise AttributeError(msg)
 
     def __repr__(self):
@@ -622,6 +625,7 @@ class widget(metaclass=abc.ABCMeta):
                 raise
             else:
                 self._logger.warning(f"Render for {self.name} failed: {ex}")
+                #raise
                 return (img, False)
 
         self._updateTimers(force)
@@ -681,16 +685,22 @@ class text(widget):
         )
         self._evalAll()
 
+        # Initialize font
         self._font = font or _textDefaultFont
         self._lineSpacing = lineSpacing
         self._antiAlias = antiAlias
         self._wrap = wrap
-        self._last_value = None
-        self._last_tSize = None
-        self._word_width_cache = {}  # Cache word widths
-
-        self._tsDraw = ImageDraw.Draw(Image.new(self._mode, (0, 0), 0))
+        
+        # Setup drawing surface
+        self._tsDraw = ImageDraw.Draw(Image.new(self._mode, (1, 1)))
         self._tsDraw.fontmode = self._fontMode
+
+        # Pre-initialize caches for better performance
+        self.__dict__['_size_cache'] = {}
+        self.__dict__['_word_width_cache'] = {}
+        self.__dict__['_combined_width_cache'] = {}
+        self.__dict__['_last_value'] = None
+        self.__dict__['_is_bitmap_font'] = "getmetrics" in dir(self._font)
 
         self.render(reset=True)
 
@@ -712,16 +722,32 @@ class text(widget):
         return "1"
 
     def _makeWrapped(self, value, width):
+        # Split the input into words only once
         vl = value.split(" ")
         lines = []
         line = ""
         
-        # Get word widths with caching
+        # Initialize word width cache if needed
+        if not hasattr(self, '_word_width_cache'):
+            self.__dict__['_word_width_cache'] = {}
+            
+        # Cache for combined text sizes to avoid repeated _sizeLine calls
+        if not hasattr(self, '_combined_width_cache'):
+            self.__dict__['_combined_width_cache'] = {}
+            
+        # Get word widths with caching - process all words at once
         word_widths = {}
         for w in vl:
-            if w not in self._word_width_cache:
-                self._word_width_cache[w] = self._sizeLine(w)[0]
-            word_widths[w] = self._word_width_cache[w]
+            # Use direct dictionary access for better performance
+            cache = self.__dict__['_word_width_cache']
+            if w not in cache:
+                cache[w] = self._sizeLine(w)[0]
+            word_widths[w] = cache[w]
+        
+        # Cache space width - calculated only once
+        if " " not in self.__dict__['_word_width_cache']:
+            self.__dict__['_word_width_cache'][" "] = self._sizeLine(" ")[0]
+        space_width = self.__dict__['_word_width_cache'][" "]
         
         for w in vl:
             # If the line is empty, just add the word
@@ -729,44 +755,81 @@ class text(widget):
                 line = w
                 continue
                 
-            # Check if adding this word would exceed width
-            # Calculate without calling _sizeLine by using cached word widths
-            current_width = self._sizeLine(line)[0]
-            space_width = self._sizeLine(" ")[0]
-            word_width = word_widths[w]
+            # Use a unique key for the combined text
+            combined_key = line + " " + w
+            combined_width_cache = self.__dict__['_combined_width_cache']
             
-            if current_width + space_width + word_width <= width:
-                line = line + " " + w
+            # Check if we already know the width of this combined text
+            if combined_key not in combined_width_cache:
+                # If not in cache, calculate using individual word widths when possible
+                if line in self.__dict__['_word_width_cache']:
+                    # We can calculate the width without calling _sizeLine again
+                    current_width = self.__dict__['_word_width_cache'][line]
+                else:
+                    # We need to calculate the width of the current line
+                    current_width = self._sizeLine(line)[0]
+                    self.__dict__['_word_width_cache'][line] = current_width
+                
+                # Calculate the combined width and cache it
+                combined_width = current_width + space_width + word_widths[w]
+                combined_width_cache[combined_key] = combined_width
+            else:
+                # Use cached combined width
+                combined_width = combined_width_cache[combined_key]
+            
+            # Decide whether to add word to current line or start a new line
+            if combined_width <= width:
+                line = combined_key
             else:
                 lines.append(line)
                 line = w
         
+        # Don't forget the last line
         if len(line) > 0:
             lines.append(line)
 
         return "\n".join(lines)
 
     def _sizeLine(self, value):
+        # Fast path for empty strings
         if value == "" or value is None:
             return (0, 0)
             
-        # Return cached size if text hasn't changed
-        if hasattr(self, '_size_cache') and value in self._size_cache:
-            return self._size_cache[value]
+        # Use direct dictionary access for caches
+        dict_self = self.__dict__
             
-        # Initialize cache if needed
-        if not hasattr(self, '_size_cache'):
-            self._size_cache = {}
+        # Initialize cache if needed - using direct dictionary access
+        if '_size_cache' not in dict_self:
+            dict_self['_size_cache'] = {}
+            
+        # Return cached size if text hasn't changed - using direct dictionary access
+        size_cache = dict_self['_size_cache']
+        if value in size_cache:
+            return size_cache[value]
 
-        if "getmetrics" in dir(self._font):
-            # Bitmap font path
-            ascent, descent = self._font.getmetrics()
+        # Cache font reference to avoid repeated lookups
+        font = dict_self['_font']
+        
+        # Cache whether we're using a bitmap or TrueType font - compute only once
+        if '_is_bitmap_font' not in dict_self:
+            dict_self['_is_bitmap_font'] = "getmetrics" in dir(font)
+            
+        # Cache drawing object - create only once
+        if '_tsDraw' not in dict_self:
+            dict_self['_tsDraw'] = ImageDraw.Draw(Image.new('RGBA', (1, 1)))
+        tsDraw = dict_self['_tsDraw']
+
+        if dict_self['_is_bitmap_font']:
+            # Bitmap font path - get metrics once
+            ascent, descent = font.getmetrics()
             h = 0
             w = 0
+            
+            # Process each line
             for v in value.split("\n"):
                 try:
-                    # Use getbbox() instead of getmask().getbbox() for more accurate sizing
-                    bbox = self._tsDraw.textbbox((0, 0), v, font=self._font)
+                    # Get text boundaries
+                    bbox = tsDraw.textbbox((0, 0), v, font=font)
                     tw = bbox[2] - bbox[0]
                     th = bbox[3] - bbox[1] + descent
                     w = max(w, tw)
@@ -776,58 +839,90 @@ class text(widget):
             tSize = (w, h)
         else:
             # TrueType font path
-            bbox = self._tsDraw.textbbox(
-                (0, 0), value, font=self._font, spacing=self._lineSpacing
+            # Cache line spacing to avoid attribute lookup
+            line_spacing = dict_self.get('_lineSpacing', 0)
+            bbox = tsDraw.textbbox(
+                (0, 0), value, font=font, spacing=line_spacing
             )
             tSize = (bbox[2] - bbox[0], bbox[3] - bbox[1])
 
+        # Ensure valid size
         tSize = (0, 0) if tSize[0] == 0 else tSize
         
-        # Cache the result
-        self._size_cache[value] = tSize
+        # Cache the result using direct dictionary access
+        size_cache[value] = tSize
         return tSize
 
     def _render(self, force=False, newData=False, *args, **kwargs):
-        # If the string to render has not changed then return current image
-        value = str(self._value)
+        # Use direct dictionary access for better performance
+        dict_self = self.__dict__
         
-        # Quick return if nothing changed
-        if not newData and not force and value == self._last_value and self.image:
-            return (self.image, False)
+        # Convert value to string - cache dictionary lookup
+        value = str(dict_self['_value'])
+        
+        # Initialize last_value if needed
+        if '_last_value' not in dict_self:
+            dict_self['_last_value'] = None
+        
+        # Quick return if nothing changed - avoid unnecessary rendering
+        if not newData and not force and value == dict_self.get('_last_value') and 'image' in dict_self:
+            return (dict_self['image'], False)
             
-        self._reprVal = f"'{value}'"
-        self._last_value = value
+        # Update representation value and last value cache
+        dict_self['_reprVal'] = f"'{value}'"
+        dict_self['_last_value'] = value
 
-        # Only calculate size if needed (when value or force changed)
-        if self._wrap and self._width is not None:
-            # Wrap only if a width was requested, otherwise ignore
-            value = self._makeWrapped(value, self._width)
-
-        tSize = self._sizeLine(value)
-        self._last_tSize = tSize
+        # Access width and wrap settings with direct dictionary access
+        width = dict_self.get('_width')
         
-        # Only create a new text image if text has changed or force is true
-        img = Image.new(self._mode, tSize, self._background)
+        # Only wrap if necessary
+        if dict_self.get('_wrap', False) and width is not None:
+            value = self._makeWrapped(value, width)
+
+        # Get the text size - this will use the cached size if available
+        tSize = self._sizeLine(value)
+        
+        # Cache the result
+        dict_self['_last_tSize'] = tSize
+        
+        # Get background color directly
+        background = dict_self.get('_background', (0, 0, 0, 0))
+        
+        # Create a new image for the text
+        img = Image.new(dict_self['_mode'], tSize, background)
+        
+        # Only draw text if the image has width
         if img.size[0] != 0:
             d = ImageDraw.Draw(img)
-            d.fontmode = self._fontMode
-            just = {"l": "left", "r": "right", "m": "center"}.get(self.just[0])
+            
+            # Get the font mode directly
+            d.fontmode = dict_self.get('_fontMode', '1')
+            
+            # Get justification directly
+            just_map = {"l": "left", "r": "right", "m": "center"}
+            just = just_map.get(dict_self.get('just', 'lt')[0], "left")
+            
+            # Draw the text
             d.text(
                 (0, 0),
                 value,
-                font=self.font,
-                fill=self._foreground,
-                spacing=self._lineSpacing,
+                font=dict_self['_font'],
+                fill=dict_self.get('_foreground', 'white'),
+                spacing=dict_self.get('_lineSpacing', 0),
                 align=just,
             )
 
+        # Calculate the final size
         size = (
-            self._width if self._width is not None else img.size[0],
-            self._height if self._height is not None else img.size[1],
+            width if width is not None else img.size[0],
+            dict_self.get('_height') if dict_self.get('_height') is not None else img.size[1],
         )
+        
+        # Clear and place the image
         self.clear(size)
-        self._place(wImage=img, just=self.just)
-        return (self.image, True)
+        self._place(wImage=img, just=dict_self.get('just', 'lt'))
+        
+        return (dict_self['image'], True)
 
 
 class progressBar(widget):
