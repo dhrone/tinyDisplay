@@ -1159,9 +1159,6 @@ class marquee(widget):
             a = a if type(a) in [tuple, list] else (a,)
             self._actions.append(a)
 
-        self._timeline = []
-        self._tick = 0
-
         if not self._dV._statements["_moveWhen"].dynamic:
             self._compile(
                 moveWhen or self._shouldIMove,
@@ -1170,7 +1167,15 @@ class marquee(widget):
                 dynamic=True,
             )
 
-        self.render(reset=True, move=False)
+        # Precompute animation timeline and initial positions (stateless)
+        self._pauses = []
+        self._pauseEnds = []
+        self._adjustWidgetSize()
+        self._timeline = []
+        self._computeTimeline()
+        # Store initial and last position for diffing
+        self._initialPos = self._timeline[0] if self._timeline else (0, 0)
+        self._lastPos = self._initialPos
 
     @abc.abstractmethod
     def _shouldIMove(self, *args, **kwargs):
@@ -1259,15 +1264,14 @@ class marquee(widget):
         return (curPos, tickCount)
 
     def _resetMovement(self):
-        self.clear()
-        self._tick = 0
+        """Recompute the animation timeline when a reset is needed."""
         self._pauses = []
         self._pauseEnds = []
         self._adjustWidgetSize()
-        tx, ty = self._place(wImage=self._aWI, just=self.just)
-        self._curPos = self._lastPos = (tx, ty)
         self._timeline = []
         self._computeTimeline()
+        # Reset lastPos so next render repaints
+        self._lastPos = None
 
     @staticmethod
     def _withinDisplayArea(pos, d):
@@ -1300,29 +1304,47 @@ class marquee(widget):
         pass  # pragma: no cover
 
     def _render(self, force=False, tick=None, move=True, newData=False):
-        self._tick = tick or self._tick
+        """Render frames statelessly based on an external tick index."""
+        # Determine tick index (default 0)
+        t = 0 if tick is None else tick
+        idx = t % len(self._timeline) if self._timeline else 0
+        # Render nested widget first
         img, updated = self._widget.render(
-            force=force, tick=tick, move=move, newData=newData
+            force=force, tick=t, move=move, newData=newData
         )
-        if updated:
-            self._adjustWidgetSize()
-        if (updated and self._resetOnChange) or force:
+        # Optionally rebuild timeline on reset or nested change
+        if force or (updated and self._resetOnChange):
             self._resetMovement()
-            self._tick = self._tick + 1 if move else self._tick
-            return (self.image, True)
-
-        moved = False
-        self._curPos = self._timeline[self._tick % len(self._timeline)]
-
-        if self._curPos != self._lastPos or updated:
+        # Compute current position for this tick
+        curPos = self._timeline[idx] if self._timeline else self._initialPos
+        # Determine if repaint is needed
+        moved = updated or (curPos != getattr(self, '_lastPos', None))
+        if moved:
             self.image = self._paintScrolledWidget()
-            moved = True
-            self._lastPos = self._curPos
-
-        self._tick = (
-            (self._tick + 1) % len(self._timeline) if move else self._tick
-        )
+        # Store last position for diffing next render
+        self._lastPos = curPos
         return (self.image, moved)
+
+    # synchronize timelines with another marquee
+    def synchronize(self, other, at_event="pause"):
+        """Rotate this marquee's timeline so it aligns with another marquee's event."""
+        if at_event == "pause":
+            sync_points = other._pauses
+        elif at_event == "pauseEnd":
+            sync_points = other._pauseEnds
+        elif at_event == "start":
+            sync_points = [0]
+        else:
+            raise ValueError(f"Unknown at_event {at_event}")
+        if not sync_points:
+            return
+        offset = sync_points[0]
+        if self._timeline:
+            # rotate timeline so index 0 aligns with the event offset
+            self._timeline = self._timeline[offset:] + self._timeline[:offset]
+        # reset initial and last positions for change detection
+        self._initialPos = self._timeline[0] if self._timeline else self._initialPos
+        self._lastPos = self._initialPos
 
 
 class slide(marquee):
