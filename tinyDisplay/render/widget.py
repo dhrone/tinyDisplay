@@ -1167,15 +1167,8 @@ class marquee(widget):
                 dynamic=True,
             )
 
-        # Precompute animation timeline and initial positions (stateless)
-        self._pauses = []
-        self._pauseEnds = []
-        self._adjustWidgetSize()
-        self._timeline = []
-        self._computeTimeline()
-        # Store initial and last position for diffing
-        self._initialPos = self._timeline[0] if self._timeline else (0, 0)
-        self._lastPos = self._initialPos
+        # Initialize movement: place child widget, build timeline, set positions
+        self._resetMovement()
 
     @abc.abstractmethod
     def _shouldIMove(self, *args, **kwargs):
@@ -1264,14 +1257,23 @@ class marquee(widget):
         return (curPos, tickCount)
 
     def _resetMovement(self):
-        """Recompute the animation timeline when a reset is needed."""
+        """Reset widget placement and rebuild its timeline and positions."""
+        # Clear the marquee's canvas
+        self.clear()
+        # Reset pause indices
         self._pauses = []
         self._pauseEnds = []
+        # Prepare underlying widget image and placement
         self._adjustWidgetSize()
+        # Place the child widget and record start position
+        tx, ty = self._place(wImage=self._aWI, just=self.just)
+        self._curPos = (tx, ty)
+        # Build the timeline based on current placement
         self._timeline = []
         self._computeTimeline()
-        # Reset lastPos so next render repaints
-        self._lastPos = None
+        # Store initial and last positions
+        self._initialPos = self._curPos
+        self._lastPos = self._curPos
 
     @staticmethod
     def _withinDisplayArea(pos, d):
@@ -1425,8 +1427,10 @@ class slide(marquee):
                         distance, a[0], curPos, tickCount
                     )
         else:
-            self.reprVal = "not sliding"
-            self._timeline.append(self._curPos)
+            # No movement: mark not sliding and record current position if set
+            self._reprVal = "not sliding"
+            pos = getattr(self, '_curPos', (0, 0))
+            self._timeline.append(pos)
 
     def _paintScrolledWidget(self):
         self.clear()
@@ -1570,8 +1574,10 @@ class scroll(marquee):
             ):
                 self._timeline.pop()
         else:
+            # No scrolling: record current or default position
             self._reprVal = "not scrolling"
-            self._timeline.append(self._curPos)
+            pos = getattr(self, '_curPos', (0, 0))
+            self._timeline.append(pos)
 
     def _computeShadowPlacements(self):
         lShadows = []
