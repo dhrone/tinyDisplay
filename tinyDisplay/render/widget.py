@@ -13,6 +13,7 @@ import os
 import pathlib
 import queue
 import threading
+from collections import deque
 from inspect import currentframe, getargvalues, getfullargspec, isclass
 from time import monotonic
 from urllib.request import urlopen
@@ -66,9 +67,18 @@ class widget(metaclass=abc.ABCMeta):
     :param trim: Determine whether to trim image after render and what part of the
         image to trim if yes.
     :type time: str
+    :param bufferSize: Number of past rendered images to store (for testing)
+    :type bufferSize: int
+    
+    .. note::
+       When bufferSize > 1, a ring buffer is created to store the last N render results.
+       Each entry in the buffer is a tuple of (image, changed) where:
+       - image: The PIL Image that was rendered
+       - changed: Boolean flag indicating if the image changed during that render
+       This allows tracking not only the images but also when they changed or stayed the same.
     """
 
-    NOTDYNAMIC = ["name", "dataset"]
+    NOTDYNAMIC = ["name", "dataset", "bufferSize"]
 
     def __init__(
         self,
@@ -85,6 +95,7 @@ class widget(metaclass=abc.ABCMeta):
         background=None,
         just="lt",
         trim=None,
+        bufferSize=1,
         **kwargs,
     ):
 
@@ -102,6 +113,10 @@ class widget(metaclass=abc.ABCMeta):
         self.type = self.__class__.__name__
         self.current = None
         self._reprVal = None
+        
+        # Initialize the ring buffer for storing past rendered images
+        self._bufferSize = max(1, bufferSize)
+        self._imageBuffer = deque(maxlen=self._bufferSize) if self._bufferSize > 1 else None
 
         # Initialize logging system
         self._logger = logging.getLogger("tinyDisplay")
@@ -639,6 +654,11 @@ class widget(metaclass=abc.ABCMeta):
             # If any trim is selected, perform trim if image has changed
             if self._trim is not None and changed:
                 img = self.trim(self._trim)
+                
+            # Store the image in the buffer regardless of whether it changed
+            if self._imageBuffer is not None:
+                # Store a copy to avoid reference issues
+                self._imageBuffer.append((img.copy(), changed))
         except Exception as ex:
             if self._debug:
                 raise
@@ -654,6 +674,168 @@ class widget(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def _render(self, *args, **kwargs):
         pass  # pragma: no cover
+
+    def print(self, n=5):
+        """
+        Print the last n rendered images to the console as ASCII art.
+        
+        :param n: Number of images to print
+        :type n: int
+        """
+        if self._imageBuffer is None:
+            # If buffer is disabled, just print the current image
+            print(f"Buffer disabled, showing current image for {self.name}:")
+            print(image2Text(self.image.convert('1') if self.image.mode != '1' else self.image, self._background))
+            return
+            
+        buffer_size = len(self._imageBuffer)
+        n = min(n, buffer_size)
+        
+        if n != buffer_size and n < buffer_size:
+            print(f"Requested {n} images but buffer contains {buffer_size}, showing last {n}.")
+            
+        print(f"Showing last {n} images for widget {self.name}:")
+        for i, entry in enumerate(list(self._imageBuffer)[-n:]):
+            img, changed = entry
+            print(f"Image {i+1}/{n} (Changed: {changed}):")
+            # Convert to mode '1' if not already in that mode
+            display_img = img.convert('1') if img.mode != '1' else img
+            print(image2Text(display_img, self._background))
+            print()  # Add an empty line between images
+    
+    def save(self, filename, n=1):
+        """
+        Save the last n rendered images to a PNG file, stacked vertically.
+        
+        :param filename: Filename to save images to
+        :type filename: str
+        :param n: Number of images to save
+        :type n: int
+        """
+        if self._imageBuffer is None and n > 1:
+            print(f"Buffer disabled, only saving current image for {self.name}")
+            self.image.save(filename)
+            return
+            
+        # If buffer enabled, get images to save
+        images_to_save = []
+        if self._imageBuffer is None:
+            # Just use current image
+            images_to_save = [(self.image, False)]
+        else:
+            # Get last n images from buffer
+            buffer_size = len(self._imageBuffer)
+            n = min(n, buffer_size)
+            images_to_save = list(self._imageBuffer)[-n:]
+            
+        if not images_to_save:
+            print(f"No images to save for {self.name}")
+            return
+            
+        # Calculate total height with spacing (5 pixels between images)
+        spacing = 5
+        width = max(img[0].width for img in images_to_save)
+        
+        # Add text height for the changed status
+        font_height = 10  # Approximate height for text
+        total_height = sum(img[0].height + font_height for img in images_to_save) + spacing * (len(images_to_save) - 1)
+        
+        # Create a new image to hold all the images
+        combined = Image.new(
+            self._mode,
+            (width, total_height),
+            self._background
+        )
+        
+        # Create drawing context
+        draw = ImageDraw.Draw(combined)
+        
+        # Paste each image into the combined image
+        y_offset = 0
+        for i, (img, changed) in enumerate(images_to_save):
+            # Add the image
+            combined.paste(img, (0, y_offset))
+            
+            # Add status text
+            text = f"Image {i+1}/{len(images_to_save)} (Changed: {changed})"
+            draw.text((0, y_offset + img.height), text, fill="white")
+            
+            y_offset += img.height + font_height + spacing
+            
+        # Save the combined image
+        combined.save(filename)
+        print(f"Saved {len(images_to_save)} images to {filename}")
+    
+    def static(self, n=1):
+        """
+        Compare the last n images to check if they are all identical.
+        
+        :param n: Number of images to compare
+        :type n: int
+        :returns: True if all images are identical, False otherwise
+        :rtype: bool
+        """
+        if self._imageBuffer is None or n <= 1:
+            # If buffer is disabled or only one image requested, return True
+            return True
+            
+        # Get the images to compare
+        buffer_size = len(self._imageBuffer)
+        if buffer_size < 2:
+            # Need at least 2 images to compare
+            return True
+            
+        n = min(n, buffer_size)
+        entries = list(self._imageBuffer)[-n:]
+        
+        # Compare the first image with all others
+        first_img = entries[0][0]  # Extract image from (image, changed) tuple
+        for entry in entries[1:]:
+            img = entry[0]  # Extract image from (image, changed) tuple
+            # Use ImageChops.difference to compare images
+            diff = ImageChops.difference(first_img, img)
+            # If difference has any non-zero pixel, images are different
+            if diff.getbbox():
+                return False
+                
+        return True
+
+    def get_buffer(self):
+        """
+        Get the current image buffer.
+        
+        :returns: List of (image, changed) tuples if buffer is enabled, or None if disabled
+        :rtype: list or None
+        """
+        if self._imageBuffer is None:
+            return None
+        return list(self._imageBuffer)
+        
+    def buffer_stats(self):
+        """
+        Get statistics about the image buffer.
+        
+        :returns: Dictionary with buffer statistics
+        :rtype: dict
+        """
+        if self._imageBuffer is None:
+            return {
+                "enabled": False,
+                "size": 0,
+                "max_size": 1,
+                "changes": 0
+            }
+            
+        buffer = list(self._imageBuffer)
+        changes = sum(1 for _, changed in buffer if changed)
+        
+        return {
+            "enabled": True,
+            "size": len(buffer),
+            "max_size": self._bufferSize,
+            "changes": changes,
+            "change_ratio": changes / len(buffer) if buffer else 0
+        }
 
 
 _textDefaultFont = bmImageFont(
