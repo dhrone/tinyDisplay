@@ -684,8 +684,10 @@ class widget(metaclass=abc.ABCMeta):
         """
         if self._imageBuffer is None:
             # If buffer is disabled, just print the current image
-            print(f"Buffer disabled, showing current image for {self.name}:")
-            print(image2Text(self.image.convert('1') if self.image.mode != '1' else self.image, self._background))
+            print(f"Buffer not available for {self.name or 'unnamed widget'} (bufferSize=1).")
+            print(f"Set bufferSize > 1 when creating the widget to enable buffer tracking.")
+            print(f"Showing current image only:")
+            self._print_image_as_ascii(self.image)
             return
             
         buffer_size = len(self._imageBuffer)
@@ -694,14 +696,42 @@ class widget(metaclass=abc.ABCMeta):
         if n != buffer_size and n < buffer_size:
             print(f"Requested {n} images but buffer contains {buffer_size}, showing last {n}.")
             
-        print(f"Showing last {n} images for widget {self.name}:")
+        print(f"Showing last {n} images for widget {self.name or 'unnamed widget'}:")
         for i, entry in enumerate(list(self._imageBuffer)[-n:]):
             img, changed = entry
             print(f"Image {i+1}/{n} (Changed: {changed}):")
-            # Convert to mode '1' if not already in that mode
-            display_img = img.convert('1') if img.mode != '1' else img
-            print(image2Text(display_img, self._background))
+            self._print_image_as_ascii(img)
             print()  # Add an empty line between images
+    
+    def _print_image_as_ascii(self, img):
+        """
+        Print a single image as ASCII art with improved representation.
+        
+        :param img: The image to print
+        :type img: PIL.Image.Image
+        """
+        # Convert to mode '1' if not already in that mode
+        display_img = img.convert('1') if img.mode != '1' else img
+        
+        # Create border characters
+        width = display_img.width
+        h_border = "-" * (width + 2)
+        
+        print(h_border)
+        
+        # Print each row of pixels
+        for y in range(display_img.height):
+            row = "|"
+            for x in range(display_img.width):
+                # Get pixel value (0 is black, 255 is white in mode '1')
+                pixel = display_img.getpixel((x, y))
+                # Use character representation based on pixel value
+                char = " " if pixel == 0 else "*"  # Black is space, white is asterisk
+                row += char
+            row += "|"
+            print(row)
+            
+        print(h_border)
     
     def save(self, filename, n=1):
         """
@@ -713,7 +743,9 @@ class widget(metaclass=abc.ABCMeta):
         :type n: int
         """
         if self._imageBuffer is None and n > 1:
-            print(f"Buffer disabled, only saving current image for {self.name}")
+            print(f"Buffer not available for {self.name or 'unnamed widget'} (bufferSize=1).")
+            print(f"Set bufferSize > 1 when creating the widget to enable buffer tracking.")
+            print(f"Saving current image only to {filename}")
             self.image.save(filename)
             return
             
@@ -729,21 +761,21 @@ class widget(metaclass=abc.ABCMeta):
             images_to_save = list(self._imageBuffer)[-n:]
             
         if not images_to_save:
-            print(f"No images to save for {self.name}")
+            print(f"No images to save for {self.name or 'unnamed widget'}")
             return
             
         # Calculate total height with spacing (5 pixels between images)
         spacing = 5
-        width = max(img[0].width for img in images_to_save)
+        max_width = max(max(1, img[0].width) for img in images_to_save)
         
         # Add text height for the changed status
         font_height = 10  # Approximate height for text
-        total_height = sum(img[0].height + font_height for img in images_to_save) + spacing * (len(images_to_save) - 1)
+        total_height = sum(max(1, img[0].height) + font_height for img in images_to_save) + spacing * (len(images_to_save) - 1)
         
-        # Create a new image to hold all the images
+        # Create a new image to hold all the images - ensure minimum size of 1x1
         combined = Image.new(
             self._mode,
-            (width, total_height),
+            (max(1, max_width), max(1, total_height)),
             self._background
         )
         
@@ -753,14 +785,16 @@ class widget(metaclass=abc.ABCMeta):
         # Paste each image into the combined image
         y_offset = 0
         for i, (img, changed) in enumerate(images_to_save):
-            # Add the image
-            combined.paste(img, (0, y_offset))
-            
+            # Ensure the image has valid dimensions
+            if img.width > 0 and img.height > 0:
+                # Add the image
+                combined.paste(img, (0, y_offset))
+                
             # Add status text
             text = f"Image {i+1}/{len(images_to_save)} (Changed: {changed})"
-            draw.text((0, y_offset + img.height), text, fill="white")
+            draw.text((0, y_offset + max(1, img.height)), text, fill="white")
             
-            y_offset += img.height + font_height + spacing
+            y_offset += max(1, img.height) + font_height + spacing
             
         # Save the combined image
         combined.save(filename)
@@ -769,6 +803,12 @@ class widget(metaclass=abc.ABCMeta):
     def static(self, n=1):
         """
         Compare the last n images to check if they are all identical.
+        
+        This method performs two checks:
+        1. Verifies that none of the images are marked as changed (except possibly the first)
+        2. Performs a visual pixel-by-pixel comparison to ensure the images are identical
+        
+        Either check can identify a difference between images.
         
         :param n: Number of images to compare
         :type n: int
@@ -788,16 +828,31 @@ class widget(metaclass=abc.ABCMeta):
         n = min(n, buffer_size)
         entries = list(self._imageBuffer)[-n:]
         
-        # Compare the first image with all others
-        first_img = entries[0][0]  # Extract image from (image, changed) tuple
+        # Check 1: If any entry is marked as changed (except possibly the first one)
+        if any(entry[1] for entry in entries[1:]):
+            return False
+            
+        # Check 2: Verify the images themselves are visually identical using pixel comparison
+        first_img = entries[0][0]
         for entry in entries[1:]:
-            img = entry[0]  # Extract image from (image, changed) tuple
+            img = entry[0]
             # Use ImageChops.difference to compare images
-            diff = ImageChops.difference(first_img, img)
-            # If difference has any non-zero pixel, images are different
-            if diff.getbbox():
+            # Only proceed with comparison if both images have valid dimensions
+            if (first_img.width > 0 and first_img.height > 0 and 
+                img.width > 0 and img.height > 0):
+                # If dimensions don't match, images are different
+                if first_img.size != img.size:
+                    return False
+                    
+                # Compare pixels
+                diff = ImageChops.difference(first_img, img)
+                if diff.getbbox():  # If difference has any non-zero pixel
+                    return False
+            elif first_img.size != img.size:
+                # If one image is empty and the other isn't, they're different
                 return False
-                
+        
+        # Both checks passed, images are identical
         return True
 
     def get_buffer(self):
@@ -1649,10 +1704,12 @@ class scroll(marquee):
     :param gap: The amount of space to add in the x and y axis to the widget in
         order to create space between the beginning and the end of the widget.
     :type gap: (int, int) or (str, str)
+    :param size: The size of the scrolling container. If not provided, will calculate based on
+        scroll direction and contained widget size.
+    :type size: (int, int)
     """
 
-    def __init__(self, actions=[("rtl",)], *args, **kwargs):
-
+    def __init__(self, actions=[("rtl",)], size=None, *args, **kwargs):
         # Figure out which directions the scroll will move so that we can inform the _computeShadowPlacements method
         dirs = [
             v[0]
@@ -1666,10 +1723,30 @@ class scroll(marquee):
         h = True if ("ltr" in dirs or "rtl" in dirs) else False
         v = True if ("ttb" in dirs or "btt" in dirs) else False
         self._movement = (h, v)
+        
+        # Flag to track if we've already warned about missing size
+        self._size_warning_shown = False
 
-        super().__init__(actions=actions, *args, **kwargs)
+        super().__init__(actions=actions, size=size, *args, **kwargs)
 
     def _shouldIMove(self, *args, **kwargs):
+        # If no size was provided, adjust size based on scroll direction
+        if self.size == (0, 0):
+            widget_width = self._widget.image.size[0]
+            widget_height = self._widget.image.size[1]
+            
+            # For horizontal scrolling, default to a narrower width to force scrolling
+            # For vertical scrolling, default to a shorter height to force scrolling
+            horizontal_scroll = ("rtl",) in self._actions or ("ltr",) in self._actions
+            vertical_scroll = ("btt",) in self._actions or ("ttb",) in self._actions
+            
+            new_width = max(1, int(widget_width * 0.6)) if horizontal_scroll else widget_width
+            new_height = max(1, int(widget_height * 0.6)) if vertical_scroll else widget_height
+            
+            self._size = (new_width, new_height)
+            self.clear(self._size)
+            
+        # Now check if scrolling is needed
         if (
             ("rtl",) in self._actions or ("ltr",) in self._actions
         ) and self._widget.image.size[0] > self.size[0]:
@@ -1689,8 +1766,38 @@ class scroll(marquee):
         sizeX = self._widget.size[0] + gapX
         sizeY = self._widget.size[1] + gapY
         self._aWI = self._widget.image.crop((0, 0, sizeX, sizeY))
+        
+        # If no size was provided, adjust it based on scroll direction
+        if self.size == (0, 0):
+            # Log a warning that no size was provided (but only once)
+            if not self._size_warning_shown:
+                widget_name = self.name or "unnamed"
+                self._logger.warning(
+                    f"No size provided for scroll widget '{widget_name}'. "
+                    f"Auto-sizing to 60% of contained widget dimensions in scroll direction. "
+                    f"This may not be the intended behavior - consider explicitly setting the size."
+                )
+                self._size_warning_shown = True
+            
+            widget_width = self._widget.image.size[0]
+            widget_height = self._widget.image.size[1]
+            
+            # For horizontal scrolling, default to a narrower width to force scrolling
+            # For vertical scrolling, default to a shorter height to force scrolling
+            horizontal_scroll = ("rtl",) in self._actions or ("ltr",) in self._actions
+            vertical_scroll = ("btt",) in self._actions or ("ttb",) in self._actions
+            
+            new_width = max(1, int(widget_width * 0.6)) if horizontal_scroll else widget_width
+            new_height = max(1, int(widget_height * 0.6)) if vertical_scroll else widget_height
+            
+            self._size = (new_width, new_height)
+            self.clear(self._size)
 
     def _computeTimeline(self):
+        # Ensure at least one position in timeline
+        if len(self._timeline) == 0:
+            self._timeline.append(self._curPos)
+            
         if self._moveWhen:
             self._reprVal = "scrolling"
             tickCount = 0
@@ -1710,7 +1817,7 @@ class scroll(marquee):
                     )
 
             # If position has looped back to start remove last position to prevent stutter
-            if (
+            if len(self._timeline) > 1 and (
                 (
                     a[0] == "ltr"
                     and self._timeline[-1][0] - aws == self._timeline[0][0]
@@ -1731,7 +1838,9 @@ class scroll(marquee):
                 self._timeline.pop()
         else:
             self._reprVal = "not scrolling"
-            self._timeline.append(self._curPos)
+            # Ensure we have at least one position
+            if len(self._timeline) == 0:
+                self._timeline.append(self._curPos)
 
     def _computeShadowPlacements(self):
         lShadows = []
