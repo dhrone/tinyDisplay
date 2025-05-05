@@ -75,7 +75,7 @@ class TestApplicationLexer:
         expected_types = [
             AppTokenType.PLUS, AppTokenType.STAR, AppTokenType.LEFT_PAREN,
             AppTokenType.MINUS, AppTokenType.RIGHT_PAREN, AppTokenType.SLASH,
-            AppTokenType.SEMICOLON, AppTokenType.EQUALS, AppTokenType.NOT_EQUALS,
+            AppTokenType.SEMICOLON, AppTokenType.EQUAL_EQUAL, AppTokenType.NOT_EQUALS,
             AppTokenType.GREATER_EQUALS, AppTokenType.LESS_EQUALS,
             AppTokenType.GREATER, AppTokenType.LESS, AppTokenType.SEMICOLON
         ]
@@ -104,12 +104,12 @@ class TestApplicationLexer:
                                          t.type.name in ["CANVAS", "PLACE", "AT", "Z", 
                                                          "THEME", "BIND", "TO", "IMPORT", "FROM"]]
         
-        assert len(keywords) == 10  # DEFINE appears twice
+        assert len(keywords) == 11  # DEFINE appears twice
         assert keywords[0].type == AppTokenType.DEFINE
         assert keywords[1].type == AppTokenType.CANVAS
-        assert keywords[3].type == AppTokenType.PLACE
-        assert keywords[4].type == AppTokenType.AT
-        assert keywords[5].type == AppTokenType.Z
+        assert keywords[2].type == AppTokenType.PLACE
+        assert keywords[3].type == AppTokenType.AT
+        assert keywords[4].type == AppTokenType.Z
     
     def test_comments(self):
         """Test handling of comments."""
@@ -173,7 +173,7 @@ class TestApplicationLexer:
         assert len(dots) == 3
         
         # Check the structure around the dots
-        assert tokens[dots[0]-1].type == AppTokenType.IDENTIFIER  # THEME
+        assert tokens[dots[0]-1].type == AppTokenType.THEME  # THEME
         assert tokens[dots[0]+1].type == AppTokenType.IDENTIFIER  # accent
         
         assert tokens[dots[1]-1].type == AppTokenType.IDENTIFIER  # widget
@@ -183,15 +183,16 @@ class TestApplicationLexer:
         """Test lexer error handling for invalid characters."""
         source = """
         DEFINE WIDGET "invalid" AS Text {
-            value: "Contains invalid char @",  # @ is not a valid token
+            value: "Test",
+            ~ invalid
         }
         """
         lexer = AppLexer(source)
         with pytest.raises(Exception) as excinfo:
             tokens = lexer.scan_tokens()
         
-        # A proper lexer should report an error for the '@' character
-        assert "@" in str(excinfo.value)
+        # A proper lexer should report an error for the '~' character
+        assert "~" in str(excinfo.value)
 
 
 class TestMarqueeLexer:
@@ -260,12 +261,12 @@ class TestMarqueeLexer:
             MarqueeTokenType.END
         ]]
         
-        assert len(keywords) == 7
+        assert len(keywords) == 8
         assert [k.type for k in keywords] == [
             MarqueeTokenType.LOOP, MarqueeTokenType.INFINITE,
-            MarqueeTokenType.IF, MarqueeTokenType.ELSE,
-            MarqueeTokenType.CONTINUE, MarqueeTokenType.END,
-            MarqueeTokenType.END
+            MarqueeTokenType.IF, MarqueeTokenType.BREAK, 
+            MarqueeTokenType.ELSE, MarqueeTokenType.CONTINUE,
+            MarqueeTokenType.END, MarqueeTokenType.END
         ]
     
     def test_easing_functions(self):

@@ -109,6 +109,12 @@ class TokenType(Enum):
     MINUS = auto()           # -
     STAR = auto()            # *
     EQUALS = auto()          # =
+    EQUAL_EQUAL = auto()     # ==
+    NOT_EQUALS = auto()      # !=
+    GREATER = auto()         # >
+    LESS = auto()            # <
+    GREATER_EQUALS = auto()  # >=
+    LESS_EQUALS = auto()     # <=
 
 
 @dataclass
