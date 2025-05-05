@@ -1,0 +1,53 @@
+Suggested Parser Tests for Marquee Animation DSL
+Here's a comprehensive set of tests we could implement to thoroughly validate the parser functionality:
+1. Basic Movement Commands
+Move with Coordinates: Test MOVE(10, 50) for explicit coordinate movement
+Two-Dimensional Movement: Test MOVE(10, 50, 20, 30) for 2D coordinate movement
+Direction Constants: Test all directions - LEFT, RIGHT, UP, DOWN
+Move with Options: Test step, interval, easing options (e.g., {step=2, interval=3, easing=linear})
+Reset Position: Test with different modes (seamless, instant, fade)
+2. Control Flow
+Basic Loop: Test finite loop count LOOP(5) {...} END;
+Infinite Loop: Test LOOP(INFINITE) {...} END;
+Named Loop: Test LOOP(10 AS main_loop) {...} END;
+If Statement: Test simple condition IF(widget.x > 100) {...} END;
+If-Else: Test with else branch
+If-Elseif-Else: Test multiple conditional branches
+Break Statement: Test break inside loops
+Continue Statement: Test continue inside loops
+Nested Control Flow: Test loops inside if statements and vice versa
+3. High-Level Commands
+Scroll Command: Test with various options
+Slide Command: Test all actions (IN, OUT, IN_OUT) with all directions
+Popup Command: Test with custom delays and options
+High-level Command Combinations: Test sequences of high-level commands
+4. Timeline Optimization
+Period Statement: Test PERIOD(100) declaration
+Start At: Test START_AT(10) for delayed start
+Segment: Test SEGMENT(name, start, end) {...} END;
+Position At: Test position calculations POSITION_AT(t) => {...} END;
+Schedule At: Test scheduled actions SCHEDULE_AT(50, action);
+Variable Change Handling: Test ON_VARIABLE_CHANGE(var) {...} END;
+Multiple Variable Monitoring: Test ON_VARIABLE_CHANGE([var1, var2]) {...} END;
+5. Synchronization
+Sync Event: Test SYNC(event); declaration
+Wait For: Test WAIT_FOR(event, ticks); with timeout
+Multiple Sync Points: Test coordination between multiple sync points
+6. Expressions
+Property Access: Test widget and container property access
+Arithmetic Operations: Test addition, subtraction, multiplication, division
+Complex Expressions: Test nested expressions with parentheses
+Function Calls: Test built-in function references
+7. Error Handling & Edge Cases
+Syntax Errors: Test recovery from various syntax errors
+Semantic Errors: Test validation of incorrect semantics
+Empty Program: Test parsing an empty string
+Large Programs: Test parsing large files with many statements
+Complex Nesting: Test deeply nested control structures
+Comments: Test parsing with different comment styles (single and multi-line)
+Whitespace Handling: Test parsing with various whitespace patterns
+8. Complete Animation Sequences
+Marquee Scroll: Test a complete text scrolling animation
+Popup Animation: Test a complete popup animation sequence
+Multi-widget Coordination: Test coordinated animations with multiple parts
+Would you like to start with implementing a specific subset of these tests, or would you prefer to add more categories or test ideas first?
