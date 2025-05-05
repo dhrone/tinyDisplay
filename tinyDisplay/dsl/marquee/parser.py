@@ -646,15 +646,38 @@ class Parser:
     
     def _multiplication(self) -> Expression:
         """Parse multiplication and division."""
-        expr = self._primary()
+        expr = self._unary()
         
         while self._match(TokenType.STAR, TokenType.SLASH):
             operator = self._previous().lexeme
-            right = self._primary()
+            right = self._unary()
             location = Location(self._previous().line, self._previous().column)
             expr = BinaryExpr(left=expr, operator=operator, right=right, location=location)
         
         return expr
+    
+    def _unary(self) -> Expression:
+        """Parse unary operations like negation."""
+        if self._match(TokenType.MINUS):
+            token = self._previous()
+            location = Location(token.line, token.column)
+            
+            # Special case: if the next token is a literal number, create a negative literal
+            if self._check(TokenType.INTEGER):
+                number_token = self._advance()
+                value = -number_token.literal  # Negate the value
+                return Literal(value=value, location=location)
+            elif self._check(TokenType.FLOAT):
+                number_token = self._advance()
+                value = -number_token.literal  # Negate the value
+                return Literal(value=value, location=location)
+            
+            # Otherwise, create a unary expression: 0 - expr
+            expr = self._primary()
+            zero = Literal(value=0, location=location)
+            return BinaryExpr(left=zero, operator="-", right=expr, location=location)
+        
+        return self._primary()
     
     def _primary(self) -> Expression:
         """Parse primary expressions."""

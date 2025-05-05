@@ -90,7 +90,11 @@ class Lexer:
         elif c == '+':
             self._add_token(TokenType.PLUS)
         elif c == '-':
-            self._add_token(TokenType.MINUS)
+            # Check if this is a negative number
+            if self._is_digit(self._peek()):
+                self._number_with_sign(negative=True)
+            else:
+                self._add_token(TokenType.MINUS)
         elif c == '*':
             # Check for comments
             if self._match('*'):
@@ -262,6 +266,38 @@ class Lexer:
         # For normal identifiers, the literal value is the identifier text
         literal = text if token_type == TokenType.IDENTIFIER else None
         self._add_token(token_type, literal)
+    
+    def _number_with_sign(self, negative: bool = False) -> None:
+        """
+        Handle numeric literals with an optional sign.
+        
+        Args:
+            negative: Whether the number is negative.
+        """
+        # Consume all digits
+        while self._is_digit(self._peek()):
+            self._advance()
+        
+        # Look for a decimal point
+        if self._peek() == '.' and self._is_digit(self._peek_next()):
+            # Consume the decimal point
+            self._advance()
+            
+            # Consume the fraction part
+            while self._is_digit(self._peek()):
+                self._advance()
+            
+            # Add float token
+            value = float(self.source[self.start:self.current])
+            if negative:
+                value = -value
+            self._add_token(TokenType.FLOAT, value)
+        else:
+            # Add integer token
+            value = int(self.source[self.start+1:self.current])  # Skip the negative sign
+            if negative:
+                value = -value
+            self._add_token(TokenType.INTEGER, value)
     
     def _advance(self) -> str:
         """
