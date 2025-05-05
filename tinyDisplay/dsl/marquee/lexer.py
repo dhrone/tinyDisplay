@@ -104,6 +104,8 @@ class Lexer:
                 self._multi_line_comment()
             else:
                 self._add_token(TokenType.SLASH)
+        elif c == '%':
+            self._add_token(TokenType.PERCENT)
         
         # Handle two-character tokens
         elif c == '=':

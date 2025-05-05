@@ -56,6 +56,11 @@ class Validator:
         
         # Track timeline properties
         self.has_timeline_statements: bool = False
+        self.in_segment: bool = False
+        self.in_position_at: bool = False
+        
+        # Track segments for overlap detection
+        self.segments: List[Tuple[str, int, int, Location]] = []
     
     def validate(self) -> List[ValidationError]:
         """
@@ -76,7 +81,7 @@ class Validator:
         for event in self.used_sync_events:
             if event not in self.defined_sync_events:
                 self.errors.append(ValidationError(
-                    location=Location(0, 0),  # TODO: Track actual location
+                    location=Location(0, 0),  # We don't have location for these post-validations
                     message=f"Event '{event}' is used but never defined."
                 ))
         
@@ -126,6 +131,11 @@ class Validator:
         # Validate the movement parameters
         if stmt.direction is not None:
             # MOVE(direction, distance)
+            if stmt.direction not in [Direction.LEFT, Direction.RIGHT, Direction.UP, Direction.DOWN]:
+                self.errors.append(ValidationError(
+                    location=stmt.location,
+                    message=f"Invalid direction: {stmt.direction}. Expected LEFT, RIGHT, UP, or DOWN."
+                ))
             self._validate_expression(stmt.distance)
         else:
             # MOVE(startX, endX, startY, endY)
@@ -148,6 +158,14 @@ class Validator:
             "easing": "string",
             "gap": "integer",
         }, stmt.location)
+        
+        # Validate that interval is not zero
+        if "interval" in stmt.options and isinstance(stmt.options["interval"], Literal):
+            if isinstance(stmt.options["interval"].value, int) and stmt.options["interval"].value == 0:
+                self.errors.append(ValidationError(
+                    location=stmt.options["interval"].location,
+                    message="Interval must not be zero."
+                ))
     
     def _validate_pause_statement(self, stmt: PauseStatement) -> None:
         """Validate a PAUSE statement."""
@@ -170,13 +188,20 @@ class Validator:
         }, stmt.location)
         
         # Validate mode value if present
-        if "mode" in stmt.options and isinstance(stmt.options["mode"], Literal):
-            mode = stmt.options["mode"].value
-            if isinstance(mode, str) and mode not in ["seamless", "instant", "fade"]:
-                self.errors.append(ValidationError(
-                    location=stmt.options["mode"].location,
-                    message=f"Invalid mode value '{mode}'. Expected 'seamless', 'instant', or 'fade'."
-                ))
+        if "mode" in stmt.options:
+            mode_expr = stmt.options["mode"]
+            valid_modes = ["seamless", "instant", "fade"]
+            
+            if isinstance(mode_expr, Literal) and isinstance(mode_expr.value, str):
+                mode = mode_expr.value
+                if mode not in valid_modes:
+                    self.errors.append(ValidationError(
+                        location=mode_expr.location,
+                        message=f"Invalid reset mode '{mode}'. Expected one of: {', '.join(valid_modes)}."
+                    ))
+            else:
+                # For non-literal modes, we have to trust they'll be valid at runtime
+                pass
     
     def _validate_loop_statement(self, stmt: LoopStatement) -> None:
         """Validate a LOOP statement."""
@@ -236,7 +261,7 @@ class Validator:
         if not self.in_loop:
             self.errors.append(ValidationError(
                 location=stmt.location,
-                message="BREAK statement outside of loop."
+                message="BREAK statement outside of a loop. BREAK can only be used inside a LOOP."
             ))
     
     def _validate_continue_statement(self, stmt: ContinueStatement) -> None:
@@ -244,7 +269,7 @@ class Validator:
         if not self.in_loop:
             self.errors.append(ValidationError(
                 location=stmt.location,
-                message="CONTINUE statement outside of loop."
+                message="CONTINUE statement outside of a loop. CONTINUE can only be used inside a LOOP."
             ))
     
     def _validate_sync_statement(self, stmt: SyncStatement) -> None:
@@ -256,6 +281,13 @@ class Validator:
         """Validate a WAIT_FOR statement."""
         # Register event as used
         self.used_sync_events.add(stmt.event)
+        
+        # Check if the event is defined
+        if stmt.event not in self.defined_sync_events:
+            self.errors.append(ValidationError(
+                location=stmt.location,
+                message=f"Event '{stmt.event}' used in WAIT_FOR statement is not defined."
+            ))
         
         # Validate ticks
         self._validate_expression(stmt.ticks)
@@ -285,6 +317,19 @@ class Validator:
     
     def _validate_period_statement(self, stmt: PeriodStatement) -> None:
         """Validate a PERIOD statement."""
+        # Check if we're in a segment or position_at block
+        if self.in_segment:
+            self.errors.append(ValidationError(
+                location=stmt.location,
+                message="PERIOD statement not allowed inside SEGMENT blocks."
+            ))
+            
+        if self.in_position_at:
+            self.errors.append(ValidationError(
+                location=stmt.location,
+                message="PERIOD statement not allowed inside POSITION_AT blocks."
+            ))
+            
         self._validate_expression(stmt.ticks)
         
         # Ensure ticks is a positive number
@@ -297,6 +342,19 @@ class Validator:
     
     def _validate_start_at_statement(self, stmt: StartAtStatement) -> None:
         """Validate a START_AT statement."""
+        # Check if we're in a segment or position_at block
+        if self.in_segment:
+            self.errors.append(ValidationError(
+                location=stmt.location,
+                message="START_AT statement not allowed inside SEGMENT blocks."
+            ))
+            
+        if self.in_position_at:
+            self.errors.append(ValidationError(
+                location=stmt.location,
+                message="START_AT statement not allowed inside POSITION_AT blocks."
+            ))
+            
         self._validate_expression(stmt.tick)
         
         # Ensure tick is not negative
@@ -309,6 +367,13 @@ class Validator:
     
     def _validate_segment_statement(self, stmt: SegmentStatement) -> None:
         """Validate a SEGMENT statement."""
+        # Check if we're already in a segment or position_at block
+        if self.in_segment or self.in_position_at:
+            self.errors.append(ValidationError(
+                location=stmt.location,
+                message="Cannot nest SEGMENT statements inside other timeline blocks."
+            ))
+        
         self._validate_expression(stmt.start_tick)
         self._validate_expression(stmt.end_tick)
         
@@ -326,12 +391,50 @@ class Validator:
                     location=stmt.location,
                     message="SEGMENT end_tick must not be negative."
                 ))
+            
+            # Check if the end tick is greater than the start tick
+            if isinstance(stmt.start_tick, Literal) and isinstance(stmt.start_tick.value, (int, float)):
+                if stmt.start_tick.value >= stmt.end_tick.value:
+                    self.errors.append(ValidationError(
+                        location=stmt.location,
+                        message="SEGMENT end_tick must be greater than start_tick."
+                    ))
+            
+            # Check for overlapping segments
+            if isinstance(stmt.start_tick, Literal) and isinstance(stmt.end_tick, Literal):
+                start = stmt.start_tick.value
+                end = stmt.end_tick.value
+                
+                for seg_name, seg_start, seg_end, seg_loc in self.segments:
+                    # Check if this segment overlaps with any existing segment
+                    if (start <= seg_end and end >= seg_start):
+                        self.errors.append(ValidationError(
+                            location=stmt.location,
+                            message=f"Segment '{stmt.name}' overlaps with segment '{seg_name}'. Segments must not overlap."
+                        ))
+                
+                # Add this segment to the list
+                self.segments.append((stmt.name, start, end, stmt.location))
+                
+        # Set context for nested validation
+        prev_in_segment = self.in_segment
+        self.in_segment = True
         
         # Validate body
         self._validate_block(stmt.body)
+        
+        # Restore context
+        self.in_segment = prev_in_segment
     
     def _validate_position_at_statement(self, stmt: PositionAtStatement) -> None:
         """Validate a POSITION_AT statement."""
+        # Check if we're already in a segment or position_at block
+        if self.in_segment or self.in_position_at:
+            self.errors.append(ValidationError(
+                location=stmt.location,
+                message="Cannot nest POSITION_AT statements inside other timeline blocks."
+            ))
+            
         self._validate_expression(stmt.tick)
         
         # Ensure tick is not negative
@@ -342,11 +445,31 @@ class Validator:
                     message="POSITION_AT tick must not be negative."
                 ))
         
+        # Set context for nested validation
+        prev_in_position_at = self.in_position_at
+        self.in_position_at = True
+        
         # Validate body
         self._validate_block(stmt.body)
+        
+        # Restore context
+        self.in_position_at = prev_in_position_at
     
     def _validate_schedule_at_statement(self, stmt: ScheduleAtStatement) -> None:
         """Validate a SCHEDULE_AT statement."""
+        # Check if we're in a segment or position_at block
+        if self.in_segment:
+            self.errors.append(ValidationError(
+                location=stmt.location,
+                message="SCHEDULE_AT statement not allowed inside SEGMENT blocks."
+            ))
+            
+        if self.in_position_at:
+            self.errors.append(ValidationError(
+                location=stmt.location,
+                message="SCHEDULE_AT statement not allowed inside POSITION_AT blocks."
+            ))
+            
         self._validate_expression(stmt.tick)
         
         # Ensure tick is not negative

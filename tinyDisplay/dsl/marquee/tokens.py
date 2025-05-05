@@ -79,6 +79,7 @@ class TokenType(Enum):
     MINUS = auto()
     STAR = auto()
     SLASH = auto()
+    PERCENT = auto()  # Modulo operator
     
     # Comparison operators
     EQUAL_EQUAL = auto()

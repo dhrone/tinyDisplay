@@ -1,9 +1,9 @@
 """
 Simple test script for the Application Widget DSL parser.
 """
-from .lexer import Lexer
-from .parser import Parser
-from .validator import Validator
+from tinyDisplay.dsl.application.lexer import Lexer
+from tinyDisplay.dsl.application.parser import Parser
+from tinyDisplay.dsl.application.validator import Validator
 
 def test_basic_widget():
     """Test the parsing of a basic widget declaration."""

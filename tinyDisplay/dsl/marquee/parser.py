@@ -648,7 +648,7 @@ class Parser:
         """Parse multiplication and division."""
         expr = self._unary()
         
-        while self._match(TokenType.STAR, TokenType.SLASH):
+        while self._match(TokenType.STAR, TokenType.SLASH, TokenType.PERCENT):
             operator = self._previous().lexeme
             right = self._unary()
             location = Location(self._previous().line, self._previous().column)
