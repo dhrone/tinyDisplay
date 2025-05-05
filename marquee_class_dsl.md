@@ -7,6 +7,7 @@ The Marquee Animation DSL is a domain-specific language tailored for defining wi
 * Provide a **declarative** syntax for movement, timing, loops, and conditions.
 * Support **coordination** between multiple animations and **custom easing**.
 * Optimize for **ticks-based timing** and **pixel-based distances** under strict memory/CPU constraints.
+* Enable **deterministic rendering** for any arbitrary tick without requiring full simulation.
 
 ### 1.1 Language Features
 
@@ -16,6 +17,8 @@ The Marquee Animation DSL is a domain-specific language tailored for defining wi
 * **Conditional behaviors**: IF/ELSEIF/ELSE branches, with BREAK and CONTINUE.
 * **Coordination**: SYNC and WAIT\_FOR primitives to synchronize multiple widgets.
 * **Transitions & easing**: Built-in (`linear`, `ease_in`, etc.) and parameterized curves (e.g., cubic‑bezier).
+* **Deterministic calculations**: Direct mapping of arbitrary ticks to widget states.
+* **Timeline optimization**: Loop periods and segment boundaries for efficient rendering.
 
 ### 1.2 Units & Timing Model
 
@@ -93,6 +96,9 @@ KEYWORD          ::=
     | "SYNC" | "WAIT_FOR"
     | "SCROLL" | "SLIDE" | "POPUP"
     | "LEFT" | "RIGHT" | "UP" | "DOWN"
+    | "PERIOD" | "START_AT" | "SEGMENT"
+    | "POSITION_AT" | "SCHEDULE_AT"
+    | "ON_VARIABLE_CHANGE"
     ;
 
 IDENT            ::=  letter { letter | digit | "_" }* ;
@@ -116,6 +122,7 @@ Statement        ::=
     | BreakStmt
     | ContinueStmt
     | HighLevelStmt
+    | TimelineStmt
     | ";"              (* empty/placeholder *)
     ;
 
@@ -203,6 +210,36 @@ EasingFunction   ::=
     ;
 
 Direction        ::=  "LEFT" | "RIGHT" | "UP" | "DOWN" ;
+
+TimelineStmt     ::=  
+      PeriodStmt
+    | StartAtStmt
+    | SegmentStmt
+    | PositionAtStmt
+    | ScheduleStmt
+    | VariableChangeStmt
+    ;
+
+PeriodStmt       ::=  "PERIOD" "(" Expr ")" ";" ;
+
+StartAtStmt      ::=  "START_AT" "(" Expr ")" ";" ;
+
+SegmentStmt      ::=  
+      "SEGMENT" "(" IDENT "," Expr "," Expr ")" Block "END" ";"
+    ;
+
+PositionAtStmt   ::=  
+      "POSITION_AT" "(" Expr ")" "=>" Block "END" ";"
+    ;
+
+ScheduleStmt     ::=  
+      "SCHEDULE_AT" "(" Expr "," IDENT ")" ";"
+    ;
+
+VariableChangeStmt ::=  
+      "ON_VARIABLE_CHANGE" "(" IDENT ")" Block "END" ";"
+    | "ON_VARIABLE_CHANGE" "(" "[" IDENT { "," IDENT } "]" ")" Block "END" ";"
+    ;
 ```
 
 ## 4. Key Features
@@ -212,6 +249,11 @@ Direction        ::=  "LEFT" | "RIGHT" | "UP" | "DOWN" ;
 * **Full control flow**: `ELSEIF`, `BREAK;`, `CONTINUE;`.
 * **Custom easing**: Supports built-in (`linear`, `ease_in`, etc.) and parameterized curves.
 * **Two-dimensional movement**: `MOVE` now optionally accepts four expressions to move X and Y concurrently.
+* **Deterministic optimization**: Features that enhance timeline predictability:
+  * Loop periods for efficient repeating patterns
+  * Position calculation for arbitrary ticks
+  * Timeline segments for modular animation definition
+  * Variable change handling for declarative recalculation policies
 
 ## 5. Command Reference
 
@@ -345,6 +387,125 @@ LOOP(repeat) {
 * **step** (integer): Pixels moved per step. Default: 1.
 * **interval** (integer): Ticks between steps. Default: 1.
 
+### 5.5 Timeline Optimization Commands
+
+#### PERIOD
+
+**Syntax:** `PERIOD(ticks);`
+**Description:** Declares that an animation repeats its state every specified number of ticks.
+
+* **ticks** (`Expr`): Number of ticks in the repeating cycle.
+
+This command helps the rendering engine optimize calculations. For example:
+
+```dsl
+LOOP(INFINITE) {
+    MOVE(LEFT, 100) { step=2, interval=1 };
+    RESET_POSITION({ mode=seamless });
+} END;
+PERIOD(50);  // States repeat every 50 ticks
+```
+
+#### START_AT
+
+**Syntax:** `START_AT(tick);`
+**Description:** Explicitly sets when an animation sequence begins.
+
+* **tick** (`Expr`): The tick number when animation begins.
+
+Useful for synchronizing multiple widgets without explicit SYNC calls:
+
+```dsl
+START_AT(10);  // This animation starts at tick 10
+MOVE(RIGHT, 50) { step=1, interval=1 };
+```
+
+#### SEGMENT
+
+**Syntax:** `SEGMENT(name, startTick, endTick) { ... } END;`
+**Description:** Defines a named segment of animation between specific ticks.
+
+* **name** (`IDENT`): Identifier for the segment.
+* **startTick** (`Expr`): Tick when segment begins.
+* **endTick** (`Expr`): Tick when segment ends.
+
+Enables modular animation definition and optimization:
+
+```dsl
+SEGMENT(intro, 0, 20) {
+    MOVE(RIGHT, 50) { step=5, interval=1 };
+} END;
+
+SEGMENT(main, 20, 100) {
+    LOOP(8) {
+        MOVE(LEFT, 10) { step=1, interval=1 };
+        MOVE(RIGHT, 10) { step=1, interval=1 };
+    } END;
+} END;
+```
+
+#### POSITION_AT
+
+**Syntax:** `POSITION_AT(tick) => { ... } END;`
+**Description:** Defines a direct formula to calculate widget state at any tick.
+
+* **tick** (`Expr`): The tick to calculate position for.
+
+Provides deterministic positioning without simulation:
+
+```dsl
+// Direct calculation for scrolling text position
+POSITION_AT(t) => {
+    // Calculate x position based on tick number
+    x = (startX - (t * stepSize) % (textWidth + gap));
+    y = startY;
+} END;
+```
+
+#### SCHEDULE_AT
+
+**Syntax:** `SCHEDULE_AT(tick, action);`
+**Description:** Schedules a specific action to occur at an absolute tick.
+
+* **tick** (`Expr`): The tick when the action should occur.
+* **action** (`IDENT`): The action to perform.
+
+Provides absolute timing control:
+
+```dsl
+SCHEDULE_AT(50, reset_position);
+SCHEDULE_AT(100, change_direction);
+```
+
+#### ON_VARIABLE_CHANGE
+
+**Syntax:** 
+```
+ON_VARIABLE_CHANGE(variable) { ... } END;
+ON_VARIABLE_CHANGE([var1, var2, ...]) { ... } END;
+```
+
+**Description:** Defines behavior when referenced variables change.
+
+* **variable** (`IDENT` or array of `IDENT`): Variable(s) to monitor.
+
+Example:
+
+```dsl
+// Handle when text content changes
+ON_VARIABLE_CHANGE(content_text) {
+    RECALCULATE_TIMELINE;
+    RESET_POSITION();
+} END;
+
+// Monitor multiple variables
+ON_VARIABLE_CHANGE([temperature, humidity]) {
+    RECALCULATE_TIMELINE;
+} END;
+```
+
+Note: The system automatically analyzes widget configurations to determine variable dependencies, making explicit declarations optional in most cases.
+
 ## 6. Widget State Access
 
 The DSL provides access to widget and container properties through dot notation:
@@ -446,6 +607,46 @@ PAUSE(30);                              // Pause when fully visible
 MOVE(RIGHT, 100) { step=2, interval=1 }; // Move out to right
 ```
 
+### H. Optimized Looping Animation
+
+```dsl
+// Scrolling text with automatic tick calculation
+LOOP(INFINITE) {
+    MOVE(LEFT, text.width) { step=1, interval=1, gap=10 };
+    RESET_POSITION({ mode=seamless });
+} END;
+PERIOD(text.width + 10);  // Period = content width + gap
+
+// Direct calculation alternative
+POSITION_AT(t) => {
+    cycle_length = text.width + 10;
+    cycle_position = t % cycle_length;
+    
+    // Initial position is at container right edge
+    if (cycle_position == 0) {
+        x = container.width;
+    } else {
+        x = container.width - cycle_position;
+    }
+} END;
+```
+
+### I. Synchronized Animations with Timeline Control
+
+```dsl
+// Widget 1: Title animation
+SEGMENT(intro, 0, 50) {
+    SLIDE(IN, LEFT, 100) { step=2, interval=1 };
+} END;
+
+// Widget 2: Automatically synchronized with Widget 1
+START_AT(50);  // Starts when Widget 1's intro completes
+SLIDE(IN, UP, 50) { step=1, interval=1 };
+
+// Alternative to SYNC primitive
+// System automatically derives relationship between widgets
+```
+
 ## 8. Error Handling
 
 The DSL processor should provide clear error messages for common issues:
@@ -460,5 +661,40 @@ Example validation checks:
 2. Widget will remain at least partially visible during animation (unless intentionally moving off-screen)
 3. Animation sequence lengths are reasonable for memory constraints
 4. Expressions reference valid properties
+
+## 9. Deterministic Rendering
+
+The DSL is designed to enable deterministic rendering, allowing the system to:
+
+1. **Calculate widget state for any arbitrary tick** without simulating all previous ticks
+2. **Optimize repeating patterns** through period declarations
+3. **Handle variable changes** by clearly defining timeline recalculation boundaries
+4. **Coordinate multiple animations** through deterministic timelines
+
+### 9.1 Automatic Dependency Analysis
+
+The system automatically:
+
+* Builds dependency graphs between widgets based on SYNC relationships
+* Identifies variable references that affect widget state or content
+* Creates widget clusters that must be calculated together
+* Determines which calculations can be cached vs. recalculated
+
+### 9.2 Timeline Optimization
+
+For efficient rendering, the system:
+
+* Identifies repeating patterns and period boundaries
+* Uses direct POSITION_AT formulas when available
+* Falls back to incremental simulation when necessary
+* Caches rendered frames strategically
+
+### 9.3 Handling Dynamic Events
+
+When dynamic events occur (like variable changes):
+
+1. The system identifies affected widgets
+2. Invalidates cached frames in the affected timelines
+3. Recalculates new deterministic timelines from that point forward
 
 
