@@ -12,13 +12,13 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
 from tinyDisplay.dsl.marquee import (
-    parse_marquee_dsl, validate_marquee_dsl, parse_and_validate_marquee_dsl,
-    MarqueeValidator, ValidationError
+    parse_marquee_dsl, validate_marquee_dsl, parse_and_validate_marquee_dsl
 )
 from tinyDisplay.dsl.marquee.ast import (
     Program, Block, MoveStatement, PauseStatement, ResetPositionStatement,
     LoopStatement, IfStatement, BreakStatement, ContinueStatement
 )
+from tinyDisplay.dsl.marquee.validator import Validator, ValidationError
 
 
 def test_break_outside_loop():

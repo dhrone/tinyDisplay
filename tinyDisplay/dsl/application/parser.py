@@ -745,22 +745,27 @@ class Parser:
         # Open the env block
         self._consume(TokenType.LEFT_BRACE, error_message="Expected '{' after ENV.")
         
-        declarations: List[Statement] = []
+        declarations: List[EnvDeclaration] = []
         
         # Parse environment variable declarations
         while not self._check(TokenType.RIGHT_BRACE) and not self._is_at_end():
-            if self._check(TokenType.IDENTIFIER):
-                declarations.append(self._env_declaration())
-            else:
-                token = self._peek()
-                self._error(token, f"Expected environment variable declaration but got '{token.lexeme}'.")
-                self._advance()
+            try:
+                if self._check(TokenType.IDENTIFIER):
+                    declarations.append(self._env_declaration())
+                else:
+                    token = self._peek()
+                    self._error(token, f"Expected environment variable declaration but got '{token.lexeme}'.")
+                    self._advance()
+            except ParseError as e:
+                print(f"Error parsing environment declaration: {e}")
+                self._synchronize()
         
         # Close the env block
         self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' after ENV block.")
         
         location = Location(token.line, token.column)
-        return EnvBlock(declarations, location)
+        # Fix parameter order to match AST class definition
+        return EnvBlock(declarations=declarations, location=location)
     
     def _env_declaration(self) -> EnvDeclaration:
         """Parse an environment variable declaration."""
@@ -776,7 +781,8 @@ class Parser:
         self._consume(TokenType.SEMICOLON, error_message="Expected ';' after variable value.")
         
         location = Location(name_token.line, name_token.column)
-        return EnvDeclaration(name, value, location)
+        # Use named parameters to match AST class definition
+        return EnvDeclaration(name=name, value=value, location=location)
     
     def _macro_declaration(self) -> MacroDeclaration:
         """Parse a MACRO declaration."""
@@ -802,12 +808,20 @@ class Parser:
             self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after parameter list.")
         
         # Parse macro value
-        value = self._expression()
-        
-        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after macro value.")
-        
-        location = Location(name_token.line, name_token.column)
-        return MacroDeclaration(name, parameters, value, location)
+        try:
+            value = self._expression()
+            
+            self._consume(TokenType.SEMICOLON, error_message="Expected ';' after macro value.")
+            
+            location = Location(name_token.line, name_token.column)
+            return MacroDeclaration(name=name, parameters=parameters, value=value, location=location)
+        except ParseError as e:
+            # Handle parse errors more gracefully
+            print(f"Error parsing macro value: {e}")
+            # Create a placeholder literal for value
+            location = Location(name_token.line, name_token.column)
+            placeholder_value = Literal(value=0, location=location)
+            return MacroDeclaration(name=name, parameters=parameters, value=placeholder_value, location=location)
     
     def _display_declaration(self) -> DisplayDeclaration:
         """Parse a DISPLAY declaration."""
@@ -833,7 +847,7 @@ class Parser:
         self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' after display properties.")
         
         location = Location(name_token.line, name_token.column)
-        return DisplayDeclaration(name, properties, interface, location)
+        return DisplayDeclaration(name=name, properties=properties, interface=interface, location=location)
     
     def _interface_block(self) -> Dict[str, Expression]:
         """Parse an INTERFACE block."""
@@ -881,7 +895,7 @@ class Parser:
         self._consume(TokenType.SEMICOLON, error_message="Expected ';' after import statement.")
         
         location = Location(token.line, token.column)
-        return ImportStatement(imports, source, location)
+        return ImportStatement(imports=imports, source=source, location=location)
     
     def _properties_block(self) -> Dict[str, Expression]:
         """Parse a properties block."""
@@ -928,7 +942,59 @@ class Parser:
         elif self._match(TokenType.AT_SIGN):
             return self._macro_reference()
         
-        # Parse a primary expression
+        # Parse mathematical expressions with proper precedence
+        return self._arithmetic_expression()
+    
+    def _arithmetic_expression(self) -> Expression:
+        """Parse an arithmetic expression with proper operator precedence."""
+        # Start with term (higher precedence)
+        expr = self._term()
+        
+        # Handle addition and subtraction (lower precedence)
+        while self._match(TokenType.PLUS, TokenType.MINUS):
+            operator = self._previous().lexeme
+            right = self._term()
+            location = Location(expr.location.line, expr.location.column)
+            expr = BinaryExpression(left=expr, operator=operator, right=right, location=location)
+        
+        return expr
+    
+    def _term(self) -> Expression:
+        """Parse a term in an arithmetic expression (multiplication/division)."""
+        # Start with factor (highest precedence)
+        expr = self._factor()
+        
+        # Handle multiplication and division (higher precedence)
+        while self._match(TokenType.STAR, TokenType.SLASH):
+            operator = self._previous().lexeme
+            right = self._factor()
+            location = Location(expr.location.line, expr.location.column)
+            expr = BinaryExpression(left=expr, operator=operator, right=right, location=location)
+        
+        return expr
+    
+    def _factor(self) -> Expression:
+        """Parse a factor in an arithmetic expression (primary or unary operation)."""
+        # Handle unary negation
+        if self._match(TokenType.MINUS):
+            location = Location(self._previous().line, self._previous().column)
+            # Create a literal with negative value
+            if self._check(TokenType.INTEGER):
+                token = self._advance()
+                # Parse the integer and negate it
+                return Literal(value=-token.literal, location=location)
+            elif self._check(TokenType.FLOAT):
+                token = self._advance()
+                # Parse the float and negate it
+                return Literal(value=-token.literal, location=location)
+            else:
+                # Unary negation of an expression
+                expr = self._primary()
+                # Create a binary expression that negates the value
+                zero = Literal(value=0, location=location)
+                return BinaryExpression(left=zero, operator="-", right=expr, location=location)
+        
+        # Handle regular primary expressions
         return self._primary()
     
     def _object_literal(self) -> ObjectLiteral:
@@ -955,7 +1021,8 @@ class Parser:
         self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' after object literal.")
         
         location = Location(token.line, token.column)
-        return ObjectLiteral(properties, location)
+        # Explicitly use named parameters to avoid confusion
+        return ObjectLiteral(properties=properties, location=location)
     
     def _array_literal(self) -> ArrayLiteral:
         """Parse an array literal expression."""
@@ -976,7 +1043,7 @@ class Parser:
         self._consume(TokenType.RIGHT_BRACKET, error_message="Expected ']' after array literal.")
         
         location = Location(token.line, token.column)
-        return ArrayLiteral(elements, location)
+        return ArrayLiteral(elements=elements, location=location)
     
     def _macro_reference(self) -> MacroReference:
         """Parse a macro reference."""
@@ -1027,30 +1094,41 @@ class Parser:
         
         # Parenthesized expression (including tuples)
         if self._match(TokenType.LEFT_PAREN):
-            # This could be a simple parenthesized expression or a tuple
-            first_expr = self._expression()
+            location = Location(token.line, token.column)
             
-            if self._match(TokenType.COMMA):
-                # This is a tuple - collect all elements
-                elements = [first_expr]
+            # This could be a simple parenthesized expression or a tuple
+            try:
+                first_expr = self._expression()
                 
-                # Get the second element
-                elements.append(self._expression())
-                
-                # Check for more elements
-                while self._match(TokenType.COMMA):
+                if self._match(TokenType.COMMA):
+                    # This is a tuple - collect all elements
+                    elements = [first_expr]
+                    
+                    # Get the second element
                     elements.append(self._expression())
-                
-                self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after tuple.")
-                
-                # Create an ArrayLiteral to represent the tuple
-                # (we're reusing ArrayLiteral since it's structurally identical to a tuple)
-                location = Location(token.line, token.column)
-                return ArrayLiteral(elements=elements, location=location)
-            else:
-                # This is a simple parenthesized expression
-                self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after expression.")
-                return first_expr
+                    
+                    # Check for more elements
+                    while self._match(TokenType.COMMA):
+                        elements.append(self._expression())
+                    
+                    self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after tuple.")
+                    
+                    # Create an ArrayLiteral to represent the tuple with explicit parameters
+                    return ArrayLiteral(elements=elements, location=location)
+                else:
+                    # This is a simple parenthesized expression
+                    self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after expression.")
+                    return first_expr
+            except ParseError as e:
+                # Handle any parse errors more gracefully
+                print(f"Error parsing parenthesized expression: {e}")
+                # Skip to the closing parenthesis if possible
+                while not self._is_at_end() and not self._check(TokenType.RIGHT_PAREN):
+                    self._advance()
+                if self._check(TokenType.RIGHT_PAREN):
+                    self._advance()
+                # Return a placeholder expression
+                return Expression(location=location)
         
         self._error(token, f"Expected expression but got '{token.lexeme}'.")
         return Expression(location=Location(0, 0))

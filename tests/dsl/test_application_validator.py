@@ -220,8 +220,10 @@ def test_validator_array_literal_elements():
     source = """
     DEFINE WIDGET "test" AS Text {
         value: "Test",
-        colors: ["red", THEME.accent, "blue"],  # Reference to theme in array
+        colors: ["red", THEME.invalid_property, "blue"],  # Reference to theme in array with invalid property
     }
     """
     _, errors = parse_and_validate_application_dsl(source)
-    assert any("Unknown theme property: 'accent'" in str(error) for error in errors) 
+    
+    # Ensure the validator can find errors in theme properties within array literals
+    assert any("Unknown theme property: 'invalid_property'" in str(error) for error in errors) 

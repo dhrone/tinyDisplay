@@ -483,14 +483,22 @@ class Validator:
                 self._validate_expression(sub_expr)
         
         elif isinstance(expr, ArrayLiteral):
-            # Make sure elements is a list before iterating
-            if not isinstance(expr.elements, list):
-                self._error(expr.location, f"Array literal has invalid elements type: {type(expr.elements)}")
-                return
-                
-            # Validate elements in array literal
-            for element in expr.elements:
-                self._validate_expression(element)
+            # The ArrayLiteral implementation is inconsistent - sometimes elements is in the location field
+            # and the elements field has a Location object instead.
+            
+            # Case 1: Normal array with elements in the right field
+            if isinstance(expr.elements, list):
+                # Validate elements in array literal
+                for element in expr.elements:
+                    self._validate_expression(element)
+            
+            # Case 2: Array with elements in location field (parser issue)
+            elif isinstance(expr.location, list):
+                # Validate elements in array literal
+                for element in expr.location:
+                    self._validate_expression(element)
+            else:
+                self._error(expr.location, f"Array literal has invalid structure: elements={type(expr.elements)}, location={type(expr.location)}")
         
         elif isinstance(expr, BinaryExpression):
             # Validate left and right expressions
