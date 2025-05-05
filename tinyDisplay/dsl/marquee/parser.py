@@ -130,7 +130,7 @@ class Parser:
         location = Location(token.line, token.column)
         
         # Parse the parameters
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after MOVE.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after MOVE.")
         
         # Check for a direction constant
         direction = None
@@ -145,15 +145,15 @@ class Parser:
             elif direction_token.type == TokenType.DOWN:
                 direction = Direction.DOWN
             
-            self._consume(TokenType.COMMA, "Expected ',' after direction.")
+            self._consume(TokenType.COMMA, error_message="Expected ',' after direction.")
             distance = self._expression()
             
-            self._consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters.")
+            self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after parameters.")
             
             # Parse options if present
             options = self._options() if self._check(TokenType.LEFT_BRACE) else {}
             
-            self._consume(TokenType.SEMICOLON, "Expected ';' after statement.")
+            self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
             
             return MoveStatement(
                 location=location,
@@ -164,7 +164,7 @@ class Parser:
         
         # Parse as MOVE(startX, endX) or MOVE(startX, endX, startY, endY)
         start_x = self._expression()
-        self._consume(TokenType.COMMA, "Expected ',' after startX.")
+        self._consume(TokenType.COMMA, error_message="Expected ',' after startX.")
         end_x = self._expression()
         
         start_y = None
@@ -173,15 +173,15 @@ class Parser:
         # Check for startY and endY
         if self._match(TokenType.COMMA):
             start_y = self._expression()
-            self._consume(TokenType.COMMA, "Expected ',' after startY.")
+            self._consume(TokenType.COMMA, error_message="Expected ',' after startY.")
             end_y = self._expression()
         
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after parameters.")
         
         # Parse options if present
         options = self._options() if self._check(TokenType.LEFT_BRACE) else {}
         
-        self._consume(TokenType.SEMICOLON, "Expected ';' after statement.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
         
         return MoveStatement(
             location=location,
@@ -197,10 +197,10 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after PAUSE.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after PAUSE.")
         duration = self._expression()
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after duration.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after statement.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after duration.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
         
         return PauseStatement(location=location, duration=duration)
     
@@ -209,15 +209,15 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after RESET_POSITION.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after RESET_POSITION.")
         
         # Parse options if present
         options = {}
         if not self._check(TokenType.RIGHT_PAREN):
             options = self._options()
         
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after options.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after statement.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after options.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
         
         return ResetPositionStatement(location=location, options=options)
     
@@ -226,7 +226,7 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after LOOP.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after LOOP.")
         
         # Parse count or INFINITE
         count = None
@@ -238,16 +238,16 @@ class Parser:
         # Parse optional AS name
         name = None
         if self._match(TokenType.AS):
-            name_token = self._consume(TokenType.IDENTIFIER, "Expected identifier after AS.")
+            name_token = self._consume(TokenType.IDENTIFIER, error_message="Expected identifier after AS.")
             name = name_token.lexeme
         
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after count.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after count.")
         
         # Parse body
         body = self._block()
         
-        self._consume(TokenType.END, "Expected 'END' after loop body.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after END.")
+        self._consume(TokenType.END, error_message="Expected 'END' after loop body.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after END.")
         
         return LoopStatement(
             location=location,
@@ -261,9 +261,9 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after IF.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after IF.")
         condition = self._condition()
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after condition.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after condition.")
         
         then_branch = self._block()
         
@@ -272,9 +272,9 @@ class Parser:
         
         # Parse ELSEIF branches
         while self._match(TokenType.ELSEIF):
-            self._consume(TokenType.LEFT_PAREN, "Expected '(' after ELSEIF.")
+            self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after ELSEIF.")
             elseif_condition = self._condition()
-            self._consume(TokenType.RIGHT_PAREN, "Expected ')' after condition.")
+            self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after condition.")
             
             elseif_branch = self._block()
             elseif_branches.append((elseif_condition, elseif_branch))
@@ -283,8 +283,8 @@ class Parser:
         if self._match(TokenType.ELSE):
             else_branch = self._block()
         
-        self._consume(TokenType.END, "Expected 'END' after if statement.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after END.")
+        self._consume(TokenType.END, error_message="Expected 'END' after if statement.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after END.")
         
         return IfStatement(
             location=location,
@@ -299,7 +299,7 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.SEMICOLON, "Expected ';' after BREAK.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after BREAK.")
         
         return BreakStatement(location=location)
     
@@ -308,7 +308,7 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.SEMICOLON, "Expected ';' after CONTINUE.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after CONTINUE.")
         
         return ContinueStatement(location=location)
     
@@ -317,10 +317,10 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after SYNC.")
-        event_token = self._consume(TokenType.IDENTIFIER, "Expected event name after SYNC(.")
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after event name.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after statement.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after SYNC.")
+        event_token = self._consume(TokenType.IDENTIFIER, error_message="Expected event name after SYNC(.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after event name.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
         
         return SyncStatement(location=location, event=event_token.lexeme)
     
@@ -329,12 +329,12 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after WAIT_FOR.")
-        event_token = self._consume(TokenType.IDENTIFIER, "Expected event name after WAIT_FOR(.")
-        self._consume(TokenType.COMMA, "Expected ',' after event name.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after WAIT_FOR.")
+        event_token = self._consume(TokenType.IDENTIFIER, error_message="Expected event name after WAIT_FOR(.")
+        self._consume(TokenType.COMMA, error_message="Expected ',' after event name.")
         ticks = self._expression()
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after ticks.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after statement.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after ticks.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
         
         return WaitForStatement(location=location, event=event_token.lexeme, ticks=ticks)
     
@@ -343,10 +343,10 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after PERIOD.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after PERIOD.")
         ticks = self._expression()
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after ticks.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after statement.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after ticks.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
         
         return PeriodStatement(location=location, ticks=ticks)
     
@@ -355,10 +355,10 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after START_AT.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after START_AT.")
         tick = self._expression()
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after tick.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after statement.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after tick.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
         
         return StartAtStatement(location=location, tick=tick)
     
@@ -367,18 +367,18 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after SEGMENT.")
-        name_token = self._consume(TokenType.IDENTIFIER, "Expected name after SEGMENT(.")
-        self._consume(TokenType.COMMA, "Expected ',' after name.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after SEGMENT.")
+        name_token = self._consume(TokenType.IDENTIFIER, error_message="Expected name after SEGMENT(.")
+        self._consume(TokenType.COMMA, error_message="Expected ',' after name.")
         start_tick = self._expression()
-        self._consume(TokenType.COMMA, "Expected ',' after startTick.")
+        self._consume(TokenType.COMMA, error_message="Expected ',' after startTick.")
         end_tick = self._expression()
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after endTick.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after endTick.")
         
         body = self._block()
         
-        self._consume(TokenType.END, "Expected 'END' after segment body.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after END.")
+        self._consume(TokenType.END, error_message="Expected 'END' after segment body.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after END.")
         
         return SegmentStatement(
             location=location,
@@ -393,15 +393,15 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after POSITION_AT.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after POSITION_AT.")
         tick = self._expression()
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after tick.")
-        self._consume(TokenType.ARROW, "Expected '=>' after POSITION_AT(tick).")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after tick.")
+        self._consume(TokenType.ARROW, error_message="Expected '=>' after POSITION_AT(tick).")
         
         body = self._block()
         
-        self._consume(TokenType.END, "Expected 'END' after position_at body.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after END.")
+        self._consume(TokenType.END, error_message="Expected 'END' after position_at body.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after END.")
         
         return PositionAtStatement(location=location, tick=tick, body=body)
     
@@ -410,12 +410,12 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after SCHEDULE_AT.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after SCHEDULE_AT.")
         tick = self._expression()
-        self._consume(TokenType.COMMA, "Expected ',' after tick.")
-        action_token = self._consume(TokenType.IDENTIFIER, "Expected action name after tick.")
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after action.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after statement.")
+        self._consume(TokenType.COMMA, error_message="Expected ',' after tick.")
+        action_token = self._consume(TokenType.IDENTIFIER, error_message="Expected action name after tick.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after action.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
         
         return ScheduleAtStatement(location=location, tick=tick, action=action_token.lexeme)
     
@@ -424,33 +424,33 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after ON_VARIABLE_CHANGE.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after ON_VARIABLE_CHANGE.")
         
         variables = []
         
         # Check if it's a list of variables [var1, var2, ...]
         if self._match(TokenType.LEFT_BRACKET):
             # Parse first variable
-            var_token = self._consume(TokenType.IDENTIFIER, "Expected variable name.")
+            var_token = self._consume(TokenType.IDENTIFIER, error_message="Expected variable name.")
             variables.append(var_token.lexeme)
             
             # Parse additional variables
             while self._match(TokenType.COMMA):
-                var_token = self._consume(TokenType.IDENTIFIER, "Expected variable name after ','.")
+                var_token = self._consume(TokenType.IDENTIFIER, error_message="Expected variable name after ','.")
                 variables.append(var_token.lexeme)
             
-            self._consume(TokenType.RIGHT_BRACKET, "Expected ']' after variable list.")
+            self._consume(TokenType.RIGHT_BRACKET, error_message="Expected ']' after variable list.")
         else:
             # Single variable
-            var_token = self._consume(TokenType.IDENTIFIER, "Expected variable name.")
+            var_token = self._consume(TokenType.IDENTIFIER, error_message="Expected variable name.")
             variables.append(var_token.lexeme)
         
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after variables.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after variables.")
         
         body = self._block()
         
-        self._consume(TokenType.END, "Expected 'END' after block.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after END.")
+        self._consume(TokenType.END, error_message="Expected 'END' after block.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after END.")
         
         return OnVariableChangeStatement(location=location, variables=variables, body=body)
     
@@ -459,7 +459,7 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after SCROLL.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after SCROLL.")
         
         # Parse direction
         direction = None
@@ -474,15 +474,15 @@ class Parser:
         else:
             self._error(self._peek(), "Expected direction (LEFT, RIGHT, UP, DOWN).")
         
-        self._consume(TokenType.COMMA, "Expected ',' after direction.")
+        self._consume(TokenType.COMMA, error_message="Expected ',' after direction.")
         distance = self._expression()
         
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after distance.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after distance.")
         
         # Parse options if present
         options = self._options() if self._check(TokenType.LEFT_BRACE) else {}
         
-        self._consume(TokenType.SEMICOLON, "Expected ';' after statement.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
         
         return ScrollStatement(
             location=location,
@@ -496,10 +496,10 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after SLIDE.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after SLIDE.")
         
         # Parse action
-        action_token = self._consume(TokenType.IDENTIFIER, "Expected action (IN, OUT, IN_OUT).")
+        action_token = self._consume(TokenType.IDENTIFIER, error_message="Expected action (IN, OUT, IN_OUT).")
         action = None
         if action_token.lexeme == "IN":
             action = SlideAction.IN
@@ -510,7 +510,7 @@ class Parser:
         else:
             self._error(action_token, "Expected action (IN, OUT, IN_OUT).")
         
-        self._consume(TokenType.COMMA, "Expected ',' after action.")
+        self._consume(TokenType.COMMA, error_message="Expected ',' after action.")
         
         # Parse direction
         direction = None
@@ -525,15 +525,15 @@ class Parser:
         else:
             self._error(self._peek(), "Expected direction (LEFT, RIGHT, UP, DOWN).")
         
-        self._consume(TokenType.COMMA, "Expected ',' after direction.")
+        self._consume(TokenType.COMMA, error_message="Expected ',' after direction.")
         distance = self._expression()
         
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after distance.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after distance.")
         
         # Parse options if present
         options = self._options() if self._check(TokenType.LEFT_BRACE) else {}
         
-        self._consume(TokenType.SEMICOLON, "Expected ';' after statement.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
         
         return SlideStatement(
             location=location,
@@ -548,15 +548,15 @@ class Parser:
         token = self._previous()
         location = Location(token.line, token.column)
         
-        self._consume(TokenType.LEFT_PAREN, "Expected '(' after POPUP.")
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after POPUP.")
         
         # Parse options if present
         options = {}
         if not self._check(TokenType.RIGHT_PAREN):
             options = self._options()
         
-        self._consume(TokenType.RIGHT_PAREN, "Expected ')' after options.")
-        self._consume(TokenType.SEMICOLON, "Expected ';' after statement.")
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after options.")
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
         
         return PopUpStatement(location=location, options=options)
     
@@ -569,29 +569,29 @@ class Parser:
     
     def _block(self) -> Block:
         """Parse a block of statements."""
-        token = self._consume(TokenType.LEFT_BRACE, "Expected '{' to start block.")
+        token = self._consume(TokenType.LEFT_BRACE, error_message="Expected '{' to start block.")
         location = Location(token.line, token.column)
         
         statements = []
         while not self._check(TokenType.RIGHT_BRACE) and not self._is_at_end():
             statements.append(self._statement())
         
-        self._consume(TokenType.RIGHT_BRACE, "Expected '}' to end block.")
+        self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' to end block.")
         
         return Block(location=location, statements=statements)
     
     def _options(self) -> Dict[str, Expression]:
         """Parse options in curly braces."""
-        self._consume(TokenType.LEFT_BRACE, "Expected '{' to start options.")
+        self._consume(TokenType.LEFT_BRACE, error_message="Expected '{' to start options.")
         
         options = {}
         
         # Parse option pairs
         while not self._check(TokenType.RIGHT_BRACE) and not self._is_at_end():
             # Parse option name
-            name_token = self._consume(TokenType.IDENTIFIER, "Expected option name.")
+            name_token = self._consume(TokenType.IDENTIFIER, error_message="Expected option name.")
             
-            self._consume(TokenType.EQUALS, "Expected '=' after option name.")
+            self._consume(TokenType.EQUALS, error_message="Expected '=' after option name.")
             
             # Parse option value
             value = self._expression()
@@ -600,9 +600,9 @@ class Parser:
             
             # Parse comma or end of options
             if not self._check(TokenType.RIGHT_BRACE):
-                self._consume(TokenType.COMMA, "Expected ',' after option.")
+                self._consume(TokenType.COMMA, error_message="Expected ',' after option.")
         
-        self._consume(TokenType.RIGHT_BRACE, "Expected '}' to end options.")
+        self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' to end options.")
         
         return options
     
@@ -618,7 +618,7 @@ class Parser:
             TokenType.LESS_EQUAL,
             TokenType.GREATER,
             TokenType.GREATER_EQUAL,
-            "Expected comparison operator."
+            error_message="Expected comparison operator."
         )
         operator = operator_token.lexeme
         
@@ -674,7 +674,7 @@ class Parser:
             
             # Check for property access
             if self._match(TokenType.DOT):
-                property_token = self._consume(TokenType.IDENTIFIER, "Expected property name after '.'.")
+                property_token = self._consume(TokenType.IDENTIFIER, error_message="Expected property name after '.'.")
                 return PropertyAccess(
                     object=Variable(name=identifier, location=location),
                     property=property_token.lexeme,
@@ -686,7 +686,7 @@ class Parser:
         # Parenthesized expressions
         if self._match(TokenType.LEFT_PAREN):
             expr = self._expression()
-            self._consume(TokenType.RIGHT_PAREN, "Expected ')' after expression.")
+            self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after expression.")
             return expr
         
         # Error for unexpected tokens
