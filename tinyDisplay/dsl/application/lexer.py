@@ -190,7 +190,7 @@ class Lexer:
             for _ in range(len(path)):
                 self._advance()
             
-            self._add_token(TokenType.PATH, path)
+            self._add_token(TokenType.PATH_LITERAL, path)
         else:
             # Not a valid path, advance and report error
             self._advance()

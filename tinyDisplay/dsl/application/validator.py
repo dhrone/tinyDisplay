@@ -483,6 +483,11 @@ class Validator:
                 self._validate_expression(sub_expr)
         
         elif isinstance(expr, ArrayLiteral):
+            # Make sure elements is a list before iterating
+            if not isinstance(expr.elements, list):
+                self._error(expr.location, f"Array literal has invalid elements type: {type(expr.elements)}")
+                return
+                
             # Validate elements in array literal
             for element in expr.elements:
                 self._validate_expression(element)

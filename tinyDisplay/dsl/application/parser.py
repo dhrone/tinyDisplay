@@ -72,32 +72,44 @@ class Parser:
         """Parse a declaration statement."""
         try:
             # Check for DEFINE keyword
+            print(f"\nEntered _declaration, checking token: {self._peek().type}")
             if self._match(TokenType.DEFINE):
+                print("Found DEFINE keyword, calling _define_statement")
                 return self._define_statement()
             
             # Check for BIND statement
             if self._match(TokenType.BIND):
+                print("Found BIND keyword, calling _bind_statement")
                 return self._bind_statement()
             
             # Check for IMPORT statement
             if self._match(TokenType.IMPORT):
+                print("Found IMPORT keyword, calling _import_statement")
                 return self._import_statement()
             
             # Default case - unsupported statement
             token = self._peek()
+            print(f"Unexpected token: {token.type}, lexeme: {token.lexeme}")
             self._error(token, f"Expected a declaration but got '{token.lexeme}'.")
         
         except ParseError as e:
+            print(f"Parse error in _declaration: {e}")
             self.errors.append(str(e))
             self._synchronize()
+        except Exception as e:
+            print(f"Unexpected exception in _declaration: {e}")
+            raise
         
         # Return a placeholder statement
+        print("Returning generic Statement")
         return Statement(Location(0, 0))
     
     def _define_statement(self) -> Statement:
         """Parse a DEFINE statement."""
         # Check what type of definition we have
+        print(f"\nEntered _define_statement, checking token: {self._peek().type}")
         if self._match(TokenType.WIDGET):
+            print("Found WIDGET keyword, calling _widget_declaration")
             return self._widget_declaration()
         elif self._match(TokenType.CANVAS):
             return self._canvas_declaration()
@@ -127,35 +139,70 @@ class Parser:
             return self._display_declaration()
         else:
             token = self._peek()
+            print(f"Unexpected token after DEFINE: {token.type}, lexeme: {token.lexeme}")
             self._error(token, f"Expected a definition type after DEFINE but got '{token.lexeme}'.")
             return Statement(Location(0, 0))
     
     def _widget_declaration(self) -> WidgetDeclaration:
         """Parse a widget declaration."""
         # DEFINE WIDGET "name" AS WidgetType { ... }
-        name_token = self._consume(TokenType.STRING, error_message="Expected widget name in quotes.")
-        name = name_token.literal
+        print("\nEntered _widget_declaration")
         
-        self._consume(TokenType.AS, error_message="Expected 'AS' after widget name.")
-        
-        # Widget type
-        type_token = self._consume(
-            TokenType.TEXT, TokenType.IMAGE, TokenType.PROGRESSBAR, 
-            TokenType.LINE, TokenType.RECTANGLE, TokenType.IDENTIFIER,
-            error_message="Expected widget type."
-        )
-        widget_type = type_token.lexeme
-        
-        # Properties block
-        properties = self._properties_block()
-        
-        # Check for timeline block
-        timeline = None
-        if self._check(TokenType.TIMELINE):
-            timeline = self._timeline_block()
-        
-        location = Location(name_token.line, name_token.column)
-        return WidgetDeclaration(name, widget_type, properties, timeline, location)
+        try:
+            name_token = self._consume(TokenType.STRING, error_message="Expected widget name in quotes.")
+            print(f"Name token: {name_token}")
+            name = name_token.literal
+            print(f"Name is: {name}")
+            
+            self._consume(TokenType.AS, error_message="Expected 'AS' after widget name.")
+            
+            # Widget type
+            type_token = self._consume(
+                TokenType.TEXT, TokenType.IMAGE, TokenType.PROGRESSBAR, 
+                TokenType.LINE, TokenType.RECTANGLE, TokenType.IDENTIFIER,
+                error_message="Expected widget type."
+            )
+            print(f"Type token: {type_token}")
+            widget_type = type_token.lexeme
+            print(f"Widget type is: {widget_type}")
+            
+            # Open the properties block
+            self._consume(TokenType.LEFT_BRACE, error_message="Expected '{' after widget type.")
+            
+            properties: Dict[str, Expression] = {}
+            timeline = None
+            
+            # Parse properties and optional TIMELINE block
+            while not self._check(TokenType.RIGHT_BRACE) and not self._is_at_end():
+                # Check for TIMELINE block
+                if self._check(TokenType.TIMELINE):
+                    timeline = self._timeline_block()
+                else:
+                    # Regular property
+                    prop, value = self._property()
+                    properties[prop] = value
+            
+            # Close the properties block
+            self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' after widget properties.")
+            
+            print(f"Properties: {properties}")
+            
+            location = Location(name_token.line, name_token.column)
+            print(f"About to create WidgetDeclaration with:")
+            print(f"  name: {name}")
+            print(f"  type: {widget_type}")
+            print(f"  properties: (dict with {len(properties)} items)")
+            print(f"  timeline: {timeline}")
+            print(f"  location: {location}")
+            
+            widget_decl = WidgetDeclaration(name=name, type=widget_type, properties=properties, timeline=timeline, location=location)
+            print(f"Created widget: {widget_decl}")
+            print(f"Created widget.name: {widget_decl.name}")
+            print(f"Created widget.type: {widget_decl.type}")
+            return widget_decl
+        except Exception as e:
+            print(f"Exception in _widget_declaration: {e}")
+            raise
     
     def _timeline_block(self) -> TimelineBlock:
         """Parse a TIMELINE block with Marquee DSL."""
@@ -188,13 +235,72 @@ class Parser:
         marquee_ast = marquee_parser.parse()
         
         location = Location(timeline_token.line, timeline_token.column)
-        return TimelineBlock(marquee_ast, location)
+        return TimelineBlock(marquee_ast=marquee_ast, location=location)
     
     def _convert_to_marquee_tokens(self, tokens: List[Token]) -> List[Any]:
         """Convert Application DSL tokens to Marquee DSL tokens."""
         # This is a placeholder. In a real implementation, this would convert between token types
-        # For simplicity, we're assuming both token types are compatible enough to pass through
-        return tokens
+        from ..marquee.tokens import Token as MarqueeToken, TokenType as MarqueeTokenType
+        
+        marquee_tokens = []
+        for token in tokens:
+            # Map the token type
+            if token.type == TokenType.IDENTIFIER and token.lexeme == "MOVE":
+                marquee_token_type = MarqueeTokenType.MOVE
+            elif token.type == TokenType.IDENTIFIER and token.lexeme == "PAUSE":
+                marquee_token_type = MarqueeTokenType.PAUSE
+            elif token.type == TokenType.IDENTIFIER and token.lexeme == "LOOP":
+                marquee_token_type = MarqueeTokenType.LOOP
+            elif token.type == TokenType.IDENTIFIER and token.lexeme == "END":
+                marquee_token_type = MarqueeTokenType.END
+            elif token.type == TokenType.IDENTIFIER and token.lexeme == "LEFT":
+                marquee_token_type = MarqueeTokenType.LEFT
+            elif token.type == TokenType.IDENTIFIER and token.lexeme == "RIGHT":
+                marquee_token_type = MarqueeTokenType.RIGHT
+            elif token.type == TokenType.IDENTIFIER and token.lexeme == "UP":
+                marquee_token_type = MarqueeTokenType.UP
+            elif token.type == TokenType.IDENTIFIER and token.lexeme == "DOWN":
+                marquee_token_type = MarqueeTokenType.DOWN
+            elif token.type == TokenType.LEFT_PAREN:
+                marquee_token_type = MarqueeTokenType.LEFT_PAREN
+            elif token.type == TokenType.RIGHT_PAREN:
+                marquee_token_type = MarqueeTokenType.RIGHT_PAREN
+            elif token.type == TokenType.LEFT_BRACE:
+                marquee_token_type = MarqueeTokenType.LEFT_BRACE
+            elif token.type == TokenType.RIGHT_BRACE:
+                marquee_token_type = MarqueeTokenType.RIGHT_BRACE
+            elif token.type == TokenType.COMMA:
+                marquee_token_type = MarqueeTokenType.COMMA
+            elif token.type == TokenType.SEMICOLON:
+                marquee_token_type = MarqueeTokenType.SEMICOLON
+            elif token.type == TokenType.EQUALS:
+                marquee_token_type = MarqueeTokenType.EQUALS
+            elif token.type == TokenType.INTEGER:
+                marquee_token_type = MarqueeTokenType.INTEGER
+            else:
+                # Default to identifier for anything else
+                marquee_token_type = MarqueeTokenType.IDENTIFIER
+                
+            # Create a new marquee token
+            marquee_token = MarqueeToken(
+                type=marquee_token_type,
+                lexeme=token.lexeme,
+                literal=token.literal,
+                line=token.line,
+                column=token.column
+            )
+            marquee_tokens.append(marquee_token)
+        
+        # Add EOF token
+        marquee_tokens.append(MarqueeToken(
+            type=MarqueeTokenType.EOF,
+            lexeme="",
+            literal=None,
+            line=0,
+            column=0
+        ))
+        
+        return marquee_tokens
     
     def _canvas_declaration(self) -> CanvasDeclaration:
         """Parse a canvas declaration."""
@@ -220,7 +326,7 @@ class Parser:
         self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' after canvas properties.")
         
         location = Location(name_token.line, name_token.column)
-        return CanvasDeclaration(name, properties, placements, location)
+        return CanvasDeclaration(name=name, properties=properties, placements=placements, location=location)
     
     def _place_statement(self) -> PlacementStatement:
         """Parse a PLACE statement."""
@@ -241,7 +347,7 @@ class Parser:
         z = None
         if self._match(TokenType.Z):
             z_token = self._consume(TokenType.INTEGER, TokenType.FLOAT, error_message="Expected numeric z-order after 'Z'.")
-            z = Literal(z_token.literal, Location(z_token.line, z_token.column))
+            z = Literal(value=z_token.literal, location=Location(z_token.line, z_token.column))
         
         # Optional justification
         justification = None
@@ -251,7 +357,7 @@ class Parser:
         self._consume(TokenType.SEMICOLON, error_message="Expected ';' after PLACE statement.")
         
         location = Location(widget_token.line, widget_token.column)
-        return PlacementStatement(widget_name, x, y, z, justification, location)
+        return PlacementStatement(widget_name=widget_name, x=x, y=y, z=z, justification=justification, location=location)
     
     def _stack_declaration(self) -> StackDeclaration:
         """Parse a stack declaration."""
@@ -277,7 +383,7 @@ class Parser:
         self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' after stack properties.")
         
         location = Location(name_token.line, name_token.column)
-        return StackDeclaration(name, properties, appends, location)
+        return StackDeclaration(name=name, properties=properties, appends=appends, location=location)
     
     def _append_statement(self) -> AppendStatement:
         """Parse an APPEND statement."""
@@ -289,12 +395,12 @@ class Parser:
         gap = None
         if self._match(TokenType.GAP):
             gap_token = self._consume(TokenType.INTEGER, TokenType.FLOAT, error_message="Expected numeric gap after 'GAP'.")
-            gap = Literal(gap_token.literal, Location(gap_token.line, gap_token.column))
+            gap = Literal(value=gap_token.literal, location=Location(gap_token.line, gap_token.column))
         
         self._consume(TokenType.SEMICOLON, error_message="Expected ';' after APPEND statement.")
         
         location = Location(widget_token.line, widget_token.column)
-        return AppendStatement(widget_name, gap, location)
+        return AppendStatement(widget_name=widget_name, gap=gap, location=location)
     
     def _sequence_declaration(self) -> SequenceDeclaration:
         """Parse a sequence declaration."""
@@ -320,7 +426,7 @@ class Parser:
         self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' after sequence properties.")
         
         location = Location(name_token.line, name_token.column)
-        return SequenceDeclaration(name, properties, appends, location)
+        return SequenceDeclaration(name=name, properties=properties, appends=appends, location=location)
     
     def _sequence_append_statement(self) -> SequenceAppendStatement:
         """Parse a sequence APPEND statement."""
@@ -337,7 +443,7 @@ class Parser:
         self._consume(TokenType.SEMICOLON, error_message="Expected ';' after APPEND statement.")
         
         location = Location(widget_token.line, widget_token.column)
-        return SequenceAppendStatement(widget_name, condition, location)
+        return SequenceAppendStatement(widget_name=widget_name, condition=condition, location=location)
     
     def _index_declaration(self) -> IndexDeclaration:
         """Parse an index declaration."""
@@ -363,7 +469,7 @@ class Parser:
         self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' after index properties.")
         
         location = Location(name_token.line, name_token.column)
-        return IndexDeclaration(name, properties, appends, location)
+        return IndexDeclaration(name=name, properties=properties, appends=appends, location=location)
     
     def _index_append_statement(self) -> IndexAppendStatement:
         """Parse an index APPEND statement."""
@@ -374,7 +480,7 @@ class Parser:
         self._consume(TokenType.SEMICOLON, error_message="Expected ';' after APPEND statement.")
         
         location = Location(widget_token.line, widget_token.column)
-        return IndexAppendStatement(widget_name, location)
+        return IndexAppendStatement(widget_name=widget_name, location=location)
     
     def _theme_declaration(self) -> ThemeDeclaration:
         """Parse a theme declaration."""
@@ -385,7 +491,7 @@ class Parser:
         properties = self._properties_block()
         
         location = Location(name_token.line, name_token.column)
-        return ThemeDeclaration(name, properties, location)
+        return ThemeDeclaration(name=name, properties=properties, location=location)
     
     def _style_declaration(self) -> StyleDeclaration:
         """Parse a style declaration."""
@@ -396,7 +502,7 @@ class Parser:
         properties = self._properties_block()
         
         location = Location(name_token.line, name_token.column)
-        return StyleDeclaration(name, properties, location)
+        return StyleDeclaration(name=name, properties=properties, location=location)
     
     def _state_declaration(self) -> StateDeclaration:
         """Parse a state declaration."""
@@ -417,14 +523,14 @@ class Parser:
             value_location = Location(value_token.line, value_token.column)
             
             if value_token.type in [TokenType.INTEGER, TokenType.FLOAT, TokenType.STRING, TokenType.BOOLEAN]:
-                default_value = Literal(value_token.literal, value_location)
+                default_value = Literal(value=value_token.literal, location=value_location)
             else:
                 self._error(value_token, "Expected literal value after DEFAULT.")
         
         self._consume(TokenType.SEMICOLON, error_message="Expected ';' after state declaration.")
         
         location = Location(name_token.line, name_token.column)
-        return StateDeclaration(name, state_type, default_value, location)
+        return StateDeclaration(name=name, type=state_type, default_value=default_value, location=location)
     
     def _datasource_declaration(self) -> DataSourceDeclaration:
         """Parse a datasource declaration."""
@@ -435,7 +541,7 @@ class Parser:
         properties = self._properties_block()
         
         location = Location(name_token.line, name_token.column)
-        return DataSourceDeclaration(name, properties, location)
+        return DataSourceDeclaration(name=name, properties=properties, location=location)
     
     def _bind_statement(self) -> BindingStatement:
         """Parse a BIND statement."""
@@ -451,7 +557,7 @@ class Parser:
         self._consume(TokenType.SEMICOLON, error_message="Expected ';' after binding.")
         
         location = Location(variable_token.line, variable_token.column)
-        return BindingStatement(variable, target, location)
+        return BindingStatement(variable=variable, target=target, location=location)
     
     def _app_declaration(self) -> AppDeclaration:
         """Parse an app declaration."""
@@ -480,7 +586,7 @@ class Parser:
         self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' after app properties.")
         
         location = Location(name_token.line, name_token.column)
-        return AppDeclaration(name, properties, screens, datasources, location)
+        return AppDeclaration(name=name, properties=properties, screens=screens, datasources=datasources, location=location)
     
     def _reference_block(self, block_name: str) -> List[ReferenceStatement]:
         """Parse a block of references."""
@@ -498,7 +604,7 @@ class Parser:
                 self._consume(TokenType.SEMICOLON, error_message="Expected ';' after reference.")
                 
                 location = Location(name_token.line, name_token.column)
-                references.append(ReferenceStatement(name, location))
+                references.append(ReferenceStatement(target_name=name, location=location))
             else:
                 token = self._peek()
                 self._error(token, f"Expected REFERENCE in {block_name} block but got '{token.lexeme}'.")
@@ -536,11 +642,12 @@ class Parser:
         self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' after RESOURCES block.")
         
         location = Location(token.line, token.column)
-        return ResourcesBlock(declarations, location)
+        return ResourcesBlock(declarations=declarations, location=location)
     
     def _file_declaration(self) -> FileDeclaration:
         """Parse a FILE declaration."""
         # FILE name: "path";
+        # or FILE name: "path", - with trailing comma
         token = self._previous()
         
         name_token = self._consume(TokenType.IDENTIFIER, error_message="Expected file name identifier.")
@@ -548,33 +655,51 @@ class Parser:
         
         self._consume(TokenType.COLON, error_message="Expected ':' after file name.")
         
-        path_token = self._consume(TokenType.STRING, TokenType.PATH, error_message="Expected file path.")
+        path_token = self._consume(TokenType.STRING, TokenType.PATH_LITERAL, error_message="Expected file path.")
         path = path_token.literal
         
-        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after file path.")
+        # Handle both semicolon and comma terminators for flexibility
+        if self._match(TokenType.SEMICOLON):
+            # Standard semicolon terminator
+            pass
+        elif self._match(TokenType.COMMA):
+            # Allow comma as an alternative terminator (common in JSON/JS style)
+            pass
+        else:
+            self._error(self._peek(), "Expected ';' or ',' after file path.")
         
         location = Location(token.line, token.column)
-        return FileDeclaration(name, path, location)
+        return FileDeclaration(name=name, path=path, location=location)
     
     def _dir_declaration(self) -> DirDeclaration:
         """Parse a directory declaration."""
         # fonts: "path/to/fonts/";
+        # or fonts: "path/to/fonts/", - with trailing comma
         type_token = self._consume(TokenType.IDENTIFIER, error_message="Expected directory type identifier.")
         path_type = type_token.literal
         
         self._consume(TokenType.COLON, error_message="Expected ':' after directory type.")
         
-        path_token = self._consume(TokenType.STRING, TokenType.PATH, error_message="Expected directory path.")
+        path_token = self._consume(TokenType.STRING, TokenType.PATH_LITERAL, error_message="Expected directory path.")
         path = path_token.literal
         
-        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after directory path.")
+        # Handle both semicolon and comma terminators for flexibility
+        if self._match(TokenType.SEMICOLON):
+            # Standard semicolon terminator
+            pass
+        elif self._match(TokenType.COMMA):
+            # Allow comma as an alternative terminator (common in JSON/JS style)
+            pass
+        else:
+            self._error(self._peek(), "Expected ';' or ',' after directory path.")
         
         location = Location(type_token.line, type_token.column)
-        return DirDeclaration(path_type, path, location)
+        return DirDeclaration(path_type=path_type, path=path, location=location)
     
     def _search_path_declaration(self) -> SearchPathDeclaration:
         """Parse a SEARCH_PATH declaration."""
         # SEARCH_PATH fonts: ["dir1/", "dir2/"];
+        # or SEARCH_PATH fonts: ["dir1/", "dir2/"], - with trailing comma
         token = self._previous()
         
         type_token = self._consume(TokenType.IDENTIFIER, error_message="Expected path type identifier.")
@@ -589,19 +714,28 @@ class Parser:
         
         if not self._check(TokenType.RIGHT_BRACKET):
             # First path
-            path_token = self._consume(TokenType.STRING, TokenType.PATH, error_message="Expected path string.")
+            path_token = self._consume(TokenType.STRING, TokenType.PATH_LITERAL, error_message="Expected path string.")
             paths.append(path_token.literal)
             
             # Additional paths
             while self._match(TokenType.COMMA):
-                path_token = self._consume(TokenType.STRING, TokenType.PATH, error_message="Expected path string after ','.")
+                path_token = self._consume(TokenType.STRING, TokenType.PATH_LITERAL, error_message="Expected path string after ','.")
                 paths.append(path_token.literal)
         
         self._consume(TokenType.RIGHT_BRACKET, error_message="Expected ']' after path list.")
-        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after search path declaration.")
+        
+        # Handle both semicolon and comma terminators for flexibility
+        if self._match(TokenType.SEMICOLON):
+            # Standard semicolon terminator
+            pass
+        elif self._match(TokenType.COMMA):
+            # Allow comma as an alternative terminator (common in JSON/JS style)
+            pass
+        else:
+            self._error(self._peek(), "Expected ';' or ',' after search path declaration.")
         
         location = Location(token.line, token.column)
-        return SearchPathDeclaration(path_type, paths, location)
+        return SearchPathDeclaration(path_type=path_type, paths=paths, location=location)
     
     def _env_block(self) -> EnvBlock:
         """Parse an ENV block."""
@@ -741,7 +875,7 @@ class Parser:
         
         self._consume(TokenType.FROM, error_message="Expected 'FROM' after import list.")
         
-        source_token = self._consume(TokenType.STRING, TokenType.PATH, error_message="Expected source file path.")
+        source_token = self._consume(TokenType.STRING, TokenType.PATH_LITERAL, error_message="Expected source file path.")
         source = source_token.literal
         
         self._consume(TokenType.SEMICOLON, error_message="Expected ';' after import statement.")
@@ -758,6 +892,10 @@ class Parser:
         
         # Parse properties
         while not self._check(TokenType.RIGHT_BRACE) and not self._is_at_end():
+            # Skip over non-property tokens like TIMELINE
+            if self._check(TokenType.TIMELINE):
+                break
+                
             prop, value = self._property()
             properties[prop] = value
         
@@ -862,7 +1000,7 @@ class Parser:
         
         if self._match(TokenType.INTEGER, TokenType.FLOAT, TokenType.STRING, TokenType.BOOLEAN):
             location = Location(token.line, token.column)
-            return Literal(token.literal, location)
+            return Literal(value=token.literal, location=location)
         
         if self._match(TokenType.IDENTIFIER):
             name = token.literal
@@ -871,18 +1009,51 @@ class Parser:
             # Check for property access
             if self._match(TokenType.DOT):
                 property_token = self._consume(TokenType.IDENTIFIER, error_message="Expected property name after '.'.")
-                return PropertyAccess(name, property_token.literal, location)
+                return PropertyAccess(object=name, property=property_token.literal, location=location)
             
-            return Variable(name, location)
+            return Variable(name=name, location=location)
         
-        # Parenthesized expression
+        # Special handling for predefined constants like THEME
+        if self._match(TokenType.THEME):
+            location = Location(token.line, token.column)
+            
+            # Check for property access 
+            if self._match(TokenType.DOT):
+                property_token = self._consume(TokenType.IDENTIFIER, error_message="Expected property name after 'THEME.'.")
+                return PropertyAccess(object="THEME", property=property_token.literal, location=location)
+            
+            self._error(token, "Expected '.' after THEME.")
+            return Expression(location=location)
+        
+        # Parenthesized expression (including tuples)
         if self._match(TokenType.LEFT_PAREN):
-            expr = self._expression()
-            self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after expression.")
-            return expr
+            # This could be a simple parenthesized expression or a tuple
+            first_expr = self._expression()
+            
+            if self._match(TokenType.COMMA):
+                # This is a tuple - collect all elements
+                elements = [first_expr]
+                
+                # Get the second element
+                elements.append(self._expression())
+                
+                # Check for more elements
+                while self._match(TokenType.COMMA):
+                    elements.append(self._expression())
+                
+                self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after tuple.")
+                
+                # Create an ArrayLiteral to represent the tuple
+                # (we're reusing ArrayLiteral since it's structurally identical to a tuple)
+                location = Location(token.line, token.column)
+                return ArrayLiteral(elements=elements, location=location)
+            else:
+                # This is a simple parenthesized expression
+                self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after expression.")
+                return first_expr
         
         self._error(token, f"Expected expression but got '{token.lexeme}'.")
-        return Expression(Location(0, 0))
+        return Expression(location=Location(0, 0))
     
     def _match(self, *types: TokenType) -> bool:
         """Check if the current token matches any of the given types and advance if it does."""

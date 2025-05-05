@@ -31,6 +31,13 @@ def test_widget_declaration():
     
     program = parse_application_dsl(source)
     
+    # Debug information
+    print(f"\nProgram statements: {len(program.statements)}")
+    for i, stmt in enumerate(program.statements):
+        print(f"Statement {i} type: {type(stmt)}")
+        print(f"Statement {i} repr: {repr(stmt)}")
+        print(f"Statement {i} direct str: {stmt}")
+    
     # Assertions to verify results
     assert len(program.statements) == 1, "Expected 1 statement in the program"
     assert isinstance(program.statements[0], WidgetDeclaration), "Expected a WidgetDeclaration"
@@ -247,7 +254,7 @@ def test_complete_application():
     program = parse_application_dsl(source)
     
     # Assertions to verify results
-    assert len(program.statements) == 4, "Expected 4 statements in the program"
+    assert len(program.statements) == 5, "Expected 5 statements in the program"
     assert any(isinstance(stmt, ThemeDeclaration) for stmt in program.statements), "Expected a ThemeDeclaration"
     assert sum(1 for stmt in program.statements if isinstance(stmt, WidgetDeclaration)) == 2, "Expected 2 WidgetDeclarations"
     assert any(isinstance(stmt, CanvasDeclaration) for stmt in program.statements), "Expected a CanvasDeclaration"

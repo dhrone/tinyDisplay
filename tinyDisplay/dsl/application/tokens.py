@@ -20,7 +20,7 @@ class TokenType(Enum):
     STRING = auto()
     IDENTIFIER = auto()
     BOOLEAN = auto()  # true/false
-    PATH = auto()     # file path
+    PATH_LITERAL = auto()  # file path
     
     # Keywords - Definition
     DEFINE = auto()
