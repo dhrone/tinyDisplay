@@ -230,10 +230,36 @@ class Validator:
         if widget.type == "Text":
             if "value" not in widget.properties:
                 self._error(widget.location, f"Text widget '{widget.name}' must have a 'value' property.")
+            elif not isinstance(widget.properties["value"], Literal) and not isinstance(widget.properties["value"], PropertyAccess):
+                self._error(widget.location, f"Text widget '{widget.name}' 'value' property must be a string or a property reference. Type mismatch.")
         
         elif widget.type == "Image":
             if "source" not in widget.properties:
                 self._error(widget.location, f"Image widget '{widget.name}' must have a 'source' property.")
+            elif not isinstance(widget.properties["source"], Literal) and not isinstance(widget.properties["source"], PropertyAccess):
+                self._error(widget.location, f"Image widget '{widget.name}' 'source' property must be a string or a property reference. Type mismatch.")
+        
+        # Validate common property types
+        if "size" in widget.properties:
+            size_prop = widget.properties["size"]
+            if not isinstance(size_prop, ArrayLiteral) and not isinstance(size_prop, PropertyAccess):
+                self._error(widget.location, f"Widget '{widget.name}' 'size' property must be a tuple (width, height). Type mismatch.")
+            elif isinstance(size_prop, ArrayLiteral) and len(size_prop.elements) != 2:
+                self._error(widget.location, f"Widget '{widget.name}' 'size' property must have exactly 2 elements (width, height). Type mismatch.")
+        
+        # Validate color properties
+        for color_prop in ["foreground", "background"]:
+            if color_prop in widget.properties:
+                prop = widget.properties[color_prop]
+                if isinstance(prop, Literal) and not isinstance(prop.value, str):
+                    self._error(widget.location, f"Widget '{widget.name}' '{color_prop}' property must be a string color value. Type mismatch.")
+        
+        # Validate numeric properties
+        for num_prop in ["opacity", "rotation", "scale"]:
+            if num_prop in widget.properties:
+                prop = widget.properties[num_prop]
+                if isinstance(prop, Literal) and not isinstance(prop.value, (int, float)):
+                    self._error(widget.location, f"Widget '{widget.name}' '{num_prop}' property must be a number. Type mismatch.")
         
         # Validate expressions in properties
         for prop_name, expr in widget.properties.items():

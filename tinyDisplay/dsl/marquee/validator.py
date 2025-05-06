@@ -544,11 +544,10 @@ class Validator:
             # Check if the variable is defined
             if expr.name not in self.defined_variables:
                 # This is a soft error - the variable might be defined at runtime
-                # self.errors.append(ValidationError(
-                #     location=expr.location,
-                #     message=f"Variable '{expr.name}' used but not defined."
-                # ))
-                pass
+                self.errors.append(ValidationError(
+                    location=expr.location,
+                    message=f"Variable '{expr.name}' used but not defined."
+                ))
         elif isinstance(expr, BinaryExpr):
             # Validate both sides of the binary expression
             self._validate_expression(expr.left)

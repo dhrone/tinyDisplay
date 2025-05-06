@@ -45,6 +45,20 @@ class PropertyAccess(Expression):
 
 
 @dataclass
+class ArrayAccess(Expression):
+    """An array access expression (e.g., items[0])."""
+    array: Union[str, Expression]
+    index: Expression
+
+
+@dataclass
+class FunctionCall(Expression):
+    """A function call expression (e.g., navigate_to("home"))."""
+    function: str
+    arguments: List[Expression]
+
+
+@dataclass
 class MacroReference(Expression):
     """A reference to a macro (e.g., @SCREEN_WIDTH)."""
     name: str
@@ -246,6 +260,13 @@ class TimelineBlock(Statement):
     }
     """
     marquee_ast: Any  # This will hold the Marquee DSL AST
+    
+    @property
+    def statements(self):
+        """
+        Provides access to the statements within the marquee AST for backward compatibility.
+        """
+        return self.marquee_ast.statements
 
 
 @dataclass

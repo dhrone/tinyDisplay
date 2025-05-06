@@ -31,6 +31,13 @@ class TokenType(Enum):
     UP = auto()
     DOWN = auto()
     
+    # Keywords - Slide actions
+    IN = auto()
+    OUT = auto()
+    IN_OUT = auto()
+    TOP = auto()
+    BOTTOM = auto()
+    
     # Keywords - Control flow
     LOOP = auto()
     END = auto()
@@ -118,6 +125,13 @@ KEYWORDS = {
     "RIGHT": TokenType.RIGHT,
     "UP": TokenType.UP,
     "DOWN": TokenType.DOWN,
+    
+    # Slide actions
+    "IN": TokenType.IN,
+    "OUT": TokenType.OUT,
+    "IN_OUT": TokenType.IN_OUT,
+    "TOP": TokenType.TOP,
+    "BOTTOM": TokenType.BOTTOM,
     
     # Control flow
     "LOOP": TokenType.LOOP,

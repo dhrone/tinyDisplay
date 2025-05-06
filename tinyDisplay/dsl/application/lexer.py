@@ -120,6 +120,8 @@ class Lexer:
                 self._multi_line_comment()
             else:
                 self._add_token(TokenType.STAR)
+        elif c == '?':
+            self._add_token(TokenType.QUESTION_MARK)
         # Handle comparison operators
         elif c == '=':
             if self._match('='):

@@ -156,6 +156,10 @@ class Parser:
             
             self._consume(TokenType.AS, error_message="Expected 'AS' after widget name.")
             
+            # Widget type - Check for a left brace which would be a syntax error (missing type)
+            if self._check(TokenType.LEFT_BRACE):
+                self._error(self._peek(), "Expected widget type.")
+                
             # Widget type
             type_token = self._consume(
                 TokenType.TEXT, TokenType.IMAGE, TokenType.PROGRESSBAR, 
@@ -210,8 +214,7 @@ class Parser:
         self._consume(TokenType.LEFT_BRACE, error_message="Expected '{' after TIMELINE.")
         
         # Extract the content of the timeline block
-        start_token = self.tokens[self.current]
-        start_position = self.current
+        start_token_pos = self.current
         brace_depth = 1
         
         while brace_depth > 0 and not self._is_at_end():
@@ -225,82 +228,132 @@ class Parser:
             self._error(self._peek(), "Unterminated TIMELINE block.")
         
         # Extract the Marquee DSL content
-        marquee_tokens = self.tokens[start_position:self.current-1]
+        end_token_pos = self.current - 1  # Exclude the closing brace
+        marquee_tokens = self.tokens[start_token_pos:end_token_pos]
         
-        # Convert to Marquee DSL tokens
-        marquee_tokens_converted = self._convert_to_marquee_tokens(marquee_tokens)
-        
-        # Parse using Marquee parser
-        marquee_parser = MarqueeParser(marquee_tokens_converted)
-        marquee_ast = marquee_parser.parse()
+        # Convert to Marquee lexer tokens
+        if len(marquee_tokens) > 0:
+            # Get the content as a string and re-tokenize using the Marquee lexer
+            from ..marquee.lexer import Lexer as MarqueeLexer
+            
+            # Marquee-specific keywords to preserve exact casing and format
+            marquee_keywords = {
+                "MOVE", "PAUSE", "LOOP", "INFINITE", "END", "IF", "ELSE", "ELSEIF",
+                "BREAK", "CONTINUE", "LEFT", "RIGHT", "UP", "DOWN", "SCROLL",
+                "SLIDE", "POPUP", "IN", "OUT", "IN_OUT", "TOP", "BOTTOM",
+                "SYNC", "WAIT_FOR", "PERIOD", "START_AT", "SEGMENT", "POSITION_AT",
+                "SCHEDULE_AT", "ON_VARIABLE_CHANGE", "RESET_POSITION"
+            }
+            
+            # Special characters and operators to preserve with proper spacing
+            source = ""
+            i = 0
+            while i < len(marquee_tokens):
+                token = marquee_tokens[i]
+                
+                # Special handling for comparison operators and other multi-token constructs
+                if token.type == TokenType.LESS and i+1 < len(marquee_tokens) and marquee_tokens[i+1].type == TokenType.EQUALS:
+                    source += "<="
+                    i += 2  # Skip both tokens
+                    continue
+                elif token.type == TokenType.GREATER and i+1 < len(marquee_tokens) and marquee_tokens[i+1].type == TokenType.EQUALS:
+                    source += ">="
+                    i += 2  # Skip both tokens
+                    continue
+                # Special handling for array accesses like widget.size[0]
+                elif token.type == TokenType.LEFT_BRACKET:
+                    source += "["
+                    # Don't add spaces inside brackets
+                    i += 1
+                    while i < len(marquee_tokens) and marquee_tokens[i].type != TokenType.RIGHT_BRACKET:
+                        inner_token = marquee_tokens[i]
+                        if inner_token.type == TokenType.INTEGER:
+                            source += str(inner_token.literal)
+                        else:
+                            source += inner_token.lexeme
+                        i += 1
+                    if i < len(marquee_tokens) and marquee_tokens[i].type == TokenType.RIGHT_BRACKET:
+                        source += "]"
+                        i += 1
+                    continue
+                elif token.type == TokenType.EQUAL_EQUAL:
+                    source += "=="
+                elif token.type == TokenType.NOT_EQUALS:
+                    source += "!="
+                elif token.type == TokenType.LESS:
+                    source += "<"
+                elif token.type == TokenType.GREATER:
+                    source += ">"
+                elif token.type == TokenType.LEFT_BRACE:
+                    source += " { "
+                elif token.type == TokenType.RIGHT_BRACE:
+                    source += " } "
+                elif token.type == TokenType.LEFT_PAREN:
+                    source += "("
+                elif token.type == TokenType.RIGHT_PAREN:
+                    source += ")"
+                elif token.type == TokenType.COMMA:
+                    source += ", "
+                elif token.type == TokenType.SEMICOLON:
+                    source += ";"
+                elif token.type == TokenType.EQUALS:
+                    source += "="
+                elif token.type == TokenType.DOT:
+                    source += "."
+                elif token.type == TokenType.STAR:
+                    source += "*"
+                elif token.type == TokenType.SLASH:
+                    source += "/"
+                elif token.type == TokenType.PLUS:
+                    source += "+"
+                elif token.type == TokenType.MINUS:
+                    source += "-"
+                elif token.type == TokenType.COLON:
+                    source += ":"
+                elif token.type == TokenType.INTEGER:
+                    # Preserve numeric literals exactly
+                    source += str(token.literal)
+                elif token.type == TokenType.FLOAT:
+                    # Preserve numeric literals exactly
+                    source += str(token.literal)
+                elif token.type == TokenType.STRING:
+                    # Preserve string literals with quotes
+                    source += f'"{token.literal}"'
+                elif token.lexeme.upper() in marquee_keywords:
+                    # Preserve Marquee keywords as-is
+                    source += token.lexeme.upper() + " "
+                else:
+                    # For normal identifiers and other tokens
+                    source += token.lexeme + " "
+                
+                i += 1
+            
+            # Parse the resulting source with the Marquee lexer and parser
+            print(f"Timeline source to parse: {source}")
+            marquee_lexer = MarqueeLexer(source)
+            marquee_tokens = marquee_lexer.scan_tokens()
+            
+            # Debug: print the generated tokens
+            print("Generated tokens:")
+            for token in marquee_tokens:
+                print(f"  {token}")
+                
+            from ..marquee.parser import Parser as MarqueeParser
+            marquee_parser = MarqueeParser(marquee_tokens)
+            marquee_ast = marquee_parser.parse()
+            
+            # Debug: print the resulting AST
+            print(f"Resulting AST: {marquee_ast}")
+            print(f"Statement count: {len(marquee_ast.statements)}")
+            for stmt in marquee_ast.statements:
+                print(f"  Statement type: {type(stmt).__name__}")
+        else:
+            # Create an empty Marquee AST
+            from ..marquee.ast import Program
+            marquee_ast = Program([])
         
         location = Location(timeline_token.line, timeline_token.column)
         return TimelineBlock(marquee_ast=marquee_ast, location=location)
-    
-    def _convert_to_marquee_tokens(self, tokens: List[Token]) -> List[Any]:
-        """Convert Application DSL tokens to Marquee DSL tokens."""
-        # This is a placeholder. In a real implementation, this would convert between token types
-        from ..marquee.tokens import Token as MarqueeToken, TokenType as MarqueeTokenType
-        
-        marquee_tokens = []
-        for token in tokens:
-            # Map the token type
-            if token.type == TokenType.IDENTIFIER and token.lexeme == "MOVE":
-                marquee_token_type = MarqueeTokenType.MOVE
-            elif token.type == TokenType.IDENTIFIER and token.lexeme == "PAUSE":
-                marquee_token_type = MarqueeTokenType.PAUSE
-            elif token.type == TokenType.IDENTIFIER and token.lexeme == "LOOP":
-                marquee_token_type = MarqueeTokenType.LOOP
-            elif token.type == TokenType.IDENTIFIER and token.lexeme == "END":
-                marquee_token_type = MarqueeTokenType.END
-            elif token.type == TokenType.IDENTIFIER and token.lexeme == "LEFT":
-                marquee_token_type = MarqueeTokenType.LEFT
-            elif token.type == TokenType.IDENTIFIER and token.lexeme == "RIGHT":
-                marquee_token_type = MarqueeTokenType.RIGHT
-            elif token.type == TokenType.IDENTIFIER and token.lexeme == "UP":
-                marquee_token_type = MarqueeTokenType.UP
-            elif token.type == TokenType.IDENTIFIER and token.lexeme == "DOWN":
-                marquee_token_type = MarqueeTokenType.DOWN
-            elif token.type == TokenType.LEFT_PAREN:
-                marquee_token_type = MarqueeTokenType.LEFT_PAREN
-            elif token.type == TokenType.RIGHT_PAREN:
-                marquee_token_type = MarqueeTokenType.RIGHT_PAREN
-            elif token.type == TokenType.LEFT_BRACE:
-                marquee_token_type = MarqueeTokenType.LEFT_BRACE
-            elif token.type == TokenType.RIGHT_BRACE:
-                marquee_token_type = MarqueeTokenType.RIGHT_BRACE
-            elif token.type == TokenType.COMMA:
-                marquee_token_type = MarqueeTokenType.COMMA
-            elif token.type == TokenType.SEMICOLON:
-                marquee_token_type = MarqueeTokenType.SEMICOLON
-            elif token.type == TokenType.EQUALS:
-                marquee_token_type = MarqueeTokenType.EQUALS
-            elif token.type == TokenType.INTEGER:
-                marquee_token_type = MarqueeTokenType.INTEGER
-            else:
-                # Default to identifier for anything else
-                marquee_token_type = MarqueeTokenType.IDENTIFIER
-                
-            # Create a new marquee token
-            marquee_token = MarqueeToken(
-                type=marquee_token_type,
-                lexeme=token.lexeme,
-                literal=token.literal,
-                line=token.line,
-                column=token.column
-            )
-            marquee_tokens.append(marquee_token)
-        
-        # Add EOF token
-        marquee_tokens.append(MarqueeToken(
-            type=MarqueeTokenType.EOF,
-            lexeme="",
-            literal=None,
-            line=0,
-            column=0
-        ))
-        
-        return marquee_tokens
     
     def _canvas_declaration(self) -> CanvasDeclaration:
         """Parse a canvas declaration."""
@@ -658,14 +711,12 @@ class Parser:
         path_token = self._consume(TokenType.STRING, TokenType.PATH_LITERAL, error_message="Expected file path.")
         path = path_token.literal
         
-        # Handle both semicolon and comma terminators for flexibility
-        if self._match(TokenType.SEMICOLON):
-            # Standard semicolon terminator
+        # Handle both semicolon and comma terminators for flexibility,
+        # or allow the closing brace of the enclosing block without a terminator
+        if self._match(TokenType.SEMICOLON) or self._match(TokenType.COMMA):
+            # Standard terminator
             pass
-        elif self._match(TokenType.COMMA):
-            # Allow comma as an alternative terminator (common in JSON/JS style)
-            pass
-        else:
+        elif not self._check(TokenType.RIGHT_BRACE):
             self._error(self._peek(), "Expected ';' or ',' after file path.")
         
         location = Location(token.line, token.column)
@@ -683,14 +734,12 @@ class Parser:
         path_token = self._consume(TokenType.STRING, TokenType.PATH_LITERAL, error_message="Expected directory path.")
         path = path_token.literal
         
-        # Handle both semicolon and comma terminators for flexibility
-        if self._match(TokenType.SEMICOLON):
-            # Standard semicolon terminator
+        # Handle both semicolon and comma terminators for flexibility,
+        # or allow the closing brace of the enclosing block without a terminator
+        if self._match(TokenType.SEMICOLON) or self._match(TokenType.COMMA):
+            # Standard terminator
             pass
-        elif self._match(TokenType.COMMA):
-            # Allow comma as an alternative terminator (common in JSON/JS style)
-            pass
-        else:
+        elif not self._check(TokenType.RIGHT_BRACE):
             self._error(self._peek(), "Expected ';' or ',' after directory path.")
         
         location = Location(type_token.line, type_token.column)
@@ -724,14 +773,12 @@ class Parser:
         
         self._consume(TokenType.RIGHT_BRACKET, error_message="Expected ']' after path list.")
         
-        # Handle both semicolon and comma terminators for flexibility
-        if self._match(TokenType.SEMICOLON):
-            # Standard semicolon terminator
+        # Handle both semicolon and comma terminators for flexibility,
+        # or allow the closing brace of the enclosing block without a terminator
+        if self._match(TokenType.SEMICOLON) or self._match(TokenType.COMMA):
+            # Standard terminator
             pass
-        elif self._match(TokenType.COMMA):
-            # Allow comma as an alternative terminator (common in JSON/JS style)
-            pass
-        else:
+        elif not self._check(TokenType.RIGHT_BRACE):
             self._error(self._peek(), "Expected ';' or ',' after search path declaration.")
         
         location = Location(token.line, token.column)
@@ -928,7 +975,12 @@ class Parser:
         
         value = self._expression()
         
-        self._consume(TokenType.COMMA, error_message="Expected ',' after property value.")
+        # Make trailing comma optional if followed by a closing brace
+        if not self._check(TokenType.RIGHT_BRACE):
+            self._consume(TokenType.COMMA, error_message="Expected ',' after property value.")
+        else:
+            # Optional comma before closing brace (common in JS/JSON style)
+            self._match(TokenType.COMMA)
         
         return name, value
     
@@ -956,6 +1008,35 @@ class Parser:
             right = self._term()
             location = Location(expr.location.line, expr.location.column)
             expr = BinaryExpression(left=expr, operator=operator, right=right, location=location)
+        
+        # Handle comparison operators 
+        if self._match(TokenType.LESS, TokenType.GREATER, TokenType.EQUAL_EQUAL, 
+                      TokenType.NOT_EQUALS, TokenType.LESS_EQUALS, TokenType.GREATER_EQUALS):
+            operator = self._previous().lexeme
+            right = self._term()
+            location = Location(expr.location.line, expr.location.column)
+            expr = BinaryExpression(left=expr, operator=operator, right=right, location=location)
+            
+            # Handle ternary conditional expression: condition ? true_expr : false_expr
+            if self._match(TokenType.QUESTION_MARK):
+                true_expr = self._expression()
+                self._consume(TokenType.COLON, error_message="Expected ':' in conditional expression")
+                false_expr = self._expression()
+                
+                # Create a nested binary expression to represent the ternary
+                condition_expr = expr
+                true_false = BinaryExpression(
+                    left=true_expr,
+                    operator=":",
+                    right=false_expr,
+                    location=location
+                )
+                expr = BinaryExpression(
+                    left=condition_expr,
+                    operator="?",
+                    right=true_false,
+                    location=location
+                )
         
         return expr
     
@@ -1015,8 +1096,12 @@ class Parser:
             
             properties[name] = value
             
+            # Make trailing comma optional if followed by a closing brace
             if not self._check(TokenType.RIGHT_BRACE):
                 self._consume(TokenType.COMMA, error_message="Expected ',' after property value.")
+            else:
+                # Optional comma before closing brace (common in JS/JSON style)
+                self._match(TokenType.COMMA)
         
         self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' after object literal.")
         
@@ -1073,10 +1158,72 @@ class Parser:
             name = token.literal
             location = Location(token.line, token.column)
             
-            # Check for property access
+            # Check for property access, array access, or function call
             if self._match(TokenType.DOT):
+                # Property access
                 property_token = self._consume(TokenType.IDENTIFIER, error_message="Expected property name after '.'.")
-                return PropertyAccess(object=name, property=property_token.literal, location=location)
+                expr = PropertyAccess(object=name, property=property_token.literal, location=location)
+                
+                # Allow for chained property access (obj.prop1.prop2)
+                while self._match(TokenType.DOT):
+                    property_token = self._consume(TokenType.IDENTIFIER, error_message="Expected property name after '.'.")
+                    expr = PropertyAccess(object=expr, property=property_token.literal, location=location)
+                
+                # Check for array access after property access (obj.prop[index])
+                if self._match(TokenType.LEFT_BRACKET):
+                    index_expr = self._expression()
+                    self._consume(TokenType.RIGHT_BRACKET, error_message="Expected ']' after array index.")
+                    from .ast import ArrayAccess
+                    expr = ArrayAccess(array=expr, index=index_expr, location=location)
+                    
+                    # Check for property access after array access (array[index].property)
+                    if self._match(TokenType.DOT):
+                        property_token = self._consume(TokenType.IDENTIFIER, error_message="Expected property name after '.'.")
+                        expr = PropertyAccess(object=expr, property=property_token.literal, location=location)
+                        
+                        # Allow for chained property access (array[index].prop1.prop2)
+                        while self._match(TokenType.DOT):
+                            property_token = self._consume(TokenType.IDENTIFIER, error_message="Expected property name after '.'.")
+                            expr = PropertyAccess(object=expr, property=property_token.literal, location=location)
+                    
+                    return expr
+            
+            # Array access (array[index])
+            elif self._match(TokenType.LEFT_BRACKET):
+                index_expr = self._expression()
+                self._consume(TokenType.RIGHT_BRACKET, error_message="Expected ']' after array index.")
+                from .ast import ArrayAccess
+                expr = ArrayAccess(array=Variable(name=name, location=location), index=index_expr, location=location)
+                
+                # Check for property access after array access (array[index].property)
+                if self._match(TokenType.DOT):
+                    property_token = self._consume(TokenType.IDENTIFIER, error_message="Expected property name after '.'.")
+                    expr = PropertyAccess(object=expr, property=property_token.literal, location=location)
+                    
+                    # Allow for chained property access (array[index].prop1.prop2)
+                    while self._match(TokenType.DOT):
+                        property_token = self._consume(TokenType.IDENTIFIER, error_message="Expected property name after '.'.")
+                        expr = PropertyAccess(object=expr, property=property_token.literal, location=location)
+                
+                return expr
+            
+            # Function call (func(args))
+            elif self._match(TokenType.LEFT_PAREN):
+                args = []
+                
+                # Parse arguments
+                if not self._check(TokenType.RIGHT_PAREN):
+                    # First argument
+                    args.append(self._expression())
+                    
+                    # Additional arguments
+                    while self._match(TokenType.COMMA):
+                        args.append(self._expression())
+                
+                self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after function arguments.")
+                
+                from .ast import FunctionCall
+                return FunctionCall(function=name, arguments=args, location=location)
             
             return Variable(name=name, location=location)
         

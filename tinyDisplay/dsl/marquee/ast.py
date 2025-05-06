@@ -15,6 +15,8 @@ class Direction(Enum):
     RIGHT = auto()
     UP = auto()
     DOWN = auto()
+    TOP = auto()
+    BOTTOM = auto()
 
 
 class SlideAction(Enum):

@@ -115,6 +115,7 @@ class TokenType(Enum):
     LESS = auto()            # <
     GREATER_EQUALS = auto()  # >=
     LESS_EQUALS = auto()     # <=
+    QUESTION_MARK = auto()   # ?
 
 
 @dataclass

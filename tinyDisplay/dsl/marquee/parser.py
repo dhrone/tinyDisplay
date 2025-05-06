@@ -59,19 +59,31 @@ class Parser:
         
         try:
             while not self._is_at_end():
-                statements.append(self._statement())
+                try:
+                    statements.append(self._statement())
+                except Exception as e:
+                    print(f"Error while parsing statement: {e}")
+                    self._synchronize()
             
             return Program(statements)
         except ParseError as e:
+            print(f"Parse error: {e}")
             self.errors.append(e)
             self._synchronize()
-            return self.parse()
+            return Program(statements)
+        except Exception as e:
+            print(f"Unexpected error in parser: {e}")
+            return Program(statements)
     
     def _statement(self) -> Statement:
         """Parse any statement."""
         
+        current_token = self._peek()
+        print(f"Parsing marquee statement starting with token: {current_token}")
+        
         # Movement statements
         if self._match(TokenType.MOVE):
+            print("Matched MOVE token, calling _move_statement")
             return self._move_statement()
         if self._match(TokenType.PAUSE):
             return self._pause_statement()
@@ -499,16 +511,15 @@ class Parser:
         self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after SLIDE.")
         
         # Parse action
-        action_token = self._consume(TokenType.IDENTIFIER, error_message="Expected action (IN, OUT, IN_OUT).")
         action = None
-        if action_token.lexeme == "IN":
+        if self._match(TokenType.IN):
             action = SlideAction.IN
-        elif action_token.lexeme == "OUT":
+        elif self._match(TokenType.OUT):
             action = SlideAction.OUT
-        elif action_token.lexeme == "IN_OUT":
+        elif self._match(TokenType.IN_OUT):
             action = SlideAction.IN_OUT
         else:
-            self._error(action_token, "Expected action (IN, OUT, IN_OUT).")
+            self._error(self._peek(), "Expected action (IN, OUT, IN_OUT).")
         
         self._consume(TokenType.COMMA, error_message="Expected ',' after action.")
         
@@ -522,8 +533,12 @@ class Parser:
             direction = Direction.UP
         elif self._match(TokenType.DOWN):
             direction = Direction.DOWN
+        elif self._match(TokenType.TOP):
+            direction = Direction.TOP
+        elif self._match(TokenType.BOTTOM):
+            direction = Direction.BOTTOM
         else:
-            self._error(self._peek(), "Expected direction (LEFT, RIGHT, UP, DOWN).")
+            self._error(self._peek(), "Expected direction (LEFT, RIGHT, UP, DOWN, TOP, BOTTOM).")
         
         self._consume(TokenType.COMMA, error_message="Expected ',' after direction.")
         distance = self._expression()
@@ -821,6 +836,18 @@ class Parser:
         """
         error = ParseError(token, message)
         self.errors.append(error)
+        print(f"Parse error at {token.line}:{token.column}: {message} Token: {token}")
+        # Print context of surrounding tokens (up to 3 before and after if available)
+        idx = self.current
+        start_idx = max(0, idx - 3)
+        end_idx = min(len(self.tokens), idx + 3)
+        context_tokens = self.tokens[start_idx:end_idx]
+        print("Context tokens:")
+        for i, ctx_token in enumerate(context_tokens):
+            marker = "  "
+            if start_idx + i == idx:
+                marker = "->"
+            print(f"{marker} {ctx_token}")
         raise error
     
     def _synchronize(self):

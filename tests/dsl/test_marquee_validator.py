@@ -103,10 +103,10 @@ def test_move_with_invalid_parameters():
     assert len(program.statements) > 0
     assert isinstance(program.statements[0], MoveStatement)
     
-    # The validator should now produce validation errors for undefined variables
-    # or would identify that 'xyz' is not a valid Direction enum value
+    # The validator should produce validation errors for undefined variables
     errors = validate_marquee_dsl(program)
-    assert len(errors) == 0  # No validation errors expected for undefined variables
+    assert len(errors) > 0  # Expect validation errors for undefined variables
+    assert any("xyz" in str(error) for error in errors)  # Error should mention the undefined variable
 
 
 def test_conflicting_movement_options():

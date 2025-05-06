@@ -158,8 +158,32 @@ def parse_and_validate_application_dsl(source: str) -> tuple[ApplicationProgram,
     Returns:
         A tuple containing the parsed AST and a list of validation errors.
     """
-    program = parse_application_dsl(source)
-    errors = validate_application_dsl(program)
+    lexer = AppLexer(source)
+    tokens = lexer.scan_tokens()
+    parser = AppParser(tokens)
+    program = parser.parse()
+    
+    # Include parser errors as validation errors
+    errors = []
+    if parser.errors:
+        from .application.ast import Location
+        # Convert parser errors to validation errors
+        for error_msg in parser.errors:
+            # Extract line and column information from error message if available
+            import re
+            match = re.search(r"Error at line (\d+):(\d+)", error_msg)
+            if match:
+                line = int(match.group(1))
+                column = int(match.group(2))
+                location = Location(line, column)
+            else:
+                location = Location(0, 0)
+            errors.append(AppValidationError(location=location, message=f"Syntax error: {error_msg}"))
+    
+    # Add standard validation errors
+    validation_errors = validate_application_dsl(program)
+    errors.extend(validation_errors)
+    
     return program, errors
 
 # Convenient aliases
