@@ -15,7 +15,9 @@ from .marquee.ast import (
     ResetPositionStatement, LoopStatement, IfStatement, BreakStatement, 
     ContinueStatement, SyncStatement, WaitForStatement, Expression, Literal,
     Variable, BinaryExpr, PropertyAccess, TimelineStatement, PeriodStatement,
-    StartAtStatement, SegmentStatement, PositionAtStatement
+    StartAtStatement, SegmentStatement, PositionAtStatement,
+    ScrollStatement, ScrollClipStatement, ScrollLoopStatement, 
+    ScrollBounceStatement, SlideStatement, PopUpStatement, HighLevelCommandStatement
 )
 
 
@@ -46,6 +48,17 @@ class ExecutionContext:
     start_at: int = 0
     pauses: List[int] = None
     pause_ends: List[int] = None
+    # Add tracking for SCROLL_CLIP starting positions
+    scroll_clip_start_x: Optional[int] = None
+    scroll_clip_start_y: Optional[int] = None
+    scroll_clip_total_moved: Optional[float] = None
+    scroll_clip_stabilized: bool = False
+    # Add tracking for SLIDE command
+    slide_start_x: Optional[int] = None
+    slide_start_y: Optional[int] = None
+    slide_total_moved: Optional[float] = None
+    slide_stabilized: bool = False
+    slide_progress: Optional[float] = None
     
     def __post_init__(self):
         """Initialize default values for collections."""
@@ -96,6 +109,11 @@ class MarqueeExecutor:
             "widget": {"x": 0, "y": 0, "width": 0, "height": 0, "opacity": 1.0},
             "container": {"width": 0, "height": 0},
             "current_tick": 0,
+            # Standard easing functions
+            "linear": "linear",
+            "ease_in": "ease_in",
+            "ease_out": "ease_out",
+            "ease_in_out": "ease_in_out"
         }
         
         # Add user-defined initial variables
@@ -109,13 +127,17 @@ class MarqueeExecutor:
             for error in self.errors:
                 self.logger.warning(f"Validation warning: {error}")
         
-    def execute(self, widget_size: Tuple[int, int], container_size: Tuple[int, int]) -> List[Position]:
+    def execute(self, widget_size: Tuple[int, int], container_size: Tuple[int, int], 
+              starting_position: Tuple[int, int] = (0, 0),
+              max_steps: Optional[int] = None) -> List[Position]:
         """
         Execute the program and generate a timeline.
         
         Args:
             widget_size: The size of the widget being animated (width, height).
             container_size: The size of the container (width, height).
+            starting_position: The initial position (x, y) for the timeline, defaults to (0,0).
+            max_steps: Maximum number of steps to generate (None for unlimited).
             
         Returns:
             A list of Positions representing the animation timeline.
@@ -125,6 +147,10 @@ class MarqueeExecutor:
         self.context.variables["widget"]["height"] = widget_size[1]
         self.context.variables["container"]["width"] = container_size[0]
         self.context.variables["container"]["height"] = container_size[1]
+        
+        # Update widget position with the provided starting position
+        self.context.variables["widget"]["x"] = starting_position[0]
+        self.context.variables["widget"]["y"] = starting_position[1]
         
         # Clear any previous execution state
         self.context.timeline = []
@@ -138,12 +164,25 @@ class MarqueeExecutor:
         self.context.pauses = []
         self.context.pause_ends = []
         
-        # Start with the widget at position (0, 0)
-        initial_pos = Position(x=0, y=0)
+        # Reset SCROLL_CLIP tracking variables
+        self.context.scroll_clip_start_x = None
+        self.context.scroll_clip_start_y = None
+        self.context.scroll_clip_total_moved = 0
+        self.context.scroll_clip_stabilized = False
+        
+        # Reset SLIDE tracking variables
+        self.context.slide_start_x = None
+        self.context.slide_start_y = None
+        self.context.slide_total_moved = 0
+        self.context.slide_stabilized = False
+        self.context.slide_progress = None
+        
+        # Start with the widget at the provided position
+        initial_pos = Position(x=starting_position[0], y=starting_position[1])
         self.context.timeline.append(initial_pos)
         
-        # Execute the program statements
-        self._execute_block(self.program.statements)
+        # Execute the program statements with incremental timeline generation
+        self._execute_program_incrementally(max_steps)
         
         # Apply period if defined
         if self.context.period is not None:
@@ -160,10 +199,73 @@ class MarqueeExecutor:
             )
         
         return self.context.timeline
-    
-    def _execute_block(self, statements: List[Statement]) -> None:
+        
+    def _execute_program_incrementally(self, max_steps: Optional[int] = None) -> None:
         """
-        Execute a block of statements.
+        Execute the program incrementally, generating the timeline step by step.
+        This approach allows conditions to be re-evaluated after each position change.
+        
+        Args:
+            max_steps: Maximum number of steps to generate (None for unlimited).
+        """
+        # Set a reasonable safety limit to avoid infinite loops
+        safety_limit = 1000 if max_steps is None else max_steps
+        
+        # While we haven't reached the maximum number of steps or safety limit
+        step_count = 0
+        max_timeline_length = safety_limit if max_steps is None else max_steps
+        
+        # Track positions to detect position stabilization (no movement)
+        position_history = set()
+        stable_position_count = 0
+        
+        while step_count < safety_limit and len(self.context.timeline) < max_timeline_length:
+            # Remember current timeline length to detect if any positions were added
+            original_timeline_length = len(self.context.timeline)
+            
+            # Get current position
+            current_x = self.context.variables["widget"]["x"]
+            current_y = self.context.variables["widget"]["y"]
+            
+            # Execute one iteration of the program
+            self.logger.debug(f"Step {step_count}: Executing program from position ({current_x}, {current_y})")
+            self._execute_one_step(self.program.statements)
+            
+            # Check if the timeline length increased
+            new_timeline_length = len(self.context.timeline)
+            if new_timeline_length <= original_timeline_length:
+                # No new positions added, might be at the end of movement
+                stable_position_count += 1
+                self.logger.debug(f"No new positions added at step {step_count}")
+                
+                # Break if stable for a certain number of iterations
+                if stable_position_count >= 5:
+                    self.logger.debug("Position stabilized, ending timeline generation")
+                    break
+            else:
+                # Reset stable position counter if new positions were added
+                stable_position_count = 0
+            
+            # Check for position loops (repeating the same positions)
+            latest_pos = (self.context.variables["widget"]["x"], self.context.variables["widget"]["y"])
+            if latest_pos in position_history:
+                self.logger.debug(f"Position loop detected at {latest_pos}, ending timeline generation")
+                break
+            position_history.add(latest_pos)
+            
+            step_count += 1
+            
+            # Safety check to avoid very large timelines
+            if len(self.context.timeline) >= max_timeline_length:
+                self.logger.debug(f"Reached maximum timeline length of {max_timeline_length}")
+                break
+                
+        self.logger.debug(f"Timeline generation completed after {step_count} steps, {len(self.context.timeline)} positions")
+    
+    def _execute_one_step(self, statements: List[Statement]) -> None:
+        """
+        Execute one step through the program statements.
+        This executes each statement once, allowing for incremental timeline building.
         
         Args:
             statements: The statements to execute.
@@ -173,38 +275,41 @@ class MarqueeExecutor:
                 # Exit early if we encountered a BREAK or CONTINUE
                 break
                 
-            self._execute_statement(stmt)
+            self._execute_statement_once(stmt)
     
-    def _execute_statement(self, stmt: Statement) -> None:
+    def _execute_statement_once(self, stmt: Statement) -> None:
         """
-        Execute a single statement.
+        Execute a single statement once.
         
         Args:
             stmt: The statement to execute.
         """
         if isinstance(stmt, Block):
-            self._execute_block(stmt.statements)
+            self._execute_one_step(stmt.statements)
         elif isinstance(stmt, MoveStatement):
-            self._execute_move(stmt)
+            self._execute_move_once(stmt)
         elif isinstance(stmt, PauseStatement):
             self._execute_pause(stmt)
         elif isinstance(stmt, ResetPositionStatement):
             self._execute_reset_position(stmt)
         elif isinstance(stmt, LoopStatement):
-            self._execute_loop(stmt)
+            self._execute_loop_once(stmt)
         elif isinstance(stmt, IfStatement):
-            self._execute_if(stmt)
+            self._execute_if_once(stmt)
         elif isinstance(stmt, BreakStatement):
             self.context.break_loop = True
         elif isinstance(stmt, ContinueStatement):
             self.context.continue_loop = True
         elif isinstance(stmt, TimelineStatement):
-            self._execute_timeline_statement(stmt)
-        # Add other statement types as needed
+            self._execute_timeline_statement_once(stmt)
+        # Add handling for high-level commands
+        elif isinstance(stmt, (ScrollStatement, ScrollClipStatement, ScrollLoopStatement, 
+                              ScrollBounceStatement, SlideStatement, PopUpStatement)):
+            self._execute_high_level_command(stmt)
     
-    def _execute_move(self, stmt: MoveStatement) -> None:
+    def _execute_move_once(self, stmt: MoveStatement) -> None:
         """
-        Execute a MOVE statement.
+        Execute a MOVE statement for one step.
         
         Args:
             stmt: The MOVE statement to execute.
@@ -213,6 +318,11 @@ class MarqueeExecutor:
         current_pos = self.context.timeline[-1]
         current_x = current_pos.x
         current_y = current_pos.y
+        
+        # Ensure widget position in environment is synced with current position
+        # This is crucial for conditionals to work correctly
+        self.context.variables["widget"]["x"] = current_x
+        self.context.variables["widget"]["y"] = current_y
         
         # Handle direction-based movement
         if stmt.direction is not None:
@@ -234,27 +344,21 @@ class MarqueeExecutor:
             elif stmt.direction == Direction.DOWN:
                 dy = step
             
-            # Calculate number of steps
-            num_steps = distance // step
+            # For incremental execution, just move one step
+            new_x = current_x + dx
+            new_y = current_y + dy
             
-            # Create a position for each step in the timeline
-            for i in range(num_steps):
-                new_x = current_x + dx
-                new_y = current_y + dy
-                
-                # Add the same position multiple times based on interval
-                for _ in range(interval):
-                    pos = Position(x=new_x, y=new_y)
-                    self.context.timeline.append(pos)
-                    self.context.tick_position += 1
-                
-                # Update current position
-                current_x = new_x
-                current_y = new_y
-                
-                # Update widget position in environment
-                self.context.variables["widget"]["x"] = current_x
-                self.context.variables["widget"]["y"] = current_y
+            # Add position with appropriate interval
+            for _ in range(interval):
+                pos = Position(x=new_x, y=new_y)
+                self.context.timeline.append(pos)
+                self.context.tick_position += 1
+            
+            # Update widget position in environment
+            self.context.variables["widget"]["x"] = new_x
+            self.context.variables["widget"]["y"] = new_y
+            
+            self.logger.debug(f"Updated widget position: x={new_x}, y={new_y}")
         
         # Handle absolute movement (from start to end coordinates)
         else:
@@ -282,34 +386,27 @@ class MarqueeExecutor:
                 step_x = dx / num_steps
                 step_y = dy / num_steps
                 
-                # Set initial position
-                current_x = start_x
-                current_y = start_y
+                # For incremental execution, just move one step from current position
+                # If we're not already on this movement path, start at beginning
+                if abs(current_x - start_x) > 0.1 or abs(current_y - start_y) > 0.1:
+                    # Not on the path yet, start at beginning
+                    current_x = start_x
+                    current_y = start_y
                 
-                # Create a position for each step
-                for i in range(num_steps):
-                    current_x += step_x
-                    current_y += step_y
-                    
-                    # Add the same position multiple times based on interval
-                    for _ in range(interval):
-                        pos = Position(x=int(round(current_x)), y=int(round(current_y)))
-                        self.context.timeline.append(pos)
-                        self.context.tick_position += 1
-                    
-                    # Update widget position in environment
-                    self.context.variables["widget"]["x"] = current_x
-                    self.context.variables["widget"]["y"] = current_y
-            
-            # Ensure we end exactly at the target position
-            if end_x != current_x or end_y != current_y:
-                pos = Position(x=end_x, y=end_y)
-                self.context.timeline.append(pos)
-                self.context.tick_position += 1
+                current_x += step_x
+                current_y += step_y
+                
+                # Add position with appropriate interval
+                for _ in range(interval):
+                    pos = Position(x=int(round(current_x)), y=int(round(current_y)))
+                    self.context.timeline.append(pos)
+                    self.context.tick_position += 1
                 
                 # Update widget position in environment
-                self.context.variables["widget"]["x"] = end_x
-                self.context.variables["widget"]["y"] = end_y
+                self.context.variables["widget"]["x"] = int(round(current_x))
+                self.context.variables["widget"]["y"] = int(round(current_y))
+                
+                self.logger.debug(f"Updated widget position: x={current_x}, y={current_y}")
     
     def _execute_pause(self, stmt: PauseStatement) -> None:
         """
@@ -356,10 +453,40 @@ class MarqueeExecutor:
         # Update widget position in environment
         self.context.variables["widget"]["x"] = 0
         self.context.variables["widget"]["y"] = 0
+        
+        # Debug log to verify widget position is updating
+        self.logger.debug("Reset widget position to (0,0)")
     
-    def _execute_loop(self, stmt: LoopStatement) -> None:
+    def _execute_if_once(self, stmt: IfStatement) -> None:
         """
-        Execute a LOOP statement.
+        Execute an IF statement for one step.
+        
+        Args:
+            stmt: The IF statement to execute.
+        """
+        # Evaluate the main condition
+        condition_result = self._evaluate_condition(stmt.condition)
+        self.logger.debug(f"IF condition evaluated to {condition_result}")
+        
+        if condition_result:
+            # Execute the then branch
+            self._execute_one_step(stmt.then_branch.statements)
+        else:
+            # Check ELSEIF branches
+            executed = False
+            for condition, block in stmt.elseif_branches:
+                if self._evaluate_condition(condition):
+                    self._execute_one_step(block.statements)
+                    executed = True
+                    break
+            
+            # Execute ELSE branch if no conditions matched
+            if not executed and stmt.else_branch:
+                self._execute_one_step(stmt.else_branch.statements)
+    
+    def _execute_loop_once(self, stmt: LoopStatement) -> None:
+        """
+        Execute a LOOP statement for one step.
         
         Args:
             stmt: The LOOP statement to execute.
@@ -369,68 +496,25 @@ class MarqueeExecutor:
         
         # Track loop counter for named loops
         if stmt.name:
-            self.context.loop_counters[stmt.name] = 0
+            if stmt.name not in self.context.loop_counters:
+                self.context.loop_counters[stmt.name] = 0
+            
+            # Check if we've reached loop limit
+            if self.context.loop_counters[stmt.name] >= count:
+                # Reset counter and exit
+                del self.context.loop_counters[stmt.name]
+                return
         
-        # Execute the loop
-        iteration = 0
-        while iteration < count:
-            # Update loop counter if named
-            if stmt.name:
-                self.context.loop_counters[stmt.name] = iteration
-            
-            # Reset control flags
-            self.context.break_loop = False
-            self.context.continue_loop = False
-            
-            # Execute loop body
-            self._execute_block(stmt.body.statements)
-            
-            # Handle break
-            if self.context.break_loop:
-                self.context.break_loop = False
-                break
-                
-            # Handle continue
-            if self.context.continue_loop:
-                self.context.continue_loop = False
-                # Continue to next iteration
-                pass
-            
-            iteration += 1
+        # Execute loop body once
+        self._execute_one_step(stmt.body.statements)
         
-        # Clean up loop counter
+        # Update loop counter if named
         if stmt.name:
-            del self.context.loop_counters[stmt.name]
+            self.context.loop_counters[stmt.name] += 1
     
-    def _execute_if(self, stmt: IfStatement) -> None:
+    def _execute_timeline_statement_once(self, stmt: TimelineStatement) -> None:
         """
-        Execute an IF statement.
-        
-        Args:
-            stmt: The IF statement to execute.
-        """
-        # Evaluate the main condition
-        condition_result = self._evaluate_condition(stmt.condition)
-        
-        if condition_result:
-            # Execute the then branch
-            self._execute_block(stmt.then_branch.statements)
-        else:
-            # Check ELSEIF branches
-            executed = False
-            for condition, block in stmt.elseif_branches:
-                if self._evaluate_condition(condition):
-                    self._execute_block(block.statements)
-                    executed = True
-                    break
-            
-            # Execute ELSE branch if no conditions matched
-            if not executed and stmt.else_branch:
-                self._execute_block(stmt.else_branch.statements)
-    
-    def _execute_timeline_statement(self, stmt: TimelineStatement) -> None:
-        """
-        Execute a timeline-related statement.
+        Execute a timeline-related statement for one step.
         
         Args:
             stmt: The timeline statement to execute.
@@ -440,57 +524,251 @@ class MarqueeExecutor:
         elif isinstance(stmt, StartAtStatement):
             self.context.start_at = self._evaluate_expression(stmt.tick)
         elif isinstance(stmt, SegmentStatement):
-            self._execute_segment(stmt)
+            # Get start and end ticks
+            start_tick = self._evaluate_expression(stmt.start_tick)
+            end_tick = self._evaluate_expression(stmt.end_tick)
+            
+            # Store segment information
+            self.context.segments[stmt.name] = (start_tick, end_tick)
+            
+            # Set current segment if not already set
+            if not self.context.current_segment:
+                self.context.current_segment = stmt.name
+                # Execute the segment body once
+                self._execute_one_step(stmt.body.statements)
         elif isinstance(stmt, PositionAtStatement):
-            self._execute_position_at(stmt)
+            # Execute the position_at body once
+            self._execute_one_step(stmt.body.statements)
     
-    def _execute_segment(self, stmt: SegmentStatement) -> None:
+    def _execute_high_level_command(self, stmt: HighLevelCommandStatement) -> None:
         """
-        Execute a SEGMENT statement.
+        Execute a high-level command statement.
         
         Args:
-            stmt: The SEGMENT statement to execute.
+            stmt: The statement to execute.
         """
-        # Get start and end ticks
-        start_tick = self._evaluate_expression(stmt.start_tick)
-        end_tick = self._evaluate_expression(stmt.end_tick)
+        if isinstance(stmt, ScrollClipStatement):
+            # Handle SCROLL_CLIP
+            self.logger.debug(f"Executing SCROLL_CLIP with direction {stmt.direction}")
+            
+            # Initialize tracking state if not already set
+            if not hasattr(self.context, "scroll_clip_stabilized"):
+                self.context.scroll_clip_stabilized = False
+                self.context.scroll_clip_total_moved = 0
+                
+            # Get current position
+            current_pos = self.context.timeline[-1]
+            current_x = current_pos.x
+            current_y = current_pos.y
+            
+            # Get parameters
+            direction = stmt.direction
+            target_distance = self._evaluate_expression(stmt.distance)
+            step = self._get_option(stmt.options, "step", 1)
+            interval = self._get_option(stmt.options, "interval", 1)
+            
+            # If we've already reached the target distance, add exactly one stabilization position
+            if self.context.scroll_clip_total_moved >= target_distance:
+                # Only add the stabilization position once
+                if not self.context.scroll_clip_stabilized:
+                    self.logger.debug(f"SCROLL_CLIP reached target distance {target_distance}, adding stabilization position")
+                    
+                    # Add the current position with pause=True to mark it as a stable position
+                    pos = Position(x=current_x, y=current_y, pause=True)
+                    self.context.timeline.append(pos)
+                    self.context.tick_position += 1
+                    
+                    # Mark that we've stabilized this ScrollClip command
+                    self.context.scroll_clip_stabilized = True
+                return
+            
+            # Calculate move based on direction
+            if direction == Direction.LEFT:
+                # Determine step, capped at remaining distance
+                remaining = min(step, target_distance - self.context.scroll_clip_total_moved)
+                dx, dy = -remaining, 0
+            elif direction == Direction.RIGHT:
+                remaining = min(step, target_distance - self.context.scroll_clip_total_moved)
+                dx, dy = remaining, 0
+            elif direction == Direction.UP:
+                remaining = min(step, target_distance - self.context.scroll_clip_total_moved)
+                dx, dy = 0, -remaining
+            elif direction == Direction.DOWN:
+                remaining = min(step, target_distance - self.context.scroll_clip_total_moved)
+                dx, dy = 0, remaining
+            else:
+                self.logger.warning(f"Unsupported direction for SCROLL_CLIP: {direction}")
+                return
+                
+            # Update position directly
+            new_x = current_x + dx
+            new_y = current_y + dy
+            
+            # Add the position multiple times based on interval
+            for _ in range(interval):
+                pos = Position(x=new_x, y=new_y)
+                self.context.timeline.append(pos)
+                self.context.tick_position += 1
+            
+            # Update widget position in environment
+            self.context.variables["widget"]["x"] = new_x
+            self.context.variables["widget"]["y"] = new_y
+            
+            # Update total moved distance
+            self.context.scroll_clip_total_moved += abs(dx) + abs(dy)
+            
+            # Check if we've reached (or exceeded) the target distance after this move
+            if self.context.scroll_clip_total_moved >= target_distance:
+                self.logger.debug(f"SCROLL_CLIP reached target distance {target_distance}, final position: ({new_x}, {new_y})")
+                
+                # Add stabilization position if not done yet
+                if not self.context.scroll_clip_stabilized:
+                    pause_pos = Position(x=new_x, y=new_y, pause=True)
+                    self.context.timeline.append(pause_pos)
+                    self.context.tick_position += 1
+                    self.context.scroll_clip_stabilized = True
+            else:
+                self.logger.debug(f"SCROLL_CLIP updated position: x={new_x}, y={new_y}, moved so far: {self.context.scroll_clip_total_moved}")
         
-        # Store segment information
-        self.context.segments[stmt.name] = (start_tick, end_tick)
+        elif isinstance(stmt, ScrollLoopStatement):
+            # Handle SCROLL_LOOP
+            self.logger.debug(f"Executing SCROLL_LOOP with direction {stmt.direction}")
+            
+            # Create and execute equivalent move statement
+            move_stmt = MoveStatement(
+                location=stmt.location,
+                direction=stmt.direction,
+                distance=stmt.distance,
+                options=stmt.options
+            )
+            
+            self._execute_move_once(move_stmt)
+            
+        elif isinstance(stmt, ScrollBounceStatement):
+            # Handle SCROLL_BOUNCE
+            self.logger.debug(f"Executing SCROLL_BOUNCE with direction {stmt.direction}")
+            
+            # Create and execute equivalent move statement
+            move_stmt = MoveStatement(
+                location=stmt.location,
+                direction=stmt.direction,
+                distance=stmt.distance,
+                options=stmt.options
+            )
+            
+            self._execute_move_once(move_stmt)
+            
+        elif isinstance(stmt, SlideStatement):
+            # Handle SLIDE
+            self.logger.debug(f"Executing SLIDE with direction {stmt.direction}")
+            
+            # Initialize tracking state if not already set
+            if not hasattr(self.context, "slide_stabilized"):
+                self.context.slide_stabilized = False
+                self.context.slide_total_moved = 0
+            
+            # Get current position
+            current_pos = self.context.timeline[-1]
+            current_x = current_pos.x
+            current_y = current_pos.y
+            
+            # Get parameters
+            direction = stmt.direction
+            target_distance = self._evaluate_expression(stmt.distance)
+            step = self._get_option(stmt.options, "step", 1)
+            interval = self._get_option(stmt.options, "interval", 1)
+            
+            # If we've already reached the target distance, add exactly one stabilization position
+            if self.context.slide_total_moved >= target_distance:
+                # Only add the stabilization position once
+                if not self.context.slide_stabilized:
+                    self.logger.debug(f"SLIDE reached target distance {target_distance}, adding stabilization position")
+                    
+                    # Add the current position with pause=True to mark it as a stable position
+                    pos = Position(x=current_x, y=current_y, pause=True)
+                    self.context.timeline.append(pos)
+                    self.context.tick_position += 1
+                    
+                    # Mark that we've stabilized this Slide command
+                    self.context.slide_stabilized = True
+                
+                # Don't add additional positions after stabilizing
+                return
+            
+            # Calculate move based on direction
+            if direction == Direction.LEFT:
+                # Determine step, capped at remaining distance
+                remaining = min(step, target_distance - self.context.slide_total_moved)
+                dx, dy = -remaining, 0
+            elif direction == Direction.RIGHT:
+                remaining = min(step, target_distance - self.context.slide_total_moved)
+                dx, dy = remaining, 0
+            elif direction == Direction.UP:
+                remaining = min(step, target_distance - self.context.slide_total_moved)
+                dx, dy = 0, -remaining
+            elif direction == Direction.DOWN:
+                remaining = min(step, target_distance - self.context.slide_total_moved)
+                dx, dy = 0, remaining
+            elif direction == Direction.TOP:
+                remaining = min(step, target_distance - self.context.slide_total_moved)
+                dx, dy = 0, -remaining
+            elif direction == Direction.BOTTOM:
+                remaining = min(step, target_distance - self.context.slide_total_moved)
+                dx, dy = 0, remaining
+            else:
+                self.logger.warning(f"Unsupported direction for SLIDE: {direction}")
+                return
+            
+            # Update position directly
+            new_x = current_x + dx
+            new_y = current_y + dy
+            
+            # Add the position multiple times based on interval
+            for _ in range(interval):
+                pos = Position(x=new_x, y=new_y)
+                self.context.timeline.append(pos)
+                self.context.tick_position += 1
+            
+            # Update widget position in environment
+            self.context.variables["widget"]["x"] = new_x
+            self.context.variables["widget"]["y"] = new_y
+            
+            # Update total moved distance
+            self.context.slide_total_moved += abs(dx) + abs(dy)
+            
+            # Check if we've reached (or exceeded) the target distance after this move
+            if self.context.slide_total_moved >= target_distance:
+                self.logger.debug(f"SLIDE reached target distance {target_distance}, final position: ({new_x}, {new_y})")
+                
+                # Add stabilization position if not done yet
+                if not self.context.slide_stabilized:
+                    pause_pos = Position(x=new_x, y=new_y, pause=True)
+                    self.context.timeline.append(pause_pos)
+                    self.context.tick_position += 1
+                    self.context.slide_stabilized = True
+            else:
+                self.logger.debug(f"SLIDE updated position: x={new_x}, y={new_y}, moved so far: {self.context.slide_total_moved}")
         
-        # Save current state
-        prev_segment = self.context.current_segment
-        
-        # Set current segment
-        self.context.current_segment = stmt.name
-        
-        # Execute the segment body
-        self._execute_block(stmt.body.statements)
-        
-        # Restore previous segment
-        self.context.current_segment = prev_segment
-    
-    def _execute_position_at(self, stmt: PositionAtStatement) -> None:
-        """
-        Execute a POSITION_AT statement.
-        
-        Args:
-            stmt: The POSITION_AT statement to execute.
-        """
-        # Get the target tick
-        tick = self._evaluate_expression(stmt.tick)
-        
-        # Save the current timeline position
-        prev_tick_position = self.context.tick_position
-        
-        # Set the timeline position to the target tick
-        self.context.tick_position = tick
-        
-        # Execute the position_at body
-        self._execute_block(stmt.body.statements)
-        
-        # Restore the previous timeline position
-        self.context.tick_position = prev_tick_position
+        elif isinstance(stmt, ScrollStatement):
+            # Handle legacy SCROLL command
+            self.logger.debug(f"Executing SCROLL with direction {stmt.direction}")
+            
+            # Create and execute equivalent move statement
+            move_stmt = MoveStatement(
+                location=stmt.location,
+                direction=stmt.direction,
+                distance=stmt.distance,
+                options=stmt.options
+            )
+            
+            self._execute_move_once(move_stmt)
+            
+        elif isinstance(stmt, PopUpStatement):
+            # Handle POPUP
+            self.logger.debug("Executing POPUP command")
+            
+            # Implement POPUP behavior here
+            pass
     
     def _evaluate_condition(self, condition) -> bool:
         """
@@ -535,6 +813,10 @@ class MarqueeExecutor:
         Returns:
             The value of the expression.
         """
+        # Handle raw Python types directly
+        if isinstance(expr, (int, float, str, bool)):
+            return expr
+            
         if isinstance(expr, Literal):
             return expr.value
         elif isinstance(expr, Variable):
@@ -589,6 +871,10 @@ class MarqueeExecutor:
         Returns:
             The option value or default.
         """
-        if name in options:
-            return self._evaluate_expression(options[name])
-        return default 
+        try:
+            if name in options:
+                return self._evaluate_expression(options[name])
+            return default
+        except Exception as e:
+            self.logger.warning(f"Error evaluating option {name}: {e}")
+            return default 

@@ -253,10 +253,55 @@ class HighLevelCommandStatement(Statement):
 @dataclass
 class ScrollStatement(HighLevelCommandStatement):
     """
-    A SCROLL statement.
+    A SCROLL statement (legacy).
     
     Example:
     SCROLL(direction, distance) { options };
+    """
+    direction: Direction
+    distance: Expression
+    options: Dict[str, Expression] = field(default_factory=dict)
+
+
+@dataclass
+class ScrollClipStatement(HighLevelCommandStatement):
+    """
+    A SCROLL_CLIP statement.
+    
+    Example:
+    SCROLL_CLIP(direction, distance) { options };
+    
+    One-way scrolling that stops at the end.
+    """
+    direction: Direction
+    distance: Expression
+    options: Dict[str, Expression] = field(default_factory=dict)
+
+
+@dataclass
+class ScrollLoopStatement(HighLevelCommandStatement):
+    """
+    A SCROLL_LOOP statement.
+    
+    Example:
+    SCROLL_LOOP(direction, distance) { options };
+    
+    Continuous scrolling with wrapping (traditional ticker/marquee).
+    """
+    direction: Direction
+    distance: Expression
+    options: Dict[str, Expression] = field(default_factory=dict)
+
+
+@dataclass
+class ScrollBounceStatement(HighLevelCommandStatement):
+    """
+    A SCROLL_BOUNCE statement.
+    
+    Example:
+    SCROLL_BOUNCE(direction, distance) { options };
+    
+    Ping-pong scrolling that reverses direction at boundaries.
     """
     direction: Direction
     distance: Expression
@@ -269,9 +314,10 @@ class SlideStatement(HighLevelCommandStatement):
     A SLIDE statement.
     
     Example:
-    SLIDE(action, direction, distance) { options };
+    SLIDE(direction, distance) { options };
+    
+    One-way movement with optional easing that stops at the end.
     """
-    action: SlideAction
     direction: Direction
     distance: Expression
     options: Dict[str, Expression] = field(default_factory=dict)

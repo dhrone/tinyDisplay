@@ -12,7 +12,8 @@ from .ast import (
     LoopStatement, Condition, IfStatement, BreakStatement, ContinueStatement,
     SyncStatement, WaitForStatement, TimelineStatement, PeriodStatement,
     StartAtStatement, SegmentStatement, PositionAtStatement, ScheduleAtStatement,
-    OnVariableChangeStatement, ScrollStatement, SlideStatement, PopUpStatement,
+    OnVariableChangeStatement, ScrollStatement, ScrollClipStatement, ScrollLoopStatement,
+    ScrollBounceStatement, SlideStatement, PopUpStatement,
     Program, Direction, SlideAction, HighLevelCommandStatement
 )
 
@@ -489,13 +490,19 @@ class Validator:
         """Validate a high-level command."""
         if isinstance(stmt, ScrollStatement):
             self._validate_scroll_statement(stmt)
+        elif isinstance(stmt, ScrollClipStatement):
+            self._validate_scroll_clip_statement(stmt)
+        elif isinstance(stmt, ScrollLoopStatement):
+            self._validate_scroll_loop_statement(stmt)
+        elif isinstance(stmt, ScrollBounceStatement):
+            self._validate_scroll_bounce_statement(stmt)
         elif isinstance(stmt, SlideStatement):
             self._validate_slide_statement(stmt)
         elif isinstance(stmt, PopUpStatement):
             self._validate_popup_statement(stmt)
     
     def _validate_scroll_statement(self, stmt: ScrollStatement) -> None:
-        """Validate a SCROLL statement."""
+        """Validate a SCROLL statement (legacy)."""
         self._validate_expression(stmt.distance)
         
         # Validate options
@@ -507,6 +514,44 @@ class Validator:
             "reset_mode": "string",
         }, stmt.location)
     
+    def _validate_scroll_clip_statement(self, stmt: ScrollClipStatement) -> None:
+        """Validate a SCROLL_CLIP statement."""
+        self._validate_expression(stmt.distance)
+        
+        # Validate options
+        self._validate_options(stmt.options, {
+            "step": "integer",
+            "interval": "integer",
+            "easing": "string",
+            "pause_at_end": "integer",
+            "auto_stop_when_invisible": "boolean",  # Whether to stop scrolling when widget is outside container
+        }, stmt.location)
+    
+    def _validate_scroll_loop_statement(self, stmt: ScrollLoopStatement) -> None:
+        """Validate a SCROLL_LOOP statement."""
+        self._validate_expression(stmt.distance)
+        
+        # Validate options
+        self._validate_options(stmt.options, {
+            "step": "integer",
+            "interval": "integer",
+            "gap": "integer",
+            "repeat": "any",
+            "pause_at_wrap": "integer",
+        }, stmt.location)
+    
+    def _validate_scroll_bounce_statement(self, stmt: ScrollBounceStatement) -> None:
+        """Validate a SCROLL_BOUNCE statement."""
+        self._validate_expression(stmt.distance)
+        
+        # Validate options
+        self._validate_options(stmt.options, {
+            "step": "integer",
+            "interval": "integer",
+            "pause_at_ends": "integer",
+            "repeat": "any",
+        }, stmt.location)
+    
     def _validate_slide_statement(self, stmt: SlideStatement) -> None:
         """Validate a SLIDE statement."""
         self._validate_expression(stmt.distance)
@@ -515,8 +560,8 @@ class Validator:
         self._validate_options(stmt.options, {
             "step": "integer",
             "interval": "integer",
-            "pause": "integer",
             "easing": "string",
+            "pause_after": "integer",
         }, stmt.location)
     
     def _validate_popup_statement(self, stmt: PopUpStatement) -> None:

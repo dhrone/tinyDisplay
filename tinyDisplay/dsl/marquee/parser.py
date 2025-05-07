@@ -14,7 +14,8 @@ from .ast import (
     LoopStatement, Condition, IfStatement, BreakStatement, ContinueStatement,
     SyncStatement, WaitForStatement, TimelineStatement, PeriodStatement,
     StartAtStatement, SegmentStatement, PositionAtStatement, ScheduleAtStatement,
-    OnVariableChangeStatement, ScrollStatement, SlideStatement, PopUpStatement,
+    OnVariableChangeStatement, ScrollStatement, ScrollClipStatement, ScrollLoopStatement, 
+    ScrollBounceStatement, SlideStatement, PopUpStatement,
     Program, Direction, SlideAction, HighLevelCommandStatement
 )
 
@@ -123,6 +124,12 @@ class Parser:
         # High-level commands
         if self._match(TokenType.SCROLL):
             return self._scroll_statement()
+        if self._match(TokenType.SCROLL_CLIP):
+            return self._scroll_clip_statement()
+        if self._match(TokenType.SCROLL_LOOP):
+            return self._scroll_loop_statement()
+        if self._match(TokenType.SCROLL_BOUNCE):
+            return self._scroll_bounce_statement()
         if self._match(TokenType.SLIDE):
             return self._slide_statement()
         if self._match(TokenType.POPUP):
@@ -467,7 +474,7 @@ class Parser:
         return OnVariableChangeStatement(location=location, variables=variables, body=body)
     
     def _scroll_statement(self) -> ScrollStatement:
-        """Parse a SCROLL statement."""
+        """Parse a SCROLL statement (legacy version)."""
         token = self._previous()
         location = Location(token.line, token.column)
         
@@ -503,25 +510,123 @@ class Parser:
             options=options
         )
     
+    def _scroll_clip_statement(self) -> ScrollClipStatement:
+        """Parse a SCROLL_CLIP statement."""
+        token = self._previous()
+        location = Location(token.line, token.column)
+        
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after SCROLL_CLIP.")
+        
+        # Parse direction
+        direction = None
+        if self._match(TokenType.LEFT):
+            direction = Direction.LEFT
+        elif self._match(TokenType.RIGHT):
+            direction = Direction.RIGHT
+        elif self._match(TokenType.UP):
+            direction = Direction.UP
+        elif self._match(TokenType.DOWN):
+            direction = Direction.DOWN
+        else:
+            self._error(self._peek(), "Expected direction (LEFT, RIGHT, UP, DOWN).")
+        
+        self._consume(TokenType.COMMA, error_message="Expected ',' after direction.")
+        distance = self._expression()
+        
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after distance.")
+        
+        # Parse options if present
+        options = self._options() if self._check(TokenType.LEFT_BRACE) else {}
+        
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
+        
+        return ScrollClipStatement(
+            location=location,
+            direction=direction,
+            distance=distance,
+            options=options
+        )
+    
+    def _scroll_loop_statement(self) -> ScrollLoopStatement:
+        """Parse a SCROLL_LOOP statement."""
+        token = self._previous()
+        location = Location(token.line, token.column)
+        
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after SCROLL_LOOP.")
+        
+        # Parse direction
+        direction = None
+        if self._match(TokenType.LEFT):
+            direction = Direction.LEFT
+        elif self._match(TokenType.RIGHT):
+            direction = Direction.RIGHT
+        elif self._match(TokenType.UP):
+            direction = Direction.UP
+        elif self._match(TokenType.DOWN):
+            direction = Direction.DOWN
+        else:
+            self._error(self._peek(), "Expected direction (LEFT, RIGHT, UP, DOWN).")
+        
+        self._consume(TokenType.COMMA, error_message="Expected ',' after direction.")
+        distance = self._expression()
+        
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after distance.")
+        
+        # Parse options if present
+        options = self._options() if self._check(TokenType.LEFT_BRACE) else {}
+        
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
+        
+        return ScrollLoopStatement(
+            location=location,
+            direction=direction,
+            distance=distance,
+            options=options
+        )
+    
+    def _scroll_bounce_statement(self) -> ScrollBounceStatement:
+        """Parse a SCROLL_BOUNCE statement."""
+        token = self._previous()
+        location = Location(token.line, token.column)
+        
+        self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after SCROLL_BOUNCE.")
+        
+        # Parse direction
+        direction = None
+        if self._match(TokenType.LEFT):
+            direction = Direction.LEFT
+        elif self._match(TokenType.RIGHT):
+            direction = Direction.RIGHT
+        elif self._match(TokenType.UP):
+            direction = Direction.UP
+        elif self._match(TokenType.DOWN):
+            direction = Direction.DOWN
+        else:
+            self._error(self._peek(), "Expected direction (LEFT, RIGHT, UP, DOWN).")
+        
+        self._consume(TokenType.COMMA, error_message="Expected ',' after direction.")
+        distance = self._expression()
+        
+        self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after distance.")
+        
+        # Parse options if present
+        options = self._options() if self._check(TokenType.LEFT_BRACE) else {}
+        
+        self._consume(TokenType.SEMICOLON, error_message="Expected ';' after statement.")
+        
+        return ScrollBounceStatement(
+            location=location,
+            direction=direction,
+            distance=distance,
+            options=options
+        )
+    
     def _slide_statement(self) -> SlideStatement:
         """Parse a SLIDE statement."""
         token = self._previous()
         location = Location(token.line, token.column)
         
         self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after SLIDE.")
-        
-        # Parse action
-        action = None
-        if self._match(TokenType.IN):
-            action = SlideAction.IN
-        elif self._match(TokenType.OUT):
-            action = SlideAction.OUT
-        elif self._match(TokenType.IN_OUT):
-            action = SlideAction.IN_OUT
-        else:
-            self._error(self._peek(), "Expected action (IN, OUT, IN_OUT).")
-        
-        self._consume(TokenType.COMMA, error_message="Expected ',' after action.")
         
         # Parse direction
         direction = None
@@ -552,7 +657,6 @@ class Parser:
         
         return SlideStatement(
             location=location,
-            action=action,
             direction=direction,
             distance=distance,
             options=options
@@ -879,6 +983,9 @@ class Parser:
                 TokenType.SCHEDULE_AT,
                 TokenType.ON_VARIABLE_CHANGE,
                 TokenType.SCROLL,
+                TokenType.SCROLL_CLIP,
+                TokenType.SCROLL_LOOP,
+                TokenType.SCROLL_BOUNCE,
                 TokenType.SLIDE,
                 TokenType.POPUP
             }:

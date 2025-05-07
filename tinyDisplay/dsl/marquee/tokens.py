@@ -54,7 +54,10 @@ class TokenType(Enum):
     WAIT_FOR = auto()
     
     # Keywords - High-level commands
-    SCROLL = auto()
+    SCROLL = auto()         # Legacy keyword, kept for backward compatibility
+    SCROLL_CLIP = auto()    # New behavior-specific keyword
+    SCROLL_LOOP = auto()    # New behavior-specific keyword
+    SCROLL_BOUNCE = auto()  # New behavior-specific keyword
     SLIDE = auto()
     POPUP = auto()
     
@@ -149,7 +152,10 @@ KEYWORDS = {
     "WAIT_FOR": TokenType.WAIT_FOR,
     
     # High-level commands
-    "SCROLL": TokenType.SCROLL,
+    "SCROLL": TokenType.SCROLL,             # Legacy keyword
+    "SCROLL_CLIP": TokenType.SCROLL_CLIP,   # New keyword
+    "SCROLL_LOOP": TokenType.SCROLL_LOOP,   # New keyword
+    "SCROLL_BOUNCE": TokenType.SCROLL_BOUNCE, # New keyword
     "SLIDE": TokenType.SLIDE,
     "POPUP": TokenType.POPUP,
     

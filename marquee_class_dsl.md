@@ -19,6 +19,7 @@ The Marquee Animation DSL is a domain-specific language tailored for defining wi
 * **Transitions & easing**: Built-in (`linear`, `ease_in`, etc.) and parameterized curves (e.g., cubic‑bezier).
 * **Deterministic calculations**: Direct mapping of arbitrary ticks to widget states.
 * **Timeline optimization**: Loop periods and segment boundaries for efficient rendering.
+* **Marquee behaviors**: Specific animation patterns (scroll-clip, scroll-loop, scroll-bounce, slide) for common effects.
 
 ### 1.2 Units & Timing Model
 
@@ -70,7 +71,7 @@ These can be used with both high-level and low-level commands:
 
 ```dsl
 // High-level with direction constant
-SCROLL(LEFT, widget.width) { step=2, gap=5 };
+SCROLL_LOOP(LEFT, widget.width) { step=2, gap=5 };
 
 // Low-level with direction constant
 MOVE(RIGHT, 100) { step=5 };
@@ -78,6 +79,17 @@ MOVE(RIGHT, 100) { step=5 };
 // Equivalent to
 MOVE(widget.x, widget.x + 100) { step=5 };
 ```
+
+### 1.4 Marquee Behaviors
+
+The DSL provides specific high-level commands for common marquee behaviors:
+
+* **SCROLL_CLIP**: One-way scrolling without wrapping (stops at the end)
+* **SCROLL_LOOP**: Continuous scrolling with seamless wrapping (traditional ticker/marquee)
+* **SCROLL_BOUNCE**: Ping-pong effect (scrolls in one direction, then reverses)
+* **SLIDE**: One-way movement that stops at the end (similar to slide-in animations)
+
+Each behavior has specific semantics designed for common animation patterns.
 
 ## 2. Lexical Definitions
 
@@ -94,7 +106,7 @@ KEYWORD          ::=
     | "IF" | "ELSEIF" | "ELSE"
     | "BREAK" | "CONTINUE"
     | "SYNC" | "WAIT_FOR"
-    | "SCROLL" | "SLIDE" | "POPUP"
+    | "SCROLL_CLIP" | "SCROLL_LOOP" | "SCROLL_BOUNCE" | "SLIDE"
     | "LEFT" | "RIGHT" | "UP" | "DOWN"
     | "PERIOD" | "START_AT" | "SEGMENT"
     | "POSITION_AT" | "SCHEDULE_AT"
@@ -165,24 +177,27 @@ BreakStmt        ::=  "BREAK" ";" ;
 ContinueStmt     ::=  "CONTINUE" ";" ;
 
 HighLevelStmt    ::=  
-      SCROLLStmt
+      SCROLL_CLIPStmt
+    | SCROLL_LOOPStmt
+    | SCROLL_BOUNCEStmt
     | SLIDEStmt
-    | POPUPStmt
     ;
 
-SCROLLStmt       ::=  
-      "SCROLL" "(" Direction "," Expr ")" [ Options ] ";"
+SCROLL_CLIPStmt  ::=  
+      "SCROLL_CLIP" "(" Direction "," Expr ")" [ Options ] ";"
+    ;
+
+SCROLL_LOOPStmt  ::=  
+      "SCROLL_LOOP" "(" Direction "," Expr ")" [ Options ] ";"
+    ;
+
+SCROLL_BOUNCEStmt ::=  
+      "SCROLL_BOUNCE" "(" Direction "," Expr ")" [ Options ] ";"
     ;
 
 SLIDEStmt        ::=  
-      "SLIDE" "(" SlideAction "," Direction "," Expr ")" [ Options ] ";"
+      "SLIDE" "(" Direction "," Expr ")" [ Options ] ";"
     ;
-
-POPUPStmt        ::=  
-      "POPUP" "(" [ Options ] ")" ";"
-    ;
-
-SlideAction      ::=  "IN" | "OUT" | "IN_OUT" ;
 
 Block            ::=  "{" { Statement } "}" ;
 
@@ -254,6 +269,7 @@ VariableChangeStmt ::=
   * Position calculation for arbitrary ticks
   * Timeline segments for modular animation definition
   * Variable change handling for declarative recalculation policies
+* **Specialized marquee behaviors**: High-level commands for common animation patterns.
 
 ## 5. Command Reference
 
@@ -287,7 +303,7 @@ Below is a detailed description of each DSL command and its attributes:
 * **mode** (`IDENT`, default `seamless`): Specifies how the reset occurs:
 
   * `seamless`: Repositions content without visual discontinuity (ideal for continuous scrolling).
-  * `instant`: Immediately jumps to the starting position with visible discontinuity.
+  * `immediate`: Immediately jumps to the starting position with visible discontinuity.
   * `fade`: Fades out at the current position and fades in at the starting position.
 * **duration** (`Expr`): Number of ticks for transition effects (used for `fade` mode). Default: 0 (immediate).
 
@@ -337,55 +353,85 @@ Below is a detailed description of each DSL command and its attributes:
 
 ### 5.4 High-Level Commands
 
-#### SCROLL
+#### SCROLL_CLIP
 
-**Syntax:** `SCROLL(direction, distance) [Options];`
+**Syntax:** `SCROLL_CLIP(direction, distance) [Options];`
 
-**Description:** Creates continuous scrolling animation in the specified direction.
+**Description:** Creates a one-way scrolling animation that does not wrap. Content scrolls in the specified direction until it reaches the end and then stops.
+
+**Options:**
+* **step** (integer): Pixels moved per step. Default: 1.
+* **interval** (integer): Ticks between steps. Default: 1.
+* **easing** (easingFunction): Transition curve to apply. Default: linear.
+* **pause_at_end** (integer): Ticks to pause at the end before stopping. Default: 0.
+
+**Expands to:**
+```dsl
+MOVE(direction, distance) { step=step, interval=interval, easing=easing };
+PAUSE(pause_at_end);
+```
+
+#### SCROLL_LOOP
+
+**Syntax:** `SCROLL_LOOP(direction, distance) [Options];`
+
+**Description:** Creates continuous scrolling animation in the specified direction with seamless wrapping (traditional marquee/ticker effect).
 
 **Options:**
 * **step** (integer): Pixels moved per step. Default: 1.
 * **interval** (integer): Ticks between steps. Default: 1.
 * **gap** (integer): Pixels of empty space between repetitions of content. Default: 0.
 * **repeat** (`Expr` or `INFINITE`): Number of scroll cycles to perform. Default: INFINITE.
-* **reset_mode** (`IDENT`): How to handle returning to start position. Default: seamless.
+* **pause_at_wrap** (integer): Ticks to pause when content wraps. Default: 0.
 
-**Expands to (for seamless scrolling):**
+**Expands to:**
 ```dsl
 LOOP(repeat) {
     MOVE(direction, distance) { step=step, interval=interval, gap=gap };
-    RESET_POSITION({ mode=reset_mode });
+    PAUSE(pause_at_wrap);
+    RESET_POSITION({ mode=seamless });
+} END;
+```
+
+#### SCROLL_BOUNCE
+
+**Syntax:** `SCROLL_BOUNCE(direction, distance) [Options];`
+
+**Description:** Creates a ping-pong scrolling effect where content moves in one direction then reverses.
+
+**Options:**
+* **step** (integer): Pixels moved per step. Default: 1.
+* **interval** (integer): Ticks between steps. Default: 1.
+* **pause_at_ends** (integer): Ticks to pause at each end before reversing. Default: 0.
+* **repeat** (`Expr` or `INFINITE`): Number of complete cycles to perform. Default: INFINITE.
+
+**Expands to:**
+```dsl
+LOOP(repeat) {
+    MOVE(direction, distance) { step=step, interval=interval };
+    PAUSE(pause_at_ends);
+    MOVE(opposite(direction), distance) { step=step, interval=interval };
+    PAUSE(pause_at_ends);
 } END;
 ```
 
 #### SLIDE
 
-**Syntax:** `SLIDE(action, direction, distance) [Options];`
+**Syntax:** `SLIDE(direction, distance) [Options];`
 
-**Description:** Creates entrance, exit, or combined animations.
-
-* **action** (`SlideAction`): The type of slide (IN, OUT, IN_OUT).
-* **direction** (`Direction`): Direction to slide.
-* **distance** (`Expr`): Total distance to slide.
+**Description:** Creates a one-way movement animation that stops at the end (similar to slide-in effects).
 
 **Options:**
 * **step** (integer): Pixels moved per step. Default: 1.
 * **interval** (integer): Ticks between steps. Default: 1.
-* **pause** (integer): Ticks to pause between IN and OUT phases (for IN_OUT). Default: 0.
-* **easing** (easingFunction): Transition curve to apply. Default: linear.
+* **easing** (easingFunction): Transition curve to apply. Default: ease_out.
+* **pause_after** (integer): Ticks to pause after completing the slide. Default: 0.
 
-#### POPUP
-
-**Syntax:** `POPUP([Options]);`
-
-**Description:** Creates a popup animation showing alternating portions of tall content.
-
-**Options:**
-* **top_delay** (integer): Ticks to delay at top position. Default: 10.
-* **bottom_delay** (integer): Ticks to delay at bottom position. Default: 10.
-* **screens** (integer): Number of content screens to cycle through. Default: 2.
-* **step** (integer): Pixels moved per step. Default: 1.
-* **interval** (integer): Ticks between steps. Default: 1.
+**Expands to:**
+```dsl
+MOVE(direction, distance) { step=step, interval=interval, easing=easing };
+PAUSE(pause_after);
+```
 
 ### 5.5 Timeline Optimization Commands
 
@@ -554,23 +600,77 @@ IF(widget.x > container.width) {
 } END;
 ```
 
-### D. Scrolling Widget with Gap & Pauses
+### D. Different Marquee Behaviors
+
+#### Continuous Loop (Ticker)
 
 ```dsl
 /* 
- * Continuous scrolling with gap
+ * Continuous scrolling with gap (traditional ticker)
  * - Scrolls from right to left
  * - Adds 10-pixel gap between repetitions
  */
 
-// High-level approach:
-SCROLL(LEFT, widget.width) { step=1, interval=1, gap=10 };
+// Using the high-level SCROLL_LOOP command:
+SCROLL_LOOP(LEFT, widget.width) { step=1, interval=1, gap=10 };
 
-// Equivalent low-level approach:
+// Equivalent low-level implementation:
 LOOP(INFINITE) {
     MOVE(LEFT, widget.width) { step=1, interval=1, gap=10 };
     RESET_POSITION({ mode=seamless });
 } END;
+```
+
+#### Clipped Scrolling (Non-Wrapping)
+
+```dsl
+/*
+ * One-way scrolling that stops at the end
+ * - Content scrolls in from right then stops
+ */
+
+// Using the high-level SCROLL_CLIP command:
+SCROLL_CLIP(LEFT, widget.width) { step=1, interval=1 };
+
+// Equivalent low-level implementation:
+MOVE(LEFT, widget.width) { step=1, interval=1 };
+```
+
+#### Bounce Effect (Ping-Pong)
+
+```dsl
+/*
+ * Ping-pong scrolling effect
+ * - Content scrolls left then right repeatedly
+ * - Pauses briefly at each end
+ */
+
+// Using the high-level SCROLL_BOUNCE command:
+SCROLL_BOUNCE(LEFT, 100) { step=2, interval=1, pause_at_ends=10 };
+
+// Equivalent low-level implementation:
+LOOP(INFINITE) {
+    MOVE(LEFT, 100) { step=2, interval=1 };
+    PAUSE(10);
+    MOVE(RIGHT, 100) { step=2, interval=1 };
+    PAUSE(10);
+} END;
+```
+
+#### Slide Animation
+
+```dsl
+/*
+ * Simple slide-in animation with easing
+ * - Slides from left to right with easing
+ * - Stops at final position
+ */
+
+// Using the high-level SLIDE command:
+SLIDE(RIGHT, 200) { step=3, interval=1, easing=ease_out };
+
+// Equivalent low-level implementation:
+MOVE(RIGHT, 200) { step=3, interval=1, easing=ease_out };
 ```
 
 ### E. Diagonal Movement (2D)
@@ -580,41 +680,35 @@ LOOP(INFINITE) {
 MOVE(0, container.width, 0, container.height) { step=2, interval=1, easing=linear };
 ```
 
-### F. Popup Animation Example
+### F. Using Multiple Behaviors in Sequence
 
 ```dsl
-// High-level popup (alternates between top and bottom content)
-POPUP({ top_delay=20, bottom_delay=20, step=2 });
+/* 
+ * Complex animation sequence using multiple behaviors
+ * 1. Slide in from left
+ * 2. Pause briefly
+ * 3. Bounce animation
+ * 4. Continuous loop scrolling
+ */
 
-// Equivalent low-level implementation:
-LOOP(INFINITE) {
-    PAUSE(20);  // Pause at top
-    MOVE(UP, widget.height - container.height) { step=2, interval=1 };
-    PAUSE(20);  // Pause at bottom
-    MOVE(DOWN, widget.height - container.height) { step=2, interval=1 };
-} END;
+// First slide in
+SLIDE(RIGHT, 100) { step=2, easing=ease_out };
+
+// Pause at entry position
+PAUSE(20);
+
+// Then do bounce effect for 5 cycles
+SCROLL_BOUNCE(LEFT, 50) { step=1, repeat=5, pause_at_ends=5 };
+
+// Finally continuous scroll
+SCROLL_LOOP(LEFT, widget.width) { step=1, gap=10 };
 ```
 
-### G. Slide Animation Example
-
-```dsl
-// High-level slide-in/out animation
-SLIDE(IN_OUT, RIGHT, 100) { step=2, interval=1, pause=30 };
-
-// Equivalent low-level implementation:
-MOVE(LEFT, 100) { step=2, interval=1 };  // Move in from right
-PAUSE(30);                              // Pause when fully visible
-MOVE(RIGHT, 100) { step=2, interval=1 }; // Move out to right
-```
-
-### H. Optimized Looping Animation
+### G. Optimized Looping Animation
 
 ```dsl
 // Scrolling text with automatic tick calculation
-LOOP(INFINITE) {
-    MOVE(LEFT, text.width) { step=1, interval=1, gap=10 };
-    RESET_POSITION({ mode=seamless });
-} END;
+SCROLL_LOOP(LEFT, text.width) { step=1, interval=1, gap=10 };
 PERIOD(text.width + 10);  // Period = content width + gap
 
 // Direct calculation alternative
@@ -631,17 +725,17 @@ POSITION_AT(t) => {
 } END;
 ```
 
-### I. Synchronized Animations with Timeline Control
+### H. Synchronized Animations with Timeline Control
 
 ```dsl
 // Widget 1: Title animation
 SEGMENT(intro, 0, 50) {
-    SLIDE(IN, LEFT, 100) { step=2, interval=1 };
+    SLIDE(LEFT, 100) { step=2, interval=1 };
 } END;
 
 // Widget 2: Automatically synchronized with Widget 1
 START_AT(50);  // Starts when Widget 1's intro completes
-SLIDE(IN, UP, 50) { step=1, interval=1 };
+SLIDE(UP, 50) { step=1, interval=1 };
 
 // Alternative to SYNC primitive
 // System automatically derives relationship between widgets

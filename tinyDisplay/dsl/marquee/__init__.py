@@ -14,7 +14,8 @@ from .ast import (
     LoopStatement, Condition, IfStatement, BreakStatement, ContinueStatement,
     SyncStatement, WaitForStatement, TimelineStatement, PeriodStatement,
     StartAtStatement, SegmentStatement, PositionAtStatement, ScheduleAtStatement,
-    OnVariableChangeStatement, ScrollStatement, SlideStatement, PopUpStatement,
+    OnVariableChangeStatement, ScrollStatement, ScrollClipStatement, 
+    ScrollLoopStatement, ScrollBounceStatement, SlideStatement, PopUpStatement,
     Program
 )
 from .parser import Parser, ParseError
