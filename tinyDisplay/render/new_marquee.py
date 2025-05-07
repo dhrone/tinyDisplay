@@ -647,6 +647,10 @@ class new_marquee(widget):
                 # Use current position but adjust for size changes if needed
                 starting_position = self._getAdjustedPosition()
         
+        # Save the current tick and position before recomputing
+        current_tick = self._tick if hasattr(self, '_tick') else 0
+        current_pos = self._curPos if hasattr(self, '_curPos') else starting_position
+        
         # Execute the program with the determined starting position
         positions = self._executor.execute(
             widget_size, 
@@ -656,6 +660,24 @@ class new_marquee(widget):
         
         # Convert positions to timeline format
         self._timeline = [(pos.x, pos.y) for pos in positions]
+        
+        # For "never" reset mode, adjust the timeline to maintain current position
+        # Also for "size_change_only" when no size change has occurred
+        if ((self._position_reset_mode == "never" or 
+             (self._position_reset_mode == "size_change_only" and not size_changed)) 
+             and current_tick > 0):
+            # Get the position at the current tick index in the new timeline
+            if len(self._timeline) > 0:
+                tick_index = current_tick % len(self._timeline)
+                new_pos_at_tick = self._timeline[tick_index]
+                
+                # Calculate the offset needed to maintain the current position
+                offset_x = current_pos[0] - new_pos_at_tick[0]
+                offset_y = current_pos[1] - new_pos_at_tick[1]
+                
+                # Apply this offset to the entire timeline
+                if offset_x != 0 or offset_y != 0:
+                    self._timeline = [(x + offset_x, y + offset_y) for x, y in self._timeline]
         
         # Extract pause points for properties
         self._pauses = self._executor.context.pauses

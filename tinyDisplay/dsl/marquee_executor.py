@@ -631,19 +631,51 @@ class MarqueeExecutor:
                 self.logger.debug(f"SCROLL_CLIP updated position: x={new_x}, y={new_y}, moved so far: {self.context.scroll_clip_total_moved}")
         
         elif isinstance(stmt, ScrollLoopStatement):
-            # Handle SCROLL_LOOP
+            # Handle SCROLL_LOOP with optimized timeline
             self.logger.debug(f"Executing SCROLL_LOOP with direction {stmt.direction}")
             
-            # Create and execute equivalent move statement
+            # Get parameters
+            widget_width = self.context.variables["widget"]["width"]
+            widget_height = self.context.variables["widget"]["height"]
+            direction = stmt.direction
+            distance = self._evaluate_expression(stmt.distance)
+            step = self._get_option(stmt.options, "step", 1)
+            interval = self._get_option(stmt.options, "interval", 1)
+            gap = self._get_option(stmt.options, "gap", 0)
+            
+            # Calculate modulo units for position equivalence
+            scroll_unit = widget_width + gap if direction in [Direction.LEFT, Direction.RIGHT] else widget_height + gap
+            
+            # Mathematical optimization: calculate minimal cycle length
+            def gcd(a, b):
+                while b:
+                    a, b = b, a % b
+                return a
+            
+            step_gcd = gcd(step, scroll_unit)
+            min_cycle_len = scroll_unit // step_gcd
+            self.logger.debug(f"Optimized cycle length: {min_cycle_len} steps for scroll unit {scroll_unit} and step {step}")
+            
+            # For compatibility with the position reset mechanism,
+            # use the classic MoveStatement but limit timeline generation
+            # to one complete cycle when setting the period
             move_stmt = MoveStatement(
                 location=stmt.location,
-                direction=stmt.direction,
-                distance=stmt.distance,
+                direction=direction,
+                distance=distance,
                 options=stmt.options
             )
             
+            # Execute the move once
             self._execute_move_once(move_stmt)
             
+            # Set period if not already defined
+            # This is the key optimization - we only need one full cycle of positions
+            if self.context.period is None:
+                cycle_length = min_cycle_len * interval
+                self.context.period = cycle_length
+                self.logger.debug(f"Setting implicit PERIOD({cycle_length}) for SCROLL_LOOP")
+        
         elif isinstance(stmt, ScrollBounceStatement):
             # Handle SCROLL_BOUNCE
             self.logger.debug(f"Executing SCROLL_BOUNCE with direction {stmt.direction}")
