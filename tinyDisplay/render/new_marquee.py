@@ -40,9 +40,13 @@ class new_marquee(widget):
     :type position_reset_mode: str
     :param dynamic_execution: Whether to use dynamic execution for conditionals
     :type dynamic_execution: bool
+    :param shared_events: Dictionary to share events between marquees
+    :type shared_events: dict
+    :param shared_sync_events: Set to share defined sync events
+    :type shared_sync_events: set
     """
 
-    NOTDYNAMIC = ["widget", "resetOnChange", "program"]
+    NOTDYNAMIC = ["widget", "resetOnChange", "program", "shared_events", "shared_sync_events"]
 
     def __init__(
         self,
@@ -52,6 +56,8 @@ class new_marquee(widget):
         variables=None,
         moveWhen=True,
         position_reset_mode="always",  # Controls how widget position resets: "always", "never", "size_change_only"
+        shared_events=None,  # Dictionary to share events between marquees
+        shared_sync_events=None,  # Set to share defined sync events
         *args,
         **kwargs,
     ):
@@ -71,6 +77,8 @@ class new_marquee(widget):
         self._program = program
         self._variables = variables or {}
         self._position_reset_mode = position_reset_mode
+        self._shared_events = shared_events  # For cross-marquee coordination
+        self._shared_sync_events = shared_sync_events  # For cross-marquee coordination
         
         # Ensure size is properly set - if not passed, use widget size
         if not self._size:
@@ -87,6 +95,12 @@ class new_marquee(widget):
         
         # Set up executor
         self._executor = MarqueeExecutor(self.ast, self._variables)
+        
+        # Connect shared event dictionaries if provided
+        if self._shared_events is not None:
+            self._executor.context.events = self._shared_events
+        if self._shared_sync_events is not None:
+            self._executor.context.defined_sync_events = self._shared_sync_events
         
         # Initialize state
         self._timeline = []
@@ -646,6 +660,10 @@ class new_marquee(widget):
             if not reset_position:
                 # Use current position but adjust for size changes if needed
                 starting_position = self._getAdjustedPosition()
+            else:
+                # When reset is needed, we always use (0,0)
+                # This ensures "always" mode resets to (0,0) every time
+                starting_position = (0, 0)
         
         # Save the current tick and position before recomputing
         current_tick = self._tick if hasattr(self, '_tick') else 0
@@ -658,8 +676,9 @@ class new_marquee(widget):
             starting_position
         )
         
-        # Convert positions to timeline format
-        self._timeline = [(pos.x, pos.y) for pos in positions]
+        # Store the timeline positions directly, preserving Position objects
+        # instead of converting to tuples
+        self._timeline = positions
         
         # For "never" reset mode, adjust the timeline to maintain current position
         # Also for "size_change_only" when no size change has occurred
@@ -671,13 +690,29 @@ class new_marquee(widget):
                 tick_index = current_tick % len(self._timeline)
                 new_pos_at_tick = self._timeline[tick_index]
                 
+                # Get x,y values from position
+                new_x = new_pos_at_tick.x if hasattr(new_pos_at_tick, 'x') else new_pos_at_tick[0]
+                new_y = new_pos_at_tick.y if hasattr(new_pos_at_tick, 'y') else new_pos_at_tick[1]
+                
                 # Calculate the offset needed to maintain the current position
-                offset_x = current_pos[0] - new_pos_at_tick[0]
-                offset_y = current_pos[1] - new_pos_at_tick[1]
+                if isinstance(current_pos, tuple):
+                    offset_x = current_pos[0] - new_x
+                    offset_y = current_pos[1] - new_y
+                else:
+                    offset_x = current_pos.x - new_x
+                    offset_y = current_pos.y - new_y
                 
                 # Apply this offset to the entire timeline
                 if offset_x != 0 or offset_y != 0:
-                    self._timeline = [(x + offset_x, y + offset_y) for x, y in self._timeline]
+                    for i in range(len(self._timeline)):
+                        pos = self._timeline[i]
+                        if hasattr(pos, 'x') and hasattr(pos, 'y'):
+                            # For Position objects, update attributes directly
+                            pos.x += offset_x
+                            pos.y += offset_y
+                        else:
+                            # For tuple positions, create a new tuple
+                            self._timeline[i] = (pos[0] + offset_x, pos[1] + offset_y)
         
         # Extract pause points for properties
         self._pauses = self._executor.context.pauses
@@ -685,7 +720,8 @@ class new_marquee(widget):
         
         # Make sure we have at least one position in the timeline
         if not self._timeline:
-            self._timeline = [starting_position]
+            # Create a Position object to match our new approach
+            self._timeline = [Position(x=starting_position[0], y=starting_position[1])]
         
         self._need_recompute = False
 
@@ -804,10 +840,17 @@ class new_marquee(widget):
                 scroll_unit_width = widget_width + self._gap_size
                 scroll_unit_height = widget_height + self._gap_size
                 
+                # Get x and y values from current position (which might be a Position object)
+                if isinstance(self._curPos, tuple):
+                    x_pos, y_pos = self._curPos
+                else:
+                    # Position object
+                    x_pos, y_pos = self._curPos.x, self._curPos.y
+                
                 # Compute the normalized position in the scroll canvas
                 # Use negative positioning to make scrolling work correctly
-                x_pos = -self._curPos[0] if horizontal_movement else 0
-                y_pos = -self._curPos[1] if vertical_movement else 0
+                x_pos = -x_pos if horizontal_movement else 0
+                y_pos = -y_pos if vertical_movement else 0
                 
                 # Normalize to create a looping effect
                 x_pos = x_pos % scroll_unit_width if scroll_unit_width > 0 else 0
@@ -845,7 +888,16 @@ class new_marquee(widget):
         
         # For non-looping behaviors or if scroll canvas isn't available, 
         # just paste at the current position
-        self.image.paste(self._aWI, self._curPos, self._aWI)
+        
+        # Get position coordinates (might be a Position object or tuple)
+        if isinstance(self._curPos, tuple):
+            cur_pos = self._curPos
+        else:
+            # Position object - extract x, y coordinates
+            cur_pos = (self._curPos.x, self._curPos.y)
+        
+        # Paste the widget at the current position
+        self.image.paste(self._aWI, cur_pos, self._aWI)
         return self.image
 
     def _calculateEquivalentPosition(self, x, y):
@@ -904,8 +956,16 @@ class new_marquee(widget):
             self._tick = self._tick + 1 if move else self._tick
             return (self.image, True)
 
-        # Compute timeline if needed
-        if not self._timeline or self._need_recompute:
+        # Check if any waiting events have been triggered since timeline generation
+        events_triggered = False
+        if hasattr(self, '_executor') and hasattr(self._executor, 'check_waiting_events_triggered'):
+            events_triggered = self._executor.check_waiting_events_triggered()
+        
+        # Compute timeline if needed or if events have been triggered
+        if not self._timeline or self._need_recompute or events_triggered:
+            # If events were triggered, we need to recompute with the current position as starting point
+            if events_triggered:
+                self._logger.debug("Events were triggered - recomputing timeline")
             self._computeTimeline()
             if not self._timeline:  # Still empty after compute
                 return (self.image, False)
@@ -926,23 +986,44 @@ class new_marquee(widget):
                 threshold_x = 100 * widget_width
                 threshold_y = 100 * widget_height
                 
-                if (abs(self._curPos[0]) > threshold_x or abs(self._curPos[1]) > threshold_y):
+                # Get x/y values from current position (which might be a Position object)
+                cur_x, cur_y = self._curPos if isinstance(self._curPos, tuple) else (self._curPos.x, self._curPos.y)
+                
+                if (abs(cur_x) > threshold_x or abs(cur_y) > threshold_y):
                     # Calculate visually equivalent position with smaller coordinates
-                    # First, adjust the timeline position
-                    new_pos_x, new_pos_y = self._calculateEquivalentPosition(self._curPos[0], self._curPos[1])
-                    self._curPos = (new_pos_x, new_pos_y)
+                    new_pos_x, new_pos_y = self._calculateEquivalentPosition(cur_x, cur_y)
+                    
+                    # Create new position object or tuple matching the original type
+                    if isinstance(self._curPos, tuple):
+                        self._curPos = (new_pos_x, new_pos_y)
+                    else:
+                        # For Position objects, update attributes while preserving other fields
+                        self._curPos.x = new_pos_x
+                        self._curPos.y = new_pos_y
                     
                     # Also adjust all remaining timeline positions to maintain relative positions
-                    offset_x = self._curPos[0] - self._timeline[self._tick % len(self._timeline)][0]
-                    offset_y = self._curPos[1] - self._timeline[self._tick % len(self._timeline)][1]
+                    tick_index = self._tick % len(self._timeline)
+                    timeline_pos = self._timeline[tick_index]
+                    
+                    # Get the coordinates from the timeline position
+                    timeline_x, timeline_y = timeline_pos if isinstance(timeline_pos, tuple) else (timeline_pos.x, timeline_pos.y)
+                    
+                    # Calculate the offset
+                    offset_x = cur_x - timeline_x
+                    offset_y = cur_y - timeline_y
                     
                     if offset_x != 0 or offset_y != 0:
                         for i in range(len(self._timeline)):
-                            old_x, old_y = self._timeline[i]
-                            self._timeline[i] = (old_x + offset_x, old_y + offset_y)
+                            pos = self._timeline[i]
+                            if isinstance(pos, tuple):
+                                self._timeline[i] = (pos[0] + offset_x, pos[1] + offset_y)
+                            else:
+                                # For Position objects, update attributes directly
+                                pos.x += offset_x
+                                pos.y += offset_y
                     
                     self._logger.debug(f"Reset position from large value to equivalent: {self._curPos}")
-        
+            
             # Update widget if position changed or widget updated
             if self._curPos != self._lastPos or updated:
                 self.image = self._paintMarqueeWidget()

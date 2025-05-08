@@ -6,7 +6,7 @@ It serves as the runtime environment for the Marquee Animation DSL.
 """
 
 from typing import Dict, List, Any, Optional, Tuple, Union, Set
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 
 from .marquee import parse_marquee_dsl, validate_marquee_dsl
@@ -23,7 +23,18 @@ from .marquee.ast import (
 
 @dataclass
 class Position:
-    """Represents a widget position at a specific tick."""
+    """
+    Position in a timeline.
+    
+    Attributes:
+        x: X coordinate.
+        y: Y coordinate.
+        pause: Whether this position represents a pause in the animation.
+        pause_end: Whether this position represents the end of a pause.
+        segment_start: Whether this position represents the start of a segment.
+        segment_end: Whether this position represents the end of a segment.
+        segment_name: Name of the segment, if any.
+    """
     x: int
     y: int
     pause: bool = False
@@ -31,32 +42,95 @@ class Position:
     segment_start: bool = False
     segment_end: bool = False
     segment_name: Optional[str] = None
+    
+    def __getitem__(self, idx):
+        """Make Position subscriptable like a tuple (pos[0] gives x, pos[1] gives y)."""
+        if idx == 0:
+            return self.x
+        elif idx == 1:
+            return self.y
+        else:
+            raise IndexError(f"Position index {idx} out of range")
+    
+    def __eq__(self, other):
+        """Allow comparison with Position objects or (x, y) tuples."""
+        if isinstance(other, Position):
+            return self.x == other.x and self.y == other.y
+        elif isinstance(other, tuple) and len(other) == 2:
+            return self.x == other[0] and self.y == other[1]
+        return False
+        
+    def __iter__(self):
+        """Allow unpacking of Position objects (x, y = position)."""
+        yield self.x
+        yield self.y
+        
+    def __len__(self):
+        """Return length of 2 to support unpacking and other tuple operations."""
+        return 2
+        
+    def __iadd__(self, other):
+        """Support position += tuple operation."""
+        if isinstance(other, tuple) and len(other) == 2:
+            self.x += other[0]
+            self.y += other[1]
+            return self
+        elif isinstance(other, Position):
+            self.x += other.x
+            self.y += other.y
+            return self
+        else:
+            raise TypeError(f"unsupported operand type(s) for +=: 'Position' and '{type(other).__name__}'")
+    
+    def __add__(self, other):
+        """Support position + tuple operation."""
+        if isinstance(other, tuple) and len(other) == 2:
+            return Position(x=self.x + other[0], y=self.y + other[1])
+        elif isinstance(other, Position):
+            return Position(x=self.x + other.x, y=self.y + other.y)
+        else:
+            raise TypeError(f"unsupported operand type(s) for +: 'Position' and '{type(other).__name__}'")
+            
+    def __radd__(self, other):
+        """Support tuple + position operation."""
+        if isinstance(other, tuple) and len(other) == 2:
+            return Position(x=other[0] + self.x, y=other[1] + self.y)
+        else:
+            raise TypeError(f"unsupported operand type(s) for +: '{type(other).__name__}' and 'Position'")
 
 
 @dataclass
 class ExecutionContext:
-    """Execution context for the Marquee DSL."""
-    variables: Dict[str, Any] = None
-    timeline: List[Position] = None
-    loop_counters: Dict[str, int] = None
+    """
+    Execution context for the Marquee DSL.
+    This stores the state during program execution.
+    """
+    variables: Dict[str, Any]
+    timeline: List[Position]
     tick_position: int = 0
     break_loop: bool = False
     continue_loop: bool = False
     current_segment: Optional[str] = None
-    segments: Dict[str, Tuple[int, int]] = None
+    loop_counters: Dict[str, int] = field(default_factory=dict)
+    segments: Dict[str, Tuple[int, int]] = field(default_factory=dict)
     period: Optional[int] = None
     start_at: int = 0
-    pauses: List[int] = None
-    pause_ends: List[int] = None
-    # Add tracking for SCROLL_CLIP starting positions
+    pauses: List[int] = field(default_factory=list)
+    pause_ends: List[int] = field(default_factory=list)
+    # Events for SYNC and WAIT_FOR
+    events: Dict[str, bool] = field(default_factory=dict)
+    defined_sync_events: Set[str] = field(default_factory=set)
+    # Events being waited for
+    waiting_for_events: Set[str] = field(default_factory=set)
+    # Tracking state for scroll_clip
     scroll_clip_start_x: Optional[int] = None
     scroll_clip_start_y: Optional[int] = None
-    scroll_clip_total_moved: Optional[float] = None
+    scroll_clip_total_moved: int = 0
     scroll_clip_stabilized: bool = False
-    # Add tracking for SLIDE command
+    # Tracking state for slide animation
     slide_start_x: Optional[int] = None
     slide_start_y: Optional[int] = None
-    slide_total_moved: Optional[float] = None
+    slide_total_moved: int = 0
     slide_stabilized: bool = False
     slide_progress: Optional[float] = None
     
@@ -101,30 +175,37 @@ class MarqueeExecutor:
         else:
             self.program = program
             
-        # Initialize execution context
-        self.context = ExecutionContext()
-        
-        # Initialize standard variables
-        self.context.variables = {
+        # Prepare initial variables with standard defaults
+        default_vars = {
             "widget": {"x": 0, "y": 0, "width": 0, "height": 0, "opacity": 1.0},
             "container": {"width": 0, "height": 0},
-            "current_tick": 0,
-            # Standard easing functions
-            "linear": "linear",
-            "ease_in": "ease_in",
-            "ease_out": "ease_out",
-            "ease_in_out": "ease_in_out"
+            "current_tick": 0
         }
         
-        # Add user-defined initial variables
+        # Merge with user-provided variables (user vars override defaults)
         if initial_variables:
-            for name, value in initial_variables.items():
-                self.context.variables[name] = value
+            for key, value in initial_variables.items():
+                default_vars[key] = value
+        
+        # Initialize execution context
+        self.context = ExecutionContext(
+            variables=default_vars,
+            timeline=[Position(x=0, y=0)]  # Start with initial position at origin
+        )
+        
+        # Add standard easing functions
+        if 'easing_functions' not in self.context.variables:
+            self.context.variables['easing_functions'] = {
+                'linear': lambda x: x,
+                'ease_in': lambda x: x * x,
+                'ease_out': lambda x: 1 - (1 - x) * (1 - x),
+                'ease_in_out': lambda x: 4 * x * x * x if x < 0.5 else 1 - pow(-2 * x + 2, 3) / 2
+            }
         
         # Validate the program
-        self.errors = validate_marquee_dsl(self.program)
-        if self.errors:
-            for error in self.errors:
+        errors = validate_marquee_dsl(self.program)
+        if errors:
+            for error in errors:
                 self.logger.warning(f"Validation warning: {error}")
         
     def execute(self, widget_size: Tuple[int, int], container_size: Tuple[int, int], 
@@ -300,6 +381,10 @@ class MarqueeExecutor:
             self.context.break_loop = True
         elif isinstance(stmt, ContinueStatement):
             self.context.continue_loop = True
+        elif isinstance(stmt, SyncStatement):
+            self._execute_sync(stmt)
+        elif isinstance(stmt, WaitForStatement):
+            self._execute_wait_for(stmt)
         elif isinstance(stmt, TimelineStatement):
             self._execute_timeline_statement_once(stmt)
         # Add handling for high-level commands
@@ -801,6 +886,88 @@ class MarqueeExecutor:
             
             # Implement POPUP behavior here
             pass
+    
+    def _execute_sync(self, stmt: SyncStatement) -> None:
+        """
+        Execute a SYNC statement by registering an event.
+        
+        Args:
+            stmt: The SYNC statement to execute.
+        """
+        self.logger.debug(f"Executing SYNC with event '{stmt.event}'")
+        
+        # Register this event as triggered
+        self.context.events[stmt.event] = True
+        self.context.defined_sync_events.add(stmt.event)
+        
+        # Add current position to timeline (no change in position)
+        current_pos = self.context.timeline[-1]
+        pos = Position(x=current_pos.x, y=current_pos.y)
+        self.context.timeline.append(pos)
+        self.context.tick_position += 1
+    
+    def _execute_wait_for(self, stmt: WaitForStatement) -> None:
+        """
+        Execute a WAIT_FOR statement by waiting for an event to be triggered.
+        
+        Args:
+            stmt: The WAIT_FOR statement to execute.
+        """
+        self.logger.debug(f"Executing WAIT_FOR with event '{stmt.event}', max ticks: {stmt.ticks}")
+        
+        # Get current position
+        current_pos = self.context.timeline[-1]
+        
+        # Get max wait duration
+        max_ticks = self._evaluate_expression(stmt.ticks)
+        
+        # Check if the event is already triggered in the shared events dictionary
+        event_already_triggered = stmt.event in self.context.events and self.context.events[stmt.event]
+        
+        if event_already_triggered:
+            self.logger.debug(f"Event '{stmt.event}' already triggered, timeline will skip waiting")
+            
+            # Even if the event is already triggered, we still create a deterministic timeline
+            # that includes one pause position to mark the WAIT_FOR point
+            pause_pos = Position(x=current_pos.x, y=current_pos.y, pause=True)
+            self.context.timeline.append(pause_pos)
+            self.context.tick_position += 1
+        else:
+            self.logger.debug(f"Event '{stmt.event}' not yet triggered, adding {max_ticks} pause positions")
+            
+            # Add pause positions for waiting
+            for _ in range(max_ticks):
+                pause_pos = Position(x=current_pos.x, y=current_pos.y, pause=True)
+                self.context.timeline.append(pause_pos)
+                self.context.tick_position += 1
+        
+        # After waiting (or skipping the wait), add a final position to continue movement
+        pos = Position(x=current_pos.x, y=current_pos.y)
+        self.context.timeline.append(pos)
+        self.context.tick_position += 1
+        
+        # Store this WAIT_FOR event to allow checking for it later
+        self.context.waiting_for_events.add(stmt.event)
+    
+    def check_waiting_events_triggered(self) -> bool:
+        """
+        Check if any events that were being waited for have been triggered.
+        This allows recomputing the timeline when events change after initial generation.
+        
+        Returns:
+            True if any waited-for event was newly triggered, False otherwise.
+        """
+        # Skip if no events are being waited for
+        if not self.context.waiting_for_events:
+            return False
+        
+        # Check each waiting event
+        for event in self.context.waiting_for_events:
+            if event in self.context.events and self.context.events[event]:
+                self.logger.debug(f"Event '{event}' was triggered after timeline generation")
+                return True
+            
+        return False
     
     def _evaluate_condition(self, condition) -> bool:
         """

@@ -78,12 +78,13 @@ class Validator:
         # Validate the program
         self._validate_program(self.program)
         
-        # Check for undefined events
+        # Check for undefined events - make this a softer warning
+        # since events might be defined in another widget
         for event in self.used_sync_events:
             if event not in self.defined_sync_events:
                 self.errors.append(ValidationError(
                     location=Location(0, 0),  # We don't have location for these post-validations
-                    message=f"Event '{event}' is used but never defined."
+                    message=f"Event '{event}' is used but may need to be defined elsewhere."
                 ))
         
         return self.errors
@@ -283,12 +284,13 @@ class Validator:
         # Register event as used
         self.used_sync_events.add(stmt.event)
         
-        # Check if the event is defined
-        if stmt.event not in self.defined_sync_events:
-            self.errors.append(ValidationError(
-                location=stmt.location,
-                message=f"Event '{stmt.event}' used in WAIT_FOR statement is not defined."
-            ))
+        # We remove this strict check since events may be defined externally
+        # or in another widget that shares events
+        # if stmt.event not in self.defined_sync_events:
+        #     self.errors.append(ValidationError(
+        #         location=stmt.location,
+        #         message=f"Event '{stmt.event}' used in WAIT_FOR statement is not defined."
+        #     ))
         
         # Validate ticks
         self._validate_expression(stmt.ticks)

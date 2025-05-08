@@ -769,10 +769,11 @@ def test_position_reset_modes():
     
     # Recompute timeline - "always" mode should reset position
     marquee_always._computeTimeline()
-    marquee_always.render(move=False)  # Render without moving
+    marquee_always.render(move=False, force=True)  # Force a full reset
     
     # Position should be back to (0,0) after timeline recomputation
     assert marquee_always._curPos != mid_pos, "Position should reset in 'always' mode"
+    assert marquee_always._curPos == (0, 0), "Position should be reset to (0,0) in 'always' mode"
     
     # Test 2: "never" reset mode
     # Creating a new marquee with "never" mode
@@ -840,6 +841,336 @@ def test_position_reset_modes():
         assert marquee_size._curPos != pos_before_size_change, "Position should change after size change"
 
 
+def test_marquee_sync():
+    """Test coordinated movement between two marquee widgets."""
+    # Create two text widgets
+    text1 = text("abc")
+    text2 = text("123456789")
+    
+    # Determine width for both marquees (twice the width of the widest text)
+    text1_width = text1.image.width
+    text2_width = text2.image.width
+    widest_text = max(text1_width, text2_width)
+    marquee_width = 2 * widest_text
+    
+    # Create simple movement programs with pauses
+    # First marquee: moves right with pauses
+    program1 = """
+    MOVE(RIGHT, 5) { step=1 };
+    PAUSE(3);
+    MOVE(RIGHT, 5) { step=1 };
+    PAUSE(3);
+    MOVE(RIGHT, 5) { step=1 };
+    """
+    
+    # Second marquee: moves left with pauses that match first marquee
+    program2 = """
+    MOVE(LEFT, 5) { step=1 };
+    PAUSE(3);
+    MOVE(LEFT, 5) { step=1 };
+    PAUSE(3);
+    MOVE(LEFT, 5) { step=1 };
+    """
+    
+    # Create the marquee widgets
+    marquee1 = new_marquee(
+        widget=text1,
+        program=program1,
+        size=(marquee_width, text1.image.height)
+    )
+    
+    marquee2 = new_marquee(
+        widget=text2,
+        program=program2, 
+        size=(marquee_width, text2.image.height)
+    )
+    
+    # Initialize both marquees (force=True to create timeline)
+    marquee1.render(force=True)
+    marquee2.render(force=True)
+    
+    # Track positions at each step
+    positions1 = []
+    positions2 = []
+    
+    # Record initial positions
+    positions1.append(marquee1._curPos)
+    positions2.append(marquee2._curPos)
+    
+    # Run both animations and track positions
+    max_steps = 25  # Enough to complete both animations
+    for i in range(max_steps):
+        # Render both marquees
+        img1, _ = marquee1.render(move=True)
+        img2, _ = marquee2.render(move=True)
+        
+        # Record positions
+        positions1.append(marquee1._curPos)
+        positions2.append(marquee2._curPos)
+    
+    # Print the position records for debugging
+    print("First marquee position trace:", positions1)
+    print("Second marquee position trace:", positions2)
+    
+    # Verify first marquee moved right (increasing x)
+    assert positions1[-1][0] > positions1[0][0], "First marquee should move from left to right"
+    
+    # Verify second marquee moved left (decreasing x)
+    assert positions2[-1][0] < positions2[0][0], "Second marquee should move from right to left"
+    
+    # Verify the pause patterns exist in the position data
+    # Find sequences where position doesn't change for at least 3 steps
+    pause_points1 = []
+    pause_points2 = []
+    
+    for i in range(len(positions1) - 3):
+        if positions1[i] == positions1[i+1] == positions1[i+2]:
+            pause_points1.append(i)
+            
+    for i in range(len(positions2) - 3):
+        if positions2[i] == positions2[i+1] == positions2[i+2]:
+            pause_points2.append(i)
+    
+    # Verify both marquees had pauses
+    assert len(pause_points1) > 0, "First marquee should have pause points"
+    assert len(pause_points2) > 0, "Second marquee should have pause points"
+    
+    # Verify the pauses were synchronized (should occur at similar positions)
+    # Just check that the number of pauses matches
+    assert len(pause_points1) == len(pause_points2), "Both marquees should have same number of pauses"
+
+
+def test_sync_command():
+    """Test the SYNC statement functionality."""
+    # Create a text widget
+    widget = text("SYNC Test")
+    
+    # Program that uses a SYNC statement to signal an event
+    program = """
+    MOVE(RIGHT, 10) { step=1 };
+    SYNC(checkpoint_reached);
+    MOVE(RIGHT, 10) { step=1 };
+    """
+    
+    # Create marquee
+    marquee = new_marquee(
+        widget=widget,
+        program=program
+    )
+    
+    # Force initial render
+    marquee.render(force=True)
+    
+    # Timeline should have been generated
+    assert len(marquee._timeline) > 0
+    
+    # Run animation steps and check if the event is registered
+    for i in range(15):
+        marquee.render()
+    
+    # Check if event was registered in context
+    assert 'checkpoint_reached' in marquee._executor.context.events
+    assert marquee._executor.context.events['checkpoint_reached'] == True
+
+
+def test_wait_for_command():
+    """Test the WAIT_FOR statement functionality."""
+    # Part 1: Test with pre-triggered event
+    # Create a text widget
+    widget = text("WAIT_FOR Test")
+    
+    # Create shared events dictionary with event already triggered
+    shared_events = {'ready_signal': True}
+    
+    # Program that uses a WAIT_FOR statement to wait for a previously set event
+    program = """
+    WAIT_FOR(ready_signal, 10);
+    MOVE(RIGHT, 10) { step=1 };
+    """
+    
+    # Create marquee with shared events
+    marquee = new_marquee(
+        widget=widget,
+        program=program,
+        shared_events=shared_events
+    )
+    
+    # Force initial render
+    marquee.render(force=True)
+    
+    # Timeline should show movement starting immediately (not waiting)
+    # since the event was already triggered
+    assert len(marquee._timeline) > 0
+    
+    # Check the first few positions - there should be no pauses
+    # since the event was already True
+    pause_count = 0
+    for i in range(min(5, len(marquee._timeline))):
+        # Handle both Position objects and tuples
+        pos = marquee._timeline[i]
+        if hasattr(pos, 'pause'):
+            if pos.pause:
+                pause_count += 1
+    
+    # Should have minimal pauses since the event was already triggered
+    assert pause_count < 3
+    
+    # Part 2: Test with event that is triggered by another marquee
+    # Create shared events for communication between marquees
+    coordination_events = {}
+    coordination_sync_events = set()
+    
+    # First marquee sends a signal
+    sync_program = """
+    MOVE(RIGHT, 2) { step=1 };
+    SYNC(activation_signal);
+    MOVE(RIGHT, 10) { step=1 };
+    """
+    
+    # Second marquee waits for that signal
+    wait_program = """
+    WAIT_FOR(activation_signal, 20);
+    MOVE(RIGHT, 10) { step=2 };
+    """
+    
+    # Create both marquees sharing the same event dictionaries
+    sync_marquee = new_marquee(
+        widget=text("Sync Test"),
+        program=sync_program,
+        shared_events=coordination_events,
+        shared_sync_events=coordination_sync_events
+    )
+    
+    wait_marquee = new_marquee(
+        widget=text("Wait Test"),
+        program=wait_program,
+        shared_events=coordination_events,
+        shared_sync_events=coordination_sync_events
+    )
+    
+    # Initialize both marquees
+    sync_marquee.render(force=True)
+    wait_marquee.render(force=True)
+    
+    # Verify timelines were generated
+    assert len(sync_marquee._timeline) > 0
+    assert len(wait_marquee._timeline) > 0
+    
+    # Print timeline for debugging
+    print("Wait marquee timeline (first 10 positions):")
+    for i, pos in enumerate(wait_marquee._timeline[:10]):
+        print(f"  Position {i}: {pos}")
+        if hasattr(pos, 'pause'):
+            print(f"    Has pause attribute: {pos.pause}")
+    
+    # Analyze the wait_marquee timeline to verify it includes a pause section
+    # followed by movement
+    pause_positions = 0
+    for pos in wait_marquee._timeline[:20]:  # Look at beginning of timeline
+        # Handle both Position objects and tuples
+        if isinstance(pos, tuple):
+            # In tuple format, we don't have pause flag
+            continue
+        elif hasattr(pos, 'pause'):
+            if pos.pause:
+                pause_positions += 1
+        
+    # Should have some pause positions while waiting
+    assert pause_positions > 0, "Timeline should include pause positions for WAIT_FOR"
+    
+    # Verify that the timeline eventually includes movement
+    has_movement = False
+    prev_x = None
+    
+    for i, pos in enumerate(wait_marquee._timeline):
+        if i > 0:
+            x_val = None
+            if isinstance(pos, tuple):
+                x_val = pos[0]
+            elif hasattr(pos, 'x'):
+                x_val = pos.x
+                
+            if prev_x is not None and x_val is not None and x_val != prev_x:
+                has_movement = True
+                break
+            
+            # Update previous x value for next comparison
+            prev_x = x_val
+    
+    assert has_movement, "WAIT_FOR timeline should eventually include movement after waiting"
+
+
+def test_sync_wait_for_coordination():
+    """Test that SYNC and WAIT_FOR can coordinate between two marquees."""
+    # Create two text widgets
+    text1 = text("First widget")
+    text2 = text("Second widget")
+    
+    # Create shared events and sync events between marquees
+    shared_events = {}
+    shared_sync_events = set()
+    
+    # Program 1: Move and then signal with SYNC
+    program1 = """
+    MOVE(RIGHT, 5) { step=1 };
+    SYNC(first_done);
+    PAUSE(5);
+    MOVE(RIGHT, 5) { step=1 };
+    """
+    
+    # Program 2: Wait for signal from marquee 1 before moving
+    program2 = """
+    WAIT_FOR(first_done, 20);
+    MOVE(RIGHT, 10) { step=1 };
+    """
+    
+    # Create marquees with shared event tracking
+    marquee1 = new_marquee(
+        widget=text1,
+        program=program1,
+        shared_events=shared_events,
+        shared_sync_events=shared_sync_events
+    )
+    
+    marquee2 = new_marquee(
+        widget=text2,
+        program=program2,
+        shared_events=shared_events,
+        shared_sync_events=shared_sync_events
+    )
+    
+    # Initialize both marquees
+    marquee1.render(force=True)
+    marquee2.render(force=True)
+    
+    # Capture initial positions
+    pos1_start = marquee1._curPos
+    pos2_start = marquee2._curPos
+    
+    # Run both marquees for a few steps
+    # The first marquee should move, the second should wait
+    for i in range(6):
+        marquee1.render()
+        marquee2.render()
+    
+    # Check positions after initial steps
+    # Marquee 1 should have moved
+    assert marquee1._curPos != pos1_start
+    
+    # Verify the event was triggered
+    assert 'first_done' in shared_events
+    assert shared_events['first_done'] == True
+    
+    # Continue for more steps to allow second marquee to move
+    for i in range(10):
+        marquee1.render()
+        marquee2.render()
+    
+    # Both marquees should now have moved
+    assert marquee1._curPos != pos1_start
+    assert marquee2._curPos != pos2_start
+
+
 if __name__ == "__main__":
     # Run tests manually
     test_new_marquee_simple_move()
@@ -856,4 +1187,8 @@ if __name__ == "__main__":
     test_slide_basic()
     test_position_reset_mechanism()
     test_position_reset_modes()
+    test_marquee_sync()
+    test_sync_command()
+    test_wait_for_command()
+    test_sync_wait_for_coordination()
     print("All tests passed!") 
