@@ -183,7 +183,7 @@ class TestComplexIntegration:
             background: "black",
             
             TIMELINE {
-                SLIDE(IN, TOP, 20);
+                SLIDE(TOP, 20);
             }
         }
         
@@ -195,7 +195,7 @@ class TestComplexIntegration:
             
             TIMELINE {
                 WAIT_FOR(title_ready, 50);
-                SLIDE(IN, LEFT, 30);
+                SLIDE(LEFT, 30);
                 SYNC(content_ready);
             }
         }
@@ -287,7 +287,7 @@ class TestComplexIntegration:
             background: THEME.background,
             
             TIMELINE {
-                SLIDE(IN, TOP, 20);
+                SLIDE(TOP, 20);
                 SYNC(header_ready);
             }
         }
@@ -300,7 +300,7 @@ class TestComplexIntegration:
             
             TIMELINE {
                 WAIT_FOR(header_ready, 30);
-                SLIDE(IN, LEFT, 30);
+                SLIDE(LEFT, 30);
                 
                 ON_VARIABLE_CHANGE(data.temperature) {
                     POPUP({ duration=5 });
@@ -316,7 +316,7 @@ class TestComplexIntegration:
             
             TIMELINE {
                 WAIT_FOR(header_ready, 40);
-                SLIDE(IN, RIGHT, 30);
+                SLIDE(RIGHT, 30);
                 
                 ON_VARIABLE_CHANGE(data.humidity) {
                     POPUP({ duration=5 });

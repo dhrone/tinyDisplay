@@ -14,6 +14,7 @@ from tinyDisplay.render.widget import widget
 from tinyDisplay.dsl.marquee import parse_and_validate_marquee_dsl
 from tinyDisplay.dsl.marquee_executor import MarqueeExecutor, Position
 from tinyDisplay.dsl.marquee.ast import Direction
+from tinyDisplay.render.coordination import timeline_manager  # Import the singleton from render package
 
 
 class new_marquee(widget):
@@ -47,6 +48,8 @@ class new_marquee(widget):
     """
 
     NOTDYNAMIC = ["widget", "resetOnChange", "program", "shared_events", "shared_sync_events"]
+    # Class variable to track if timelines have been resolved during initialization
+    _timelines_initialized = False
 
     def __init__(
         self,
@@ -114,6 +117,15 @@ class new_marquee(widget):
         self._last_widget_size = None
         self._need_recompute = True
         
+        # Unique ID for this marquee widget
+        self._widget_id = id(self)
+        
+        # Register with timeline coordination manager
+        timeline_manager.register_widget(self._widget_id, self)
+        
+        # Flag to track if this widget's timeline has been resolved
+        self._timeline_resolved = False
+        
         # Logger setup
         self._logger = logging.getLogger("tinyDisplay.render.new_marquee")
         
@@ -131,8 +143,421 @@ class new_marquee(widget):
                 dynamic=True,
             )
         
+        # Register SYNC events and dependencies
+        self._register_events_and_dependencies()
+        
         # Initial render with move=False
         self.render(reset=True, move=False)
+
+    @classmethod
+    def initialize_all_timelines(cls):
+        """
+        Initialize and resolve all marquee timelines at once.
+        This method should be called after all marquee widgets have been created,
+        and before the first frame is rendered.
+        
+        This is important for coordinating SYNC and WAIT_FOR relationships between widgets.
+        """
+        if cls._timelines_initialized:
+            # Skip if already initialized
+            return
+        
+        # Get logger
+        logger = logging.getLogger("tinyDisplay.render.new_marquee")
+        logger.info("Initializing all marquee timelines")
+        
+        try:
+            # Resolve all timelines
+            timeline_manager.resolve_timelines()
+            
+            # Mark as initialized
+            cls._timelines_initialized = True
+            logger.info("Timeline initialization complete")
+        except Exception as e:
+            logger.error(f"Error initializing timelines: {e}")
+    
+    @classmethod
+    def reset_all_timelines(cls, changed_widgets=None, force_full_reset=False):
+        """
+        Reset marquee timelines as needed.
+        
+        By default, this only resets timelines for widgets that have changed and their dependents.
+        A full reset can be forced if needed for initialization or recovery.
+        
+        Args:
+            changed_widgets: List of widget IDs that have changed and need recalculation.
+                            If None, no specific widget is marked (full reset only when forced).
+            force_full_reset: When True, resets and recalculates all timelines regardless of changes.
+        """
+        # Get logger
+        logger = logging.getLogger("tinyDisplay.render.new_marquee")
+        
+        try:
+            if force_full_reset:
+                # Full reset, recalculate everything
+                logger.info("Performing full timeline reset")
+                cls._timelines_initialized = False
+                timeline_manager.resolved.clear()
+                timeline_manager.resolve_timelines()
+                cls._timelines_initialized = True
+                logger.info("Full timeline reset complete")
+            elif changed_widgets:
+                # Selective reset - only reset changed widgets and their dependents
+                logger.info(f"Selectively resetting timelines for {len(changed_widgets)} changed widgets")
+                
+                # Mark each changed widget and its dependents for recalculation
+                for widget_id in changed_widgets:
+                    logger.debug(f"Marking widget {widget_id} and its dependents for recalculation")
+                    timeline_manager.mark_widget_for_recalculation(widget_id)
+                
+                # Resolve only the marked widgets
+                timeline_manager.resolve_timelines()
+                cls._timelines_initialized = True
+                logger.info("Selective timeline reset complete")
+            else:
+                logger.warning("No widgets marked for reset and force_full_reset=False, no action taken")
+                
+        except Exception as e:
+            logger.error(f"Error resetting timelines: {e}")
+            # Ensure we're marked as initialized to avoid deadlock
+            cls._timelines_initialized = True
+    
+    def _register_events_and_dependencies(self):
+        """
+        Register SYNC events and WAIT_FOR dependencies with the coordination manager.
+        This allows widgets to coordinate their timelines deterministically.
+        """
+        self._logger.debug("Registering events and dependencies with timeline coordination manager")
+        
+        try:
+            # Extract SYNC events from the program
+            sync_events = self._executor.extract_sync_events(
+                self._widget.image.size,
+                self._size or self._widget.image.size,
+                (0, 0)  # Initial position for event extraction
+            )
+            
+            # Register each SYNC event with its tick position
+            for event_name, tick_position in sync_events:
+                self._logger.debug(f"Registering SYNC event '{event_name}' at tick {tick_position}")
+                timeline_manager.register_sync_event(self._widget_id, event_name, tick_position)
+            
+            # Register any WAIT_FOR dependencies
+            for event_name in self._executor.context.waiting_for_events:
+                self._logger.debug(f"Registering dependency on event '{event_name}'")
+                timeline_manager.register_dependency(self._widget_id, event_name)
+        except Exception as e:
+            self._logger.error(f"Error registering events: {e}")
+
+    def _compute_timeline_with_resolved_events(self, manager):
+        """
+        Compute timeline with resolved SYNC events from the coordination manager.
+        Called by the TimelineCoordinationManager during timeline resolution.
+        
+        Args:
+            manager: The timeline coordination manager instance
+        """
+        self._logger.debug("Computing timeline with resolved events")
+        
+        try:
+            # Update the executor's context with resolved event positions
+            for event_name in self._executor.context.waiting_for_events:
+                tick_position = manager.get_sync_event_position(event_name)
+                if tick_position is not None:
+                    self._logger.debug(f"Found position for event '{event_name}' at tick {tick_position}")
+                    
+                    # Update the executor's context with the event position
+                    if not hasattr(self._executor.context, 'event_positions'):
+                        self._executor.context.event_positions = {}
+                    
+                    self._executor.context.event_positions[event_name] = tick_position
+                    self._executor.context.events[event_name] = True
+            
+            # Now compute the timeline normally
+            self._computeTimeline()
+            
+            # Mark this widget's timeline as resolved
+            self._timeline_resolved = True
+            
+        except Exception as e:
+            self._logger.error(f"Error computing timeline with resolved events: {e}")
+
+    def _computeTimeline(self):
+        """Compute the animation timeline using the DSL executor."""
+        widget_size = self._widget.image.size
+        container_size = self._size or widget_size
+        
+        # Track if widget size has changed significantly
+        size_changed = self._detectSizeChange()
+        
+        # Store current size for future comparison
+        self._last_widget_size = widget_size
+        
+        # Determine starting position based on reset mode
+        starting_position = (0, 0)
+        
+        # Only use current position if we have a position and shouldn't reset
+        if hasattr(self, '_curPos') and self._curPos is not None:
+            reset_position = self._shouldResetPosition()
+                
+            if not reset_position:
+                # Use current position but adjust for size changes if needed
+                starting_position = self._getAdjustedPosition()
+            else:
+                # When reset is needed, we always use (0,0)
+                # This ensures "always" mode resets to (0,0) every time
+                starting_position = (0, 0)
+        
+        # Save the current tick and position before recomputing
+        current_tick = self._tick if hasattr(self, '_tick') else 0
+        current_pos = self._curPos if hasattr(self, '_curPos') else starting_position
+        
+        # Execute the program with the determined starting position
+        positions = self._executor.execute(
+            widget_size, 
+            container_size, 
+            starting_position
+        )
+        
+        # Store the timeline positions directly, preserving Position objects
+        # instead of converting to tuples
+        self._timeline = positions
+        
+        # For "never" reset mode, adjust the timeline to maintain current position
+        # Also for "size_change_only" when no size change has occurred
+        if ((self._position_reset_mode == "never" or 
+             (self._position_reset_mode == "size_change_only" and not size_changed)) 
+             and current_tick > 0):
+            # Get the position at the current tick index in the new timeline
+            if len(self._timeline) > 0:
+                tick_index = current_tick % len(self._timeline)
+                new_pos_at_tick = self._timeline[tick_index]
+                
+                # Get x,y values from position
+                new_x = new_pos_at_tick.x if hasattr(new_pos_at_tick, 'x') else new_pos_at_tick[0]
+                new_y = new_pos_at_tick.y if hasattr(new_pos_at_tick, 'y') else new_pos_at_tick[1]
+                
+                # Calculate the offset needed to maintain the current position
+                if isinstance(current_pos, tuple):
+                    offset_x = current_pos[0] - new_x
+                    offset_y = current_pos[1] - new_y
+                else:
+                    offset_x = current_pos.x - new_x
+                    offset_y = current_pos.y - new_y
+                
+                # Apply this offset to the entire timeline
+                if offset_x != 0 or offset_y != 0:
+                    for i in range(len(self._timeline)):
+                        pos = self._timeline[i]
+                        if hasattr(pos, 'x') and hasattr(pos, 'y'):
+                            # For Position objects, update attributes directly
+                            pos.x += offset_x
+                            pos.y += offset_y
+                        else:
+                            # For tuple positions, create a new tuple
+                            self._timeline[i] = (pos[0] + offset_x, pos[1] + offset_y)
+        
+        # Extract pause points for properties
+        self._pauses = self._executor.context.pauses
+        self._pauseEnds = self._executor.context.pause_ends
+        
+        # Make sure we have at least one position in the timeline
+        if not self._timeline:
+            # Create a Position object to match our new approach
+            self._timeline = [Position(x=starting_position[0], y=starting_position[1])]
+        
+        self._need_recompute = False
+        
+        # Mark this timeline as resolved
+        self._timeline_resolved = True
+        
+        # Mark widget as resolved in the timeline manager
+        if hasattr(timeline_manager, 'resolved') and self._widget_id not in timeline_manager.resolved:
+            timeline_manager.resolved.add(self._widget_id)
+
+    def _resetMovement(self):
+        """Reset the animation to its starting position."""
+        self.clear()
+        self._tick = 0
+        self._pauses = []
+        self._pauseEnds = []
+        self._adjustWidgetSize()
+        
+        # Ensure image is created with correct size
+        self._createImage()
+        
+        # Determine initial position based on reset mode
+        if self._position_reset_mode == "never" and hasattr(self, '_curPos') and self._curPos:
+            # Keep current position if in "never" reset mode
+            tx, ty = self._curPos
+        else:
+            # Otherwise use placement algorithm
+            tx, ty = self._place(wImage=self._aWI, just=self.just)
+            
+        self._curPos = self._lastPos = (tx, ty)
+        self._timeline = []
+        self._need_recompute = True
+        
+        # Mark widget for recalculation in the timeline manager
+        self.mark_for_recalculation()
+        
+        # Compute timeline using coordinated approach
+        if not timeline_manager.resolved:
+            # If no timelines have been resolved yet, resolve all of them
+            timeline_manager.resolve_timelines()
+        elif self._widget_id not in timeline_manager.resolved:
+            # Only compute this timeline if it hasn't been resolved
+            self._computeTimeline()
+
+    def _render(self, force=False, tick=None, move=True, newData=False):
+        """
+        Render the marquee animation.
+        
+        :param force: Force a complete re-render
+        :param tick: Set the current tick
+        :param move: Whether to move to the next position
+        :param newData: Whether data has changed
+        :returns: Tuple of (image, changed)
+        """
+        # Ensure timeline initialization has been done
+        if not new_marquee._timelines_initialized:
+            self._logger.debug("Timeline initialization not done yet, initializing now")
+            new_marquee.initialize_all_timelines()
+        
+        # Update tick if provided
+        self._tick = tick if tick is not None else self._tick
+        
+        # Render the contained widget
+        img, updated = self._widget.render(
+            force=force, tick=tick, move=move, newData=newData
+        )
+        
+        # If the content has changed, mark this widget for recalculation
+        if updated:
+            self._adjustWidgetSize()
+            
+            # Content has changed - mark for recalculation if needed
+            if self._resetOnChange:
+                # This will clear state and mark for recalculation
+                self._resetMovement()
+                # Increment tick if move is True
+                self._tick = self._tick + 1 if move else self._tick
+                return (self.image, True)
+            else:
+                # Even if we don't reset position, we should still mark for recalculation
+                # so that any widgets that depend on our timeline can update
+                self.mark_for_recalculation()
+        elif force:
+            # Force reset regardless of content change
+            self._resetMovement()
+            # Increment tick if move is True
+            self._tick = self._tick + 1 if move else self._tick
+            return (self.image, True)
+
+        # Check if any waiting events have been triggered since timeline generation
+        events_triggered = False
+        if hasattr(self, '_executor') and hasattr(self._executor, 'check_waiting_events_triggered'):
+            events_triggered = self._executor.check_waiting_events_triggered()
+        
+        # Ensure timeline is resolved
+        if (not self._timeline or self._need_recompute or events_triggered or 
+            not self._timeline_resolved or self._widget_id not in timeline_manager.resolved):
+            self._logger.debug("Timeline needs computing or resolving")
+            
+            # Check if all timelines need resolution
+            if not timeline_manager.resolved:
+                self._logger.debug("Resolving all timelines")
+                timeline_manager.resolve_timelines()
+            else:
+                # If events were triggered, we need to recompute with the current position as starting point
+                if events_triggered:
+                    self._logger.debug("Events were triggered - recomputing timeline")
+                    self.mark_for_recalculation()
+                    
+                # Only compute this timeline if necessary
+                if self._widget_id not in timeline_manager.resolved:
+                    self._computeTimeline()
+                    
+            if not self._timeline:  # Still empty after compute
+                return (self.image, False)
+        
+        # Make sure image exists with correct size
+        if self.image.size == (0, 0) or self.image.size != self._size:
+            self._createImage()
+        
+        # Get position from timeline
+        moved = False
+        if len(self._timeline) > 0:
+            self._curPos = self._timeline[self._tick % len(self._timeline)]
+            
+            # Check if position has grown too large (exceeding 100x widget dimensions)
+            # Only do this for SCROLL_LOOP behavior where position resetting is safe
+            if self._hasScrollLoopBehavior() and hasattr(self, '_widget_dimensions'):
+                widget_width, widget_height = self._widget_dimensions
+                threshold_x = 100 * widget_width
+                threshold_y = 100 * widget_height
+                
+                # Get x/y values from current position (which might be a Position object)
+                cur_x, cur_y = self._curPos if isinstance(self._curPos, tuple) else (self._curPos.x, self._curPos.y)
+                
+                if (abs(cur_x) > threshold_x or abs(cur_y) > threshold_y):
+                    # Calculate visually equivalent position with smaller coordinates
+                    new_pos_x, new_pos_y = self._calculateEquivalentPosition(cur_x, cur_y)
+                    
+                    # Create new position object or tuple matching the original type
+                    if isinstance(self._curPos, tuple):
+                        self._curPos = (new_pos_x, new_pos_y)
+                    else:
+                        # For Position objects, update attributes while preserving other fields
+                        self._curPos.x = new_pos_x
+                        self._curPos.y = new_pos_y
+                    
+                    # Also adjust all remaining timeline positions to maintain relative positions
+                    tick_index = self._tick % len(self._timeline)
+                    timeline_pos = self._timeline[tick_index]
+                    
+                    # Get the coordinates from the timeline position
+                    timeline_x, timeline_y = timeline_pos if isinstance(timeline_pos, tuple) else (timeline_pos.x, timeline_pos.y)
+                    
+                    # Calculate the offset
+                    offset_x = cur_x - timeline_x
+                    offset_y = cur_y - timeline_y
+                    
+                    if offset_x != 0 or offset_y != 0:
+                        for i in range(len(self._timeline)):
+                            pos = self._timeline[i]
+                            if isinstance(pos, tuple):
+                                self._timeline[i] = (pos[0] + offset_x, pos[1] + offset_y)
+                            else:
+                                # For Position objects, update attributes directly
+                                pos.x += offset_x
+                                pos.y += offset_y
+                    
+                    self._logger.debug(f"Reset position from large value to equivalent: {self._curPos}")
+            
+            # Update widget if position changed or widget updated
+            if self._curPos != self._lastPos or updated:
+                self.image = self._paintMarqueeWidget()
+                moved = True
+                self._lastPos = self._curPos
+        
+        # Only increment tick if movement is enabled and moveWhen evaluates to True
+        # and we're not at a terminal position
+        if move and self._moveWhen:
+            # Check if current position is a terminal position
+            is_terminal = hasattr(self._curPos, 'terminal') and self._curPos.terminal
+            
+            # Only advance the tick if not at a terminal position
+            if not is_terminal:
+                self._tick = (self._tick + 1) % (len(self._timeline) or 1)
+        
+        # Ensure image exists and has correct size before returning
+        if self.image.size == (0, 0):
+            self._logger.warning("Image has zero size after rendering, creating new image")
+            self._createImage()
+            self._paintMarqueeWidget()
+            
+        return (self.image, moved)
 
     def _debug_dump_ast(self):
         """Dump the AST structure to the debug log for troubleshooting."""
@@ -639,92 +1064,6 @@ class new_marquee(widget):
             # Create the scroll canvas for efficient rendering
             self._createScrollCanvas()
 
-    def _computeTimeline(self):
-        """Compute the animation timeline using the DSL executor."""
-        widget_size = self._widget.image.size
-        container_size = self._size or widget_size
-        
-        # Track if widget size has changed significantly
-        size_changed = self._detectSizeChange()
-        
-        # Store current size for future comparison
-        self._last_widget_size = widget_size
-        
-        # Determine starting position based on reset mode
-        starting_position = (0, 0)
-        
-        # Only use current position if we have a position and shouldn't reset
-        if hasattr(self, '_curPos') and self._curPos is not None:
-            reset_position = self._shouldResetPosition()
-                
-            if not reset_position:
-                # Use current position but adjust for size changes if needed
-                starting_position = self._getAdjustedPosition()
-            else:
-                # When reset is needed, we always use (0,0)
-                # This ensures "always" mode resets to (0,0) every time
-                starting_position = (0, 0)
-        
-        # Save the current tick and position before recomputing
-        current_tick = self._tick if hasattr(self, '_tick') else 0
-        current_pos = self._curPos if hasattr(self, '_curPos') else starting_position
-        
-        # Execute the program with the determined starting position
-        positions = self._executor.execute(
-            widget_size, 
-            container_size, 
-            starting_position
-        )
-        
-        # Store the timeline positions directly, preserving Position objects
-        # instead of converting to tuples
-        self._timeline = positions
-        
-        # For "never" reset mode, adjust the timeline to maintain current position
-        # Also for "size_change_only" when no size change has occurred
-        if ((self._position_reset_mode == "never" or 
-             (self._position_reset_mode == "size_change_only" and not size_changed)) 
-             and current_tick > 0):
-            # Get the position at the current tick index in the new timeline
-            if len(self._timeline) > 0:
-                tick_index = current_tick % len(self._timeline)
-                new_pos_at_tick = self._timeline[tick_index]
-                
-                # Get x,y values from position
-                new_x = new_pos_at_tick.x if hasattr(new_pos_at_tick, 'x') else new_pos_at_tick[0]
-                new_y = new_pos_at_tick.y if hasattr(new_pos_at_tick, 'y') else new_pos_at_tick[1]
-                
-                # Calculate the offset needed to maintain the current position
-                if isinstance(current_pos, tuple):
-                    offset_x = current_pos[0] - new_x
-                    offset_y = current_pos[1] - new_y
-                else:
-                    offset_x = current_pos.x - new_x
-                    offset_y = current_pos.y - new_y
-                
-                # Apply this offset to the entire timeline
-                if offset_x != 0 or offset_y != 0:
-                    for i in range(len(self._timeline)):
-                        pos = self._timeline[i]
-                        if hasattr(pos, 'x') and hasattr(pos, 'y'):
-                            # For Position objects, update attributes directly
-                            pos.x += offset_x
-                            pos.y += offset_y
-                        else:
-                            # For tuple positions, create a new tuple
-                            self._timeline[i] = (pos[0] + offset_x, pos[1] + offset_y)
-        
-        # Extract pause points for properties
-        self._pauses = self._executor.context.pauses
-        self._pauseEnds = self._executor.context.pause_ends
-        
-        # Make sure we have at least one position in the timeline
-        if not self._timeline:
-            # Create a Position object to match our new approach
-            self._timeline = [Position(x=starting_position[0], y=starting_position[1])]
-        
-        self._need_recompute = False
-
     def _detectSizeChange(self):
         """Detect if the widget size has changed significantly."""
         size_changed = False
@@ -780,45 +1119,6 @@ class new_marquee(widget):
         else:
             # No size change, use current position directly
             return self._curPos
-
-    def _resetMovement(self):
-        """Reset the animation to its starting position."""
-        self.clear()
-        self._tick = 0
-        self._pauses = []
-        self._pauseEnds = []
-        self._adjustWidgetSize()
-        
-        # Ensure image is created with correct size
-        self._createImage()
-        
-        # Determine initial position based on reset mode
-        if self._position_reset_mode == "never" and hasattr(self, '_curPos') and self._curPos:
-            # Keep current position if in "never" reset mode
-            tx, ty = self._curPos
-        else:
-            # Otherwise use placement algorithm
-            tx, ty = self._place(wImage=self._aWI, just=self.just)
-            
-        self._curPos = self._lastPos = (tx, ty)
-        self._timeline = []
-        self._need_recompute = True
-        self._computeTimeline()
-
-    def _withinDisplayArea(self, pos, container_size):
-        """Check if the given position is at least partially within the display area."""
-        x0, y0, x1, y1 = pos
-        width, height = container_size
-        
-        # Check if any part of the widget is visible
-        if ((x0 >= 0 and x0 < width) or
-            (x1 >= 0 and x1 < width) or
-            (x0 < 0 and x1 >= width)) and \
-           ((y0 >= 0 and y0 < height) or
-            (y1 >= 0 and y1 < height) or
-            (y0 < 0 and y1 >= height)):
-            return True
-        return False
 
     def _paintMarqueeWidget(self):
         """Paint the widget using efficient cropping from the scroll canvas."""
@@ -927,120 +1227,37 @@ class new_marquee(widget):
         # Return equivalent position with same visual appearance
         return (equivalent_x, equivalent_y)
 
-    def _render(self, force=False, tick=None, move=True, newData=False):
-        """
-        Render the marquee animation.
+    def _createImage(self):
+        """Create a new image with the correct size."""
+        if not self._size:
+            # Default to widget size if available
+            if hasattr(self._widget, 'size') and self._widget.size:
+                self._size = self._widget.size
+            elif hasattr(self._widget, 'image') and self._widget.image:
+                self._size = self._widget.image.size
+            else:
+                self._size = (100, 20)  # Default fallback size
         
-        :param force: Force a complete re-render
-        :param tick: Set the current tick
-        :param move: Whether to move to the next position
-        :param newData: Whether data has changed
-        :returns: Tuple of (image, changed)
-        """
-        # Update tick if provided
-        self._tick = tick if tick is not None else self._tick
+        # Create the image with the determined size
+        self._logger.debug(f"Creating image with size {self._size}")
+        self.image = Image.new(self._mode, self._size, self._background)
         
-        # Render the contained widget
-        img, updated = self._widget.render(
-            force=force, tick=tick, move=move, newData=newData
-        )
-        
-        # Re-adjust widget size if it changed
-        if updated:
-            self._adjustWidgetSize()
-            
-        # Reset animation if forced or widget changed and resetOnChange is True
-        if (updated and self._resetOnChange) or force:
-            self._resetMovement()
-            # Increment tick if move is True
-            self._tick = self._tick + 1 if move else self._tick
-            return (self.image, True)
+        return self.image 
 
-        # Check if any waiting events have been triggered since timeline generation
-        events_triggered = False
-        if hasattr(self, '_executor') and hasattr(self._executor, 'check_waiting_events_triggered'):
-            events_triggered = self._executor.check_waiting_events_triggered()
+    def _withinDisplayArea(self, pos, container_size):
+        """Check if the given position is at least partially within the display area."""
+        x0, y0, x1, y1 = pos
+        width, height = container_size
         
-        # Compute timeline if needed or if events have been triggered
-        if not self._timeline or self._need_recompute or events_triggered:
-            # If events were triggered, we need to recompute with the current position as starting point
-            if events_triggered:
-                self._logger.debug("Events were triggered - recomputing timeline")
-            self._computeTimeline()
-            if not self._timeline:  # Still empty after compute
-                return (self.image, False)
-        
-        # Make sure image exists with correct size
-        if self.image.size == (0, 0) or self.image.size != self._size:
-            self._createImage()
-        
-        # Get position from timeline
-        moved = False
-        if len(self._timeline) > 0:
-            self._curPos = self._timeline[self._tick % len(self._timeline)]
-            
-            # Check if position has grown too large (exceeding 100x widget dimensions)
-            # Only do this for SCROLL_LOOP behavior where position resetting is safe
-            if self._hasScrollLoopBehavior() and hasattr(self, '_widget_dimensions'):
-                widget_width, widget_height = self._widget_dimensions
-                threshold_x = 100 * widget_width
-                threshold_y = 100 * widget_height
-                
-                # Get x/y values from current position (which might be a Position object)
-                cur_x, cur_y = self._curPos if isinstance(self._curPos, tuple) else (self._curPos.x, self._curPos.y)
-                
-                if (abs(cur_x) > threshold_x or abs(cur_y) > threshold_y):
-                    # Calculate visually equivalent position with smaller coordinates
-                    new_pos_x, new_pos_y = self._calculateEquivalentPosition(cur_x, cur_y)
-                    
-                    # Create new position object or tuple matching the original type
-                    if isinstance(self._curPos, tuple):
-                        self._curPos = (new_pos_x, new_pos_y)
-                    else:
-                        # For Position objects, update attributes while preserving other fields
-                        self._curPos.x = new_pos_x
-                        self._curPos.y = new_pos_y
-                    
-                    # Also adjust all remaining timeline positions to maintain relative positions
-                    tick_index = self._tick % len(self._timeline)
-                    timeline_pos = self._timeline[tick_index]
-                    
-                    # Get the coordinates from the timeline position
-                    timeline_x, timeline_y = timeline_pos if isinstance(timeline_pos, tuple) else (timeline_pos.x, timeline_pos.y)
-                    
-                    # Calculate the offset
-                    offset_x = cur_x - timeline_x
-                    offset_y = cur_y - timeline_y
-                    
-                    if offset_x != 0 or offset_y != 0:
-                        for i in range(len(self._timeline)):
-                            pos = self._timeline[i]
-                            if isinstance(pos, tuple):
-                                self._timeline[i] = (pos[0] + offset_x, pos[1] + offset_y)
-                            else:
-                                # For Position objects, update attributes directly
-                                pos.x += offset_x
-                                pos.y += offset_y
-                    
-                    self._logger.debug(f"Reset position from large value to equivalent: {self._curPos}")
-            
-            # Update widget if position changed or widget updated
-            if self._curPos != self._lastPos or updated:
-                self.image = self._paintMarqueeWidget()
-                moved = True
-                self._lastPos = self._curPos
-        
-        # Only increment tick if movement is enabled and moveWhen evaluates to True
-        if move and self._moveWhen:
-            self._tick = (self._tick + 1) % (len(self._timeline) or 1)
-        
-        # Ensure image exists and has correct size before returning
-        if self.image.size == (0, 0):
-            self._logger.warning("Image has zero size after rendering, creating new image")
-            self._createImage()
-            self._paintMarqueeWidget()
-            
-        return (self.image, moved)
+        # Check if any part of the widget is visible
+        if ((x0 >= 0 and x0 < width) or
+            (x1 >= 0 and x1 < width) or
+            (x0 < 0 and x1 >= width)) and \
+           ((y0 >= 0 and y0 < height) or
+            (y1 >= 0 and y1 < height) or
+            (y0 < 0 and y1 >= height)):
+            return True
+        return False
 
     # The at properties can be used by a controlling system to coordinate pauses between multiple marquee objects
     @property
@@ -1088,19 +1305,83 @@ class new_marquee(widget):
             return True
         return False
 
-    def _createImage(self):
-        """Create a new image with the correct size."""
-        if not self._size:
-            # Default to widget size if available
-            if hasattr(self._widget, 'size') and self._widget.size:
-                self._size = self._widget.size
-            elif hasattr(self._widget, 'image') and self._widget.image:
-                self._size = self._widget.image.size
-            else:
-                self._size = (100, 20)  # Default fallback size
+    @property
+    def atTerminal(self):
+        """
+        Has animation reached a terminal (final) position.
         
-        # Create the image with the determined size
-        self._logger.debug(f"Creating image with size {self._size}")
-        self.image = Image.new(self._mode, self._size, self._background)
+        Terminal positions represent the end of an animation like SCROLL_CLIP or SLIDE
+        where the animation has completed and shouldn't continue.
+
+        :returns: True if at a terminal position, False otherwise
+        :rtype: bool
+        """
+        if len(self._timeline) == 0:
+            return False
+            
+        current_pos = self._timeline[self._tick % len(self._timeline)]
+        return hasattr(current_pos, 'terminal') and current_pos.terminal
+
+    def mark_for_recalculation(self):
+        """
+        Mark this widget for timeline recalculation.
         
-        return self.image 
+        This notifies the timeline coordination system that this widget's timeline
+        needs to be recalculated (typically because content has changed).
+        
+        This also marks all dependent widgets for recalculation.
+        """
+        self._logger.debug(f"Widget {self._widget_id} marking itself for recalculation")
+        timeline_manager.mark_widget_for_recalculation(self._widget_id)
+        self._timeline_resolved = False
+        self._need_recompute = True
+        
+        # No need to call resolve_timelines here - it will be done during rendering
+        # or when reset_all_timelines is called
+
+    @classmethod
+    def get_widget_ids(cls, widgets):
+        """
+        Get widget IDs from a list of marquee widget objects.
+        
+        This simplifies the API for marking widgets for recalculation.
+        
+        Args:
+            widgets: A list of new_marquee objects
+            
+        Returns:
+            List of widget IDs
+        """
+        return [widget._widget_id for widget in widgets if hasattr(widget, '_widget_id')]
+
+    @classmethod
+    def reset_widgets(cls, widgets):
+        """
+        Reset timelines for specific widgets and their dependents.
+        
+        This is a convenience method that combines get_widget_ids and reset_all_timelines.
+        
+        Args:
+            widgets: List of new_marquee widget objects that need recalculation
+        """
+        if not widgets:
+            return
+        
+        widget_ids = cls.get_widget_ids(widgets)
+        cls.reset_all_timelines(changed_widgets=widget_ids) 
+
+    @property
+    def position(self):
+        """
+        Return the current position of the marquee.
+        
+        Returns:
+            tuple: (x, y) coordinates representing the current position
+        """
+        if hasattr(self, '_curPos'):
+            # Handle both Position objects and tuples
+            if hasattr(self._curPos, 'x') and hasattr(self._curPos, 'y'):
+                return (self._curPos.x, self._curPos.y)
+            return self._curPos
+        # Default position if not set yet
+        return (0, 0) 

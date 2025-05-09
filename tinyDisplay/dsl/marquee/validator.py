@@ -284,13 +284,17 @@ class Validator:
         # Register event as used
         self.used_sync_events.add(stmt.event)
         
-        # We remove this strict check since events may be defined externally
-        # or in another widget that shares events
-        # if stmt.event not in self.defined_sync_events:
-        #     self.errors.append(ValidationError(
-        #         location=stmt.location,
-        #         message=f"Event '{stmt.event}' used in WAIT_FOR statement is not defined."
-        #     ))
+        # Check for local event definition but with a softer approach
+        # We need to keep this check for unit tests, but add a flag to indicate it might be defined elsewhere
+        if stmt.event not in self.defined_sync_events:
+            # Add a validation error with a message that indicates this might be valid in a shared context
+            self.errors.append(ValidationError(
+                location=stmt.location,
+                message=f"Event '{stmt.event}' used in WAIT_FOR statement is not defined."
+            ))
+            # Mark this error as potentially valid in a shared context
+            # The executor can check for this when running in a coordinated environment
+            setattr(self.errors[-1], 'may_be_shared_event', True)
         
         # Validate ticks
         self._validate_expression(stmt.ticks)

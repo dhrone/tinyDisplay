@@ -321,23 +321,21 @@ class TestHighLevelCommands:
         assert options["gap"].value == 10
     
     def test_slide_command(self):
-        """Test SLIDE with all actions and directions."""
+        """Test SLIDE with different directions."""
         source = """
-        SLIDE(IN, LEFT, 100) { duration=20 };
-        SLIDE(OUT, RIGHT, 50) { duration=15 };
-        SLIDE(IN_OUT, UP, 30) { pause=10 };
+        SLIDE(LEFT, 100) { duration=20 };
+        SLIDE(RIGHT, 50) { duration=15 };
+        SLIDE(UP, 30) { pause=10 };
         """
         
         program = parse_marquee_dsl(source)
         assert len(program.statements) == 3
         
-        actions = [SlideAction.IN, SlideAction.OUT, SlideAction.IN_OUT]
         directions = [Direction.LEFT, Direction.RIGHT, Direction.UP]
         distances = [100, 50, 30]
         
-        for i, (action, direction, distance) in enumerate(zip(actions, directions, distances)):
+        for i, (direction, distance) in enumerate(zip(directions, distances)):
             assert isinstance(program.statements[i], SlideStatement)
-            assert program.statements[i].action == action
             assert program.statements[i].direction == direction
             assert program.statements[i].distance.value == distance
     
@@ -362,9 +360,9 @@ class TestHighLevelCommands:
         source = """
         SCROLL(LEFT, widget.width) { step=1 };
         PAUSE(10);
-        SLIDE(IN, RIGHT, 50);
+        SLIDE(RIGHT, 50);
         POPUP({});
-        SLIDE(OUT, LEFT, 50);
+        SLIDE(LEFT, 50);
         """
         
         program = parse_marquee_dsl(source)
@@ -663,7 +661,7 @@ class TestCompleteAnimationSequences:
         WAIT_FOR(user_interaction, 200);
         
         # Exit animation
-        SLIDE(OUT, DOWN, 50) { duration=20 };
+        SLIDE(DOWN, 50) { duration=20 };
         """
         
         program = parse_marquee_dsl(source)
@@ -672,7 +670,6 @@ class TestCompleteAnimationSequences:
         assert isinstance(program.statements[1], PopUpStatement)
         assert isinstance(program.statements[2], WaitForStatement)
         assert isinstance(program.statements[3], SlideStatement)
-        assert program.statements[3].action == SlideAction.OUT
         assert program.statements[3].direction == Direction.DOWN
     
     def test_multi_widget_coordination(self):
@@ -684,21 +681,21 @@ class TestCompleteAnimationSequences:
         
         # Title animation
         SEGMENT(title_animation, 0, 50) {
-            SLIDE(IN, LEFT, 100);
+            SLIDE(LEFT, 100);
             SYNC(title_ready);
         } END;
         
         # Content animation, waits for title
         SEGMENT(content_animation, 0, 100) {
             WAIT_FOR(title_ready, 60);
-            SLIDE(IN, UP, 50);
+            SLIDE(UP, 50);
             SYNC(content_ready);
         } END;
         
         # Footer animation, waits for content
         SEGMENT(footer_animation, 0, 150) {
             WAIT_FOR(content_ready, 120);
-            SLIDE(IN, RIGHT, 30);
+            SLIDE(RIGHT, 30);
         } END;
         """
         

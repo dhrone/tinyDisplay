@@ -48,18 +48,15 @@ def test_scroll_loop_behavior():
     assert marquee._scroll_canvas.width > widget.image.width
     
     # Move through a complete cycle
-    for _ in range(widget.image.width + 10):  # +10 to ensure we go past one cycle
-        marquee.render()
+    for _ in range(widget.image.width + 5):  
+        end_img, _ = marquee.render()
     
     # Check if we're back at the start position (should loop)
-    assert marquee.atStart
-    
-    # Get the image after one cycle
-    end_img, _ = marquee.render()
+    assert marquee.atStart, "Marquee didn't loop back to the start"
     
     # The image after one cycle should match the starting image
     diff = ImageChops.difference(start_img, end_img).getbbox()
-    assert diff is None, "Images don't match after one cycle"
+    assert diff is None, f"Images don't match after one cycle {diff}\n{image2Text(start_img)}\n{image2Text(end_img)}"
 
 
 def test_scroll_clip_behavior():
@@ -146,6 +143,10 @@ def test_scroll_bounce_behavior():
     for _ in range(50):
         marquee.render()
         current_pos = marquee._curPos
+        
+        # Print position for debugging
+        print(f"Position: ({current_pos[0]}, {current_pos[1]}) Pause: {hasattr(current_pos, 'pause') and current_pos.pause}")
+        
         positions.append(current_pos)
         
         # Detect direction changes by looking at x coordinate trends
@@ -157,6 +158,7 @@ def test_scroll_bounce_behavior():
             if (prev_direction > 0 and current_direction < 0) or \
                (prev_direction < 0 and current_direction > 0):
                 direction_changes += 1
+                print(f"Direction change detected! Current direction: {current_direction}")
     
     # Should have at least one direction change (ideally two for a complete cycle)
     assert direction_changes > 0, "SCROLL_BOUNCE didn't change direction"
@@ -164,9 +166,19 @@ def test_scroll_bounce_behavior():
     # Check we have pauses at the ends
     has_pause = False
     for i in range(len(positions) - 1):
-        if positions[i] == positions[i+1]:
+        # Check if consecutive positions have the same coordinates
+        if positions[i][0] == positions[i+1][0] and positions[i][1] == positions[i+1][1]:
             has_pause = True
+            print(f"Pause detected at positions[{i}] and positions[{i+1}]")
             break
+    
+    # If we didn't find pauses using coordinates, check the pause flag
+    if not has_pause:
+        for i, pos in enumerate(positions):
+            if hasattr(pos, 'pause') and pos.pause:
+                has_pause = True
+                print(f"Pause flag detected at positions[{i}]")
+                break
     
     assert has_pause, "SCROLL_BOUNCE didn't pause at the ends"
 

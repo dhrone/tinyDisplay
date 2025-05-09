@@ -205,7 +205,7 @@ def test_high_level_commands():
     """Test all high-level convenience commands."""
     source = """
     SCROLL(LEFT, widget.width) { step=2, gap=5 };
-    SLIDE(IN_OUT, RIGHT, 100) { pause=30 };
+    SLIDE(RIGHT, 100) { pause=30 };
     POPUP({ top_delay=20 });
     """
     
@@ -224,7 +224,6 @@ def test_high_level_commands():
     # Check SLIDE statement
     slide = program.statements[1]
     assert isinstance(slide, SlideStatement)
-    assert slide.action == SlideAction.IN_OUT
     assert slide.direction == Direction.RIGHT
     assert slide.distance.value == 100
     assert 'pause' in slide.options

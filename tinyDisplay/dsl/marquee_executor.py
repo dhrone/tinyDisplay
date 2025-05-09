@@ -31,6 +31,7 @@ class Position:
         y: Y coordinate.
         pause: Whether this position represents a pause in the animation.
         pause_end: Whether this position represents the end of a pause.
+        terminal: Whether this position represents a final terminal state of an animation.
         segment_start: Whether this position represents the start of a segment.
         segment_end: Whether this position represents the end of a segment.
         segment_name: Name of the segment, if any.
@@ -39,6 +40,7 @@ class Position:
     y: int
     pause: bool = False
     pause_end: bool = False
+    terminal: bool = False  # New flag for terminal positions
     segment_start: bool = False
     segment_end: bool = False
     segment_name: Optional[str] = None
@@ -55,8 +57,11 @@ class Position:
     def __eq__(self, other):
         """Allow comparison with Position objects or (x, y) tuples."""
         if isinstance(other, Position):
+            # For Position to Position comparison, only compare x and y coordinates
+            # Don't consider flags like pause, terminal, etc.
             return self.x == other.x and self.y == other.y
         elif isinstance(other, tuple) and len(other) == 2:
+            # For Position to tuple comparison, check if coordinates match
             return self.x == other[0] and self.y == other[1]
         return False
         
@@ -122,6 +127,8 @@ class ExecutionContext:
     defined_sync_events: Set[str] = field(default_factory=set)
     # Events being waited for
     waiting_for_events: Set[str] = field(default_factory=set)
+    # For event extraction - maps event names to tick positions
+    event_positions: Dict[str, int] = field(default_factory=dict)
     # Tracking state for scroll_clip
     scroll_clip_start_x: Optional[int] = None
     scroll_clip_start_y: Optional[int] = None
@@ -133,6 +140,13 @@ class ExecutionContext:
     slide_total_moved: int = 0
     slide_stabilized: bool = False
     slide_progress: Optional[float] = None
+    # Tracking state for bounce animation
+    bounce_direction: Optional[Direction] = None
+    bounce_total_moved: int = 0
+    bounce_max_distance: float = 0
+    bounce_at_edge: bool = False
+    bounce_paused_ticks: int = 0
+    bounce_pause_duration: int = 0
     
     def __post_init__(self):
         """Initialize default values for collections."""
@@ -206,7 +220,13 @@ class MarqueeExecutor:
         errors = validate_marquee_dsl(self.program)
         if errors:
             for error in errors:
-                self.logger.warning(f"Validation warning: {error}")
+                # Skip warnings for shared events if they might be valid in a shared context
+                if hasattr(error, 'may_be_shared_event') and hasattr(self.context, 'defined_sync_events'):
+                    # Only show these warnings if we're not in a shared context
+                    if len(self.context.defined_sync_events) == 0 and not self.context.events:
+                        self.logger.warning(f"Validation warning: {error}")
+                else:
+                    self.logger.warning(f"Validation warning: {error}")
         
     def execute(self, widget_size: Tuple[int, int], container_size: Tuple[int, int], 
               starting_position: Tuple[int, int] = (0, 0),
@@ -257,6 +277,14 @@ class MarqueeExecutor:
         self.context.slide_total_moved = 0
         self.context.slide_stabilized = False
         self.context.slide_progress = None
+        
+        # Reset bounce tracking variables
+        self.context.bounce_direction = None
+        self.context.bounce_total_moved = 0
+        self.context.bounce_max_distance = 0
+        self.context.bounce_at_edge = False
+        self.context.bounce_paused_ticks = 0
+        self.context.bounce_pause_duration = 0
         
         # Start with the widget at the provided position
         initial_pos = Position(x=starting_position[0], y=starting_position[1])
@@ -658,8 +686,8 @@ class MarqueeExecutor:
                 if not self.context.scroll_clip_stabilized:
                     self.logger.debug(f"SCROLL_CLIP reached target distance {target_distance}, adding stabilization position")
                     
-                    # Add the current position with pause=True to mark it as a stable position
-                    pos = Position(x=current_x, y=current_y, pause=True)
+                    # Add the current position with terminal=True to mark it as a final state
+                    pos = Position(x=current_x, y=current_y, terminal=True)
                     self.context.timeline.append(pos)
                     self.context.tick_position += 1
                     
@@ -708,7 +736,7 @@ class MarqueeExecutor:
                 
                 # Add stabilization position if not done yet
                 if not self.context.scroll_clip_stabilized:
-                    pause_pos = Position(x=new_x, y=new_y, pause=True)
+                    pause_pos = Position(x=new_x, y=new_y, terminal=True)
                     self.context.timeline.append(pause_pos)
                     self.context.tick_position += 1
                     self.context.scroll_clip_stabilized = True
@@ -765,16 +793,135 @@ class MarqueeExecutor:
             # Handle SCROLL_BOUNCE
             self.logger.debug(f"Executing SCROLL_BOUNCE with direction {stmt.direction}")
             
-            # Create and execute equivalent move statement
-            move_stmt = MoveStatement(
-                location=stmt.location,
-                direction=stmt.direction,
-                distance=stmt.distance,
-                options=stmt.options
-            )
+            # Initialize tracking state if not already set
+            if not hasattr(self.context, "bounce_direction") or self.context.bounce_direction is None:
+                # Debug direction value
+                self.logger.debug(f"Initializing SCROLL_BOUNCE direction: {stmt.direction} (type: {type(stmt.direction)})")
+                
+                # Start with the initial direction
+                self.context.bounce_direction = stmt.direction
+                self.context.bounce_total_moved = 0
+                self.context.bounce_max_distance = self._evaluate_expression(stmt.distance)
+                self.context.bounce_at_edge = False
+                self.context.bounce_paused_ticks = 0
+                self.context.bounce_pause_duration = self._get_option(stmt.options, "pause_at_ends", 0)
+                
+                # Fallback to LEFT if direction is somehow None
+                if self.context.bounce_direction is None:
+                    self.logger.warning("Direction was None, defaulting to LEFT")
+                    self.context.bounce_direction = Direction.LEFT
             
-            self._execute_move_once(move_stmt)
+            # Get current position
+            current_pos = self.context.timeline[-1]
+            current_x = current_pos.x
+            current_y = current_pos.y
             
+            # Get parameters
+            step = self._get_option(stmt.options, "step", 1)
+            interval = self._get_option(stmt.options, "interval", 1)
+            
+            # Check if we're pausing at an edge
+            if self.context.bounce_at_edge:
+                # If we've paused enough ticks, flip direction and continue
+                if self.context.bounce_paused_ticks >= self.context.bounce_pause_duration:
+                    # Reset pause state
+                    self.context.bounce_at_edge = False
+                    self.context.bounce_paused_ticks = 0
+                    
+                    # Reverse direction
+                    if self.context.bounce_direction == Direction.LEFT:
+                        self.context.bounce_direction = Direction.RIGHT
+                    elif self.context.bounce_direction == Direction.RIGHT:
+                        self.context.bounce_direction = Direction.LEFT
+                    elif self.context.bounce_direction == Direction.UP:
+                        self.context.bounce_direction = Direction.DOWN
+                    elif self.context.bounce_direction == Direction.DOWN:
+                        self.context.bounce_direction = Direction.UP
+                    
+                    self.logger.debug(f"SCROLL_BOUNCE reversed direction to {self.context.bounce_direction}")
+                    
+                    # Reset total moved for the new direction
+                    self.context.bounce_total_moved = 0
+                else:
+                    # Add another pause position at the exact same coordinate as the last position
+                    pos = Position(x=current_x, y=current_y, pause=True)
+                    self.context.timeline.append(pos)
+                    self.context.tick_position += 1
+                    self.context.bounce_paused_ticks += 1
+                    return
+            
+            # Calculate move based on current bounce direction
+            if self.context.bounce_direction == Direction.LEFT:
+                dx, dy = -step, 0
+            elif self.context.bounce_direction == Direction.RIGHT:
+                dx, dy = step, 0
+            elif self.context.bounce_direction == Direction.UP:
+                dx, dy = 0, -step
+            elif self.context.bounce_direction == Direction.DOWN:
+                dx, dy = 0, step
+            else:
+                self.logger.warning(f"Unsupported direction for SCROLL_BOUNCE: {self.context.bounce_direction}")
+                return
+            
+            # Update position
+            new_x = current_x + dx
+            new_y = current_y + dy
+            
+            # Update total distance moved in current direction
+            self.context.bounce_total_moved += abs(dx) + abs(dy)
+            
+            # Check if we're at a boundary
+            if self.context.bounce_total_moved >= self.context.bounce_max_distance:
+                self.logger.debug(f"SCROLL_BOUNCE reached edge at distance {self.context.bounce_total_moved}")
+                
+                # Start pausing at edge if pause is configured
+                if self.context.bounce_pause_duration > 0:
+                    self.logger.debug(f"SCROLL_BOUNCE pausing at edge for {self.context.bounce_pause_duration} ticks")
+                    self.context.bounce_at_edge = True
+                    self.context.bounce_paused_ticks = 0
+                    
+                    # Add a pause position
+                    pause_pos = Position(x=new_x, y=new_y, pause=True)
+                    self.context.timeline.append(pause_pos)
+                    self.context.tick_position += 1
+                    
+                    # Increment paused ticks (but we still need to return 
+                    # to prevent adding the regular position)
+                    self.context.bounce_paused_ticks += 1
+                    return
+                else:
+                    # No pause, immediately reverse direction
+                    # Reverse direction
+                    if self.context.bounce_direction == Direction.LEFT:
+                        self.context.bounce_direction = Direction.RIGHT
+                    elif self.context.bounce_direction == Direction.RIGHT:
+                        self.context.bounce_direction = Direction.LEFT
+                    elif self.context.bounce_direction == Direction.UP:
+                        self.context.bounce_direction = Direction.DOWN
+                    elif self.context.bounce_direction == Direction.DOWN:
+                        self.context.bounce_direction = Direction.UP
+                    
+                    self.logger.debug(f"SCROLL_BOUNCE reversed direction to {self.context.bounce_direction}")
+                    
+                    # Reset total moved for the new direction
+                    self.context.bounce_total_moved = 0
+                    
+                    # Add a position at the edge
+                    pos = Position(x=new_x, y=new_y)
+                    self.context.timeline.append(pos)
+                    self.context.tick_position += 1
+                    return
+            
+            # Add the position multiple times based on interval
+            for _ in range(interval):
+                pos = Position(x=new_x, y=new_y)
+                self.context.timeline.append(pos)
+                self.context.tick_position += 1
+            
+            # Update widget position in environment
+            self.context.variables["widget"]["x"] = new_x
+            self.context.variables["widget"]["y"] = new_y
+        
         elif isinstance(stmt, SlideStatement):
             # Handle SLIDE
             self.logger.debug(f"Executing SLIDE with direction {stmt.direction}")
@@ -801,8 +948,8 @@ class MarqueeExecutor:
                 if not self.context.slide_stabilized:
                     self.logger.debug(f"SLIDE reached target distance {target_distance}, adding stabilization position")
                     
-                    # Add the current position with pause=True to mark it as a stable position
-                    pos = Position(x=current_x, y=current_y, pause=True)
+                    # Add the current position with terminal=True to mark it as a final state
+                    pos = Position(x=current_x, y=current_y, terminal=True)
                     self.context.timeline.append(pos)
                     self.context.tick_position += 1
                     
@@ -859,7 +1006,7 @@ class MarqueeExecutor:
                 
                 # Add stabilization position if not done yet
                 if not self.context.slide_stabilized:
-                    pause_pos = Position(x=new_x, y=new_y, pause=True)
+                    pause_pos = Position(x=new_x, y=new_y, terminal=True)
                     self.context.timeline.append(pause_pos)
                     self.context.tick_position += 1
                     self.context.slide_stabilized = True
@@ -921,10 +1068,28 @@ class MarqueeExecutor:
         # Get max wait duration
         max_ticks = self._evaluate_expression(stmt.ticks)
         
+        # Check if we have a pre-determined event position from the coordinator
+        event_position_known = (hasattr(self.context, 'event_positions') and 
+                               stmt.event in self.context.event_positions)
+        
         # Check if the event is already triggered in the shared events dictionary
         event_already_triggered = stmt.event in self.context.events and self.context.events[stmt.event]
         
-        if event_already_triggered:
+        if event_position_known:
+            # We know exactly when this event occurs, so we can generate a deterministic wait period
+            event_position = self.context.event_positions[stmt.event]
+            wait_ticks = min(max_ticks, max(1, event_position - self.context.tick_position))
+            
+            self.logger.debug(f"Event '{stmt.event}' position is known ({event_position}), " 
+                              f"generating {wait_ticks} wait positions")
+            
+            # Add pause positions for the exact waiting period
+            for _ in range(wait_ticks):
+                pause_pos = Position(x=current_pos.x, y=current_pos.y, pause=True)
+                self.context.timeline.append(pause_pos)
+                self.context.tick_position += 1
+            
+        elif event_already_triggered:
             self.logger.debug(f"Event '{stmt.event}' already triggered, timeline will skip waiting")
             
             # Even if the event is already triggered, we still create a deterministic timeline
@@ -1076,4 +1241,110 @@ class MarqueeExecutor:
             return default
         except Exception as e:
             self.logger.warning(f"Error evaluating option {name}: {e}")
-            return default 
+            return default
+    
+    def extract_sync_events(self, widget_size, container_size, starting_position):
+        """
+        Extract SYNC events and their positions without generating a full timeline.
+        
+        Args:
+            widget_size: The size of the widget being animated (width, height)
+            container_size: The size of the container (width, height)
+            starting_position: The initial position (x, y) for the timeline
+            
+        Returns:
+            List of (event_name, tick_position) tuples
+        """
+        self.logger.debug("Extracting SYNC events from program")
+        
+        # Update widget and container sizes - same as in execute()
+        self.context.variables["widget"]["width"] = widget_size[0]
+        self.context.variables["widget"]["height"] = widget_size[1]
+        self.context.variables["container"]["width"] = container_size[0]
+        self.context.variables["container"]["height"] = container_size[1]
+        
+        # Update widget position with the provided starting position
+        self.context.variables["widget"]["x"] = starting_position[0]
+        self.context.variables["widget"]["y"] = starting_position[1]
+        
+        # Create a clean context just for event extraction
+        extraction_context = ExecutionContext(
+            variables=self.context.variables.copy(),
+            timeline=[Position(x=starting_position[0], y=starting_position[1])],
+            events={},
+            defined_sync_events=set()
+        )
+        
+        # Add a special field for event positions
+        extraction_context.event_positions = {}
+        
+        # Store original context
+        original_context = self.context
+        
+        # Set extraction context as active
+        self.context = extraction_context
+        
+        # Extract events from the program
+        self._extract_sync_events_from_statements(self.program.statements)
+        
+        # Get the results
+        event_positions = [(event, pos) for event, pos in extraction_context.event_positions.items()]
+        
+        # Restore original context
+        self.context = original_context
+        
+        self.logger.debug(f"Extracted {len(event_positions)} SYNC events")
+        
+        return event_positions
+    
+    def _extract_sync_events_from_statements(self, statements):
+        """
+        Recursively extract SYNC events from statements.
+        
+        Args:
+            statements: List of statements to process
+        """
+        for stmt in statements:
+            if isinstance(stmt, SyncStatement):
+                # Record this SYNC event and its position
+                self.context.events[stmt.event] = True
+                self.context.event_positions[stmt.event] = self.context.tick_position
+                self.context.defined_sync_events.add(stmt.event)
+                self.context.tick_position += 1
+                
+                self.logger.debug(f"Found SYNC event '{stmt.event}' at tick {self.context.tick_position-1}")
+                
+            elif isinstance(stmt, Block):
+                self._extract_sync_events_from_statements(stmt.statements)
+                
+            elif isinstance(stmt, IfStatement):
+                # Always process all branches for deterministic extraction
+                self._extract_sync_events_from_statements(stmt.then_branch.statements)
+                for _, block in stmt.elseif_branches:
+                    self._extract_sync_events_from_statements(block.statements)
+                if stmt.else_branch:
+                    self._extract_sync_events_from_statements(stmt.else_branch.statements)
+                    
+            elif isinstance(stmt, LoopStatement):
+                # For loops, process the body once (sufficient for event positions)
+                # This is an approximation but works for simple cases
+                self._extract_sync_events_from_statements(stmt.body.statements)
+                
+            elif isinstance(stmt, PauseStatement):
+                # Add pause duration to tick count
+                pause_duration = self._evaluate_expression(stmt.duration)
+                self.context.tick_position += pause_duration
+                
+            elif isinstance(stmt, MoveStatement) or isinstance(stmt, HighLevelCommandStatement):
+                # For movement statements, estimate tick count based on options
+                # This is a rough approximation for tick counting
+                interval = 1
+                if hasattr(stmt, 'options') and stmt.options and 'interval' in stmt.options:
+                    interval = self._evaluate_expression(stmt.options['interval'])
+                
+                # Just increment by the interval as a basic approximation
+                self.context.tick_position += interval
+                
+            else:
+                # For other statements, just increment tick by 1 as basic assumption
+                self.context.tick_position += 1 
