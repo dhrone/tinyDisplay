@@ -111,6 +111,7 @@ KEYWORD          ::=
     | "PERIOD" | "START_AT" | "SEGMENT"
     | "POSITION_AT" | "SCHEDULE_AT"
     | "ON_VARIABLE_CHANGE"
+    | "DEFINE"
     ;
 
 IDENT            ::=  letter { letter | digit | "_" }* ;
@@ -135,6 +136,8 @@ Statement        ::=
     | ContinueStmt
     | HighLevelStmt
     | TimelineStmt
+    | DefineStmt
+    | SequenceInvocation
     | ";"              (* empty/placeholder *)
     ;
 
@@ -142,6 +145,14 @@ CommandStmt      ::=
       MOVEStmt
     | PAUSEStmt
     | RESETStmt
+    ;
+
+DefineStmt       ::=
+      "DEFINE" IDENT "{" { Statement } "}" ";"
+    ;
+
+SequenceInvocation ::=
+      IDENT "(" [ ArgList ] ")" ";"
     ;
 
 MOVEStmt         ::=  
@@ -307,7 +318,39 @@ Below is a detailed description of each DSL command and its attributes:
   * `fade`: Fades out at the current position and fades in at the starting position.
 * **duration** (`Expr`): Number of ticks for transition effects (used for `fade` mode). Default: 0 (immediate).
 
-### 5.2 Control Flow Commands
+### 5.2 Sequence Definition
+
+#### DEFINE
+
+**Syntax:** `DEFINE name { statements... }`
+**Description:** Defines a named sequence of statements that can be invoked later.
+
+* **name** (`IDENT`): Name for the sequence.
+* **statements** (any valid DSL statements): The body of the sequence.
+
+#### Sequence Invocation
+
+**Syntax:** `name();`
+**Description:** Invokes a previously defined sequence.
+
+* **name** (`IDENT`): Name of a previously defined sequence.
+
+**Example:**
+```dsl
+# Define a complex movement pattern
+DEFINE complex_movement {
+    MOVE(RIGHT, 20);
+    MOVE(DOWN, 10);
+    MOVE(LEFT, 10);
+}
+
+# Invoke the sequence
+complex_movement();
+```
+
+Sequences allow for reusable animation patterns. This is especially useful when you need to repeat the same animation sequence multiple times or in different parts of your program.
+
+### 5.3 Control Flow Commands
 
 #### LOOP
 
@@ -334,7 +377,7 @@ Below is a detailed description of each DSL command and its attributes:
 **Syntax:** `CONTINUE;`
 **Description:** Skips the remainder of the current loop iteration and begins the next one.
 
-### 5.3 Synchronization Commands
+### 5.4 Synchronization Commands
 
 #### SYNC
 
@@ -351,7 +394,7 @@ Below is a detailed description of each DSL command and its attributes:
 * **event** (`IDENT`): Event to wait for.
 * **ticks** (`Expr`): Maximum ticks to wait before timing out.
 
-### 5.4 High-Level Commands
+### 5.5 High-Level Commands
 
 #### SCROLL_CLIP
 
@@ -433,7 +476,7 @@ MOVE(direction, distance) { step=step, interval=interval, easing=easing };
 PAUSE(pause_after);
 ```
 
-### 5.5 Timeline Optimization Commands
+### 5.6 Timeline Optimization Commands
 
 #### PERIOD
 

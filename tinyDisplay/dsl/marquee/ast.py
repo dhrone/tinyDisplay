@@ -335,6 +335,30 @@ class PopUpStatement(HighLevelCommandStatement):
 
 
 @dataclass
+class DefineStatement(Statement):
+    """
+    Define a named sequence of statements that can be invoked later.
+    
+    Example:
+    DEFINE sequence_name { ... };
+    """
+    name: str
+    body: Block
+    
+
+@dataclass
+class SequenceInvocationStatement(Statement):
+    """
+    Invocation of a previously defined sequence.
+    
+    Example:
+    sequence_name();
+    """
+    name: str
+    arguments: List[Expression] = field(default_factory=list)
+
+
+@dataclass
 class Program:
     """The root of the AST, representing a complete program."""
     statements: List[Statement]

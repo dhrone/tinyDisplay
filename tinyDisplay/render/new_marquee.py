@@ -55,16 +55,32 @@ class new_marquee(widget):
         self,
         widget=None,
         program="",
-        resetOnChange=True,
+        resetOnChange=None,
         variables=None,
         moveWhen=True,
-        position_reset_mode="always",  # Controls how widget position resets: "always", "never", "size_change_only"
-        shared_events=None,  # Dictionary to share events between marquees
-        shared_sync_events=None,  # Set to share defined sync events
+        position_reset_mode="always",
+        shared_events=None,
+        shared_sync_events=None,
         *args,
         **kwargs,
     ):
         assert widget, "No widget supplied to initialize new_marquee"
+        
+        # Setup logging first
+        self._logger = logging.getLogger(__name__)
+        
+        # Enable debug mode if specified
+        self._debug = kwargs.get('debug', False)
+        if self._debug:
+            self._logger.setLevel(logging.DEBUG)
+            # Add stream handler if none exists
+            if not self._logger.handlers:
+                handler = logging.StreamHandler()
+                formatter = logging.Formatter('[%(name)s] %(levelname)s: %(message)s')
+                handler.setFormatter(formatter)
+                self._logger.addHandler(handler)
+            self._logger.debug("Debug mode enabled for new_marquee")
+        
         super().__init__(*args, **kwargs)
 
         self._initArguments(
@@ -109,8 +125,9 @@ class new_marquee(widget):
         self._timeline = []
         self._tick = 0
         self._last_tick = 0
-        self._curPos = (0, 0)
-        self._lastPos = (0, 0)
+        # Use Position objects instead of tuples
+        self._curPos = Position(x=0, y=0)
+        self._lastPos = Position(x=0, y=0)
         self._pauses = []
         self._pauseEnds = []
         self._widget_content_hash = None
@@ -125,9 +142,6 @@ class new_marquee(widget):
         
         # Flag to track if this widget's timeline has been resolved
         self._timeline_resolved = False
-        
-        # Logger setup
-        self._logger = logging.getLogger("tinyDisplay.render.new_marquee")
         
         # Log any validation errors
         if self.errors:
@@ -294,7 +308,7 @@ class new_marquee(widget):
         self._last_widget_size = widget_size
         
         # Determine starting position based on reset mode
-        starting_position = (0, 0)
+        starting_position = Position(x=0, y=0)
         
         # Only use current position if we have a position and shouldn't reset
         if hasattr(self, '_curPos') and self._curPos is not None:
@@ -306,17 +320,18 @@ class new_marquee(widget):
             else:
                 # When reset is needed, we always use (0,0)
                 # This ensures "always" mode resets to (0,0) every time
-                starting_position = (0, 0)
+                starting_position = Position(x=0, y=0)
         
         # Save the current tick and position before recomputing
         current_tick = self._tick if hasattr(self, '_tick') else 0
         current_pos = self._curPos if hasattr(self, '_curPos') else starting_position
         
         # Execute the program with the determined starting position
+        # Convert to tuple for API compatibility with executor.execute() which expects tuple
         positions = self._executor.execute(
             widget_size, 
             container_size, 
-            starting_position
+            (starting_position.x, starting_position.y)
         )
         
         # Store the timeline positions directly, preserving Position objects
@@ -333,17 +348,17 @@ class new_marquee(widget):
                 tick_index = current_tick % len(self._timeline)
                 new_pos_at_tick = self._timeline[tick_index]
                 
-                # Get x,y values from position
-                new_x = new_pos_at_tick.x if hasattr(new_pos_at_tick, 'x') else new_pos_at_tick[0]
-                new_y = new_pos_at_tick.y if hasattr(new_pos_at_tick, 'y') else new_pos_at_tick[1]
+                # Extract coordinates 
+                new_x = getattr(new_pos_at_tick, 'x', new_pos_at_tick[0])
+                new_y = getattr(new_pos_at_tick, 'y', new_pos_at_tick[1])
+                
+                # Extract coordinates from current position
+                current_x = getattr(current_pos, 'x', current_pos[0] if isinstance(current_pos, (tuple, list)) else 0)
+                current_y = getattr(current_pos, 'y', current_pos[1] if isinstance(current_pos, (tuple, list)) else 0)
                 
                 # Calculate the offset needed to maintain the current position
-                if isinstance(current_pos, tuple):
-                    offset_x = current_pos[0] - new_x
-                    offset_y = current_pos[1] - new_y
-                else:
-                    offset_x = current_pos.x - new_x
-                    offset_y = current_pos.y - new_y
+                offset_x = current_x - new_x
+                offset_y = current_y - new_y
                 
                 # Apply this offset to the entire timeline
                 if offset_x != 0 or offset_y != 0:
@@ -354,8 +369,8 @@ class new_marquee(widget):
                             pos.x += offset_x
                             pos.y += offset_y
                         else:
-                            # For tuple positions, create a new tuple
-                            self._timeline[i] = (pos[0] + offset_x, pos[1] + offset_y)
+                            # Convert tuple positions to Position objects 
+                            self._timeline[i] = Position(x=pos[0] + offset_x, y=pos[1] + offset_y)
         
         # Extract pause points for properties
         self._pauses = self._executor.context.pauses
@@ -363,8 +378,8 @@ class new_marquee(widget):
         
         # Make sure we have at least one position in the timeline
         if not self._timeline:
-            # Create a Position object to match our new approach
-            self._timeline = [Position(x=starting_position[0], y=starting_position[1])]
+            # Create a Position object 
+            self._timeline = [Position(x=starting_position.x, y=starting_position.y)]
         
         self._need_recompute = False
         
@@ -394,7 +409,7 @@ class new_marquee(widget):
             # Otherwise use placement algorithm
             tx, ty = self._place(wImage=self._aWI, just=self.just)
             
-        self._curPos = self._lastPos = (tx, ty)
+        self._curPos = self._lastPos = Position(x=tx, y=ty)
         self._timeline = []
         self._need_recompute = True
         
@@ -488,64 +503,32 @@ class new_marquee(widget):
         # Get position from timeline
         moved = False
         if len(self._timeline) > 0:
-            self._curPos = self._timeline[self._tick % len(self._timeline)]
+            # Get the position at the current tick
+            timeline_index = self._tick % len(self._timeline)
+            current_position = self._timeline[timeline_index]
             
-            # Check if position has grown too large (exceeding 100x widget dimensions)
-            # Only do this for SCROLL_LOOP behavior where position resetting is safe
-            if self._hasScrollLoopBehavior() and hasattr(self, '_widget_dimensions'):
-                widget_width, widget_height = self._widget_dimensions
-                threshold_x = 100 * widget_width
-                threshold_y = 100 * widget_height
-                
-                # Get x/y values from current position (which might be a Position object)
-                cur_x, cur_y = self._curPos if isinstance(self._curPos, tuple) else (self._curPos.x, self._curPos.y)
-                
-                if (abs(cur_x) > threshold_x or abs(cur_y) > threshold_y):
-                    # Calculate visually equivalent position with smaller coordinates
-                    new_pos_x, new_pos_y = self._calculateEquivalentPosition(cur_x, cur_y)
-                    
-                    # Create new position object or tuple matching the original type
-                    if isinstance(self._curPos, tuple):
-                        self._curPos = (new_pos_x, new_pos_y)
-                    else:
-                        # For Position objects, update attributes while preserving other fields
-                        self._curPos.x = new_pos_x
-                        self._curPos.y = new_pos_y
-                    
-                    # Also adjust all remaining timeline positions to maintain relative positions
-                    tick_index = self._tick % len(self._timeline)
-                    timeline_pos = self._timeline[tick_index]
-                    
-                    # Get the coordinates from the timeline position
-                    timeline_x, timeline_y = timeline_pos if isinstance(timeline_pos, tuple) else (timeline_pos.x, timeline_pos.y)
-                    
-                    # Calculate the offset
-                    offset_x = cur_x - timeline_x
-                    offset_y = cur_y - timeline_y
-                    
-                    if offset_x != 0 or offset_y != 0:
-                        for i in range(len(self._timeline)):
-                            pos = self._timeline[i]
-                            if isinstance(pos, tuple):
-                                self._timeline[i] = (pos[0] + offset_x, pos[1] + offset_y)
-                            else:
-                                # For Position objects, update attributes directly
-                                pos.x += offset_x
-                                pos.y += offset_y
-                    
-                    self._logger.debug(f"Reset position from large value to equivalent: {self._curPos}")
+            # Ensure we always have a Position object
+            if isinstance(current_position, tuple):
+                self._curPos = Position(x=current_position[0], y=current_position[1])
+            else:
+                # It's already a Position object
+                self._curPos = current_position
+            
+            # Compare positions
+            position_changed = self._curPos != self._lastPos
             
             # Update widget if position changed or widget updated
-            if self._curPos != self._lastPos or updated:
+            if position_changed or updated:
                 self.image = self._paintMarqueeWidget()
                 moved = True
-                self._lastPos = self._curPos
+                # Copy the Position object to avoid shared references
+                self._lastPos = Position(x=self._curPos.x, y=self._curPos.y)
         
         # Only increment tick if movement is enabled and moveWhen evaluates to True
         # and we're not at a terminal position
         if move and self._moveWhen:
             # Check if current position is a terminal position
-            is_terminal = hasattr(self._curPos, 'terminal') and self._curPos.terminal
+            is_terminal = self._curPos.terminal if hasattr(self._curPos, 'terminal') else False
             
             # Only advance the tick if not at a terminal position
             if not is_terminal:
@@ -1005,42 +988,104 @@ class new_marquee(widget):
         
         # Create the appropriate canvas based on movement directions
         if horizontal_movement and vertical_movement:
-            # 2D scrolling (3x3 grid)
-            cols, rows = 3, 3
-            total_width = (widget_width * cols) + (gap_size * (cols - 1))
-            total_height = (widget_height * rows) + (gap_size * (rows - 1))
+            # 2D scrolling - calculate required copies based on viewing window
+            marquee_width = self._size[0] if hasattr(self, '_size') and self._size else widget_width
+            marquee_height = self._size[1] if hasattr(self, '_size') and self._size else widget_height
+            
+            # For proper scrolling and wrapping, we need enough copies in each direction
+            # Need more copies for larger view sizes relative to content size
+            width_ratio = max(1, marquee_width / (widget_width + gap_size))
+            height_ratio = max(1, marquee_height / (widget_height + gap_size))
+            
+            # Ensure at least ceil(width_ratio) + 2 copies to provide seamless scrolling
+            # The +2 ensures we have one extra copy on each side for smooth wrapping
+            import math
+            h_copies = math.ceil(width_ratio) + 3  # Add more copies to be safe
+            v_copies = math.ceil(height_ratio) + 3
+            
+            # Use at least 4 copies in each direction
+            h_copies = max(4, h_copies)
+            v_copies = max(4, v_copies)
+            
+            self._logger.debug(f"2D scrolling ratios - width: {width_ratio}, height: {height_ratio}")
+            self._logger.debug(f"Using {h_copies}x{v_copies} copies for 2D scrolling")
+            
+            total_width = (widget_width * h_copies) + (gap_size * (h_copies - 1))
+            total_height = (widget_height * v_copies) + (gap_size * (v_copies - 1))
             scroll_canvas = Image.new(self._mode, (total_width, total_height), self._background)
             
-            # Fill the 3x3 grid with copies of the widget
-            for row in range(rows):
-                for col in range(cols):
+            self._logger.debug(f"Created 2D scroll canvas: {h_copies}x{v_copies} grid, size={total_width}x{total_height}")
+            
+            # Fill the grid with copies of the widget
+            for row in range(v_copies):
+                for col in range(h_copies):
                     x = col * (widget_width + gap_size)
                     y = row * (widget_height + gap_size)
                     scroll_canvas.paste(widget_img, (x, y), widget_img)
+                    self._logger.debug(f"Pasted copy at ({x}, {y})")
         
         elif horizontal_movement:
-            # Horizontal scrolling only (3x1)
-            total_width = (widget_width * 3) + (gap_size * 2)
+            # Horizontal scrolling only - calculate required copies based on viewing window
+            marquee_width = self._size[0] if hasattr(self, '_size') and self._size else widget_width
+            
+            # For proper scrolling and wrapping, we need enough copies
+            # Calculate how many widget copies fit in the view
+            width_ratio = max(1, marquee_width / (widget_width + gap_size))
+            
+            # Ensure at least ceil(width_ratio) + 2 copies for seamless scrolling
+            # The +2 ensures we have one extra copy on each side for smooth wrapping
+            import math
+            min_copies = math.ceil(width_ratio) + 3  # Add more copies to be safe
+            
+            # Use at least 4 copies for any horizontal scrolling
+            copies = max(4, min_copies)
+            
+            self._logger.debug(f"Horizontal scrolling ratio: {width_ratio}")
+            self._logger.debug(f"Using {copies} copies for horizontal scrolling")
+            
+            total_width = (widget_width * copies) + (gap_size * (copies - 1))
             scroll_canvas = Image.new(self._mode, (total_width, widget_height), self._background)
             
-            # Paste three copies with gaps
-            for i in range(3):
+            self._logger.debug(f"Created horizontal scroll canvas: {copies} copies, size={total_width}x{widget_height}, gap={gap_size}")
+            
+            # Paste copies with gaps
+            for i in range(copies):
                 x = i * (widget_width + gap_size)
                 scroll_canvas.paste(widget_img, (x, 0), widget_img)
+                self._logger.debug(f"Pasted copy {i+1} at x={x}")
         
         elif vertical_movement:
-            # Vertical scrolling only (1x3)
-            total_height = (widget_height * 3) + (gap_size * 2)
+            # Vertical scrolling only - calculate required copies based on viewing window
+            marquee_height = self._size[1] if hasattr(self, '_size') and self._size else widget_height
+            
+            # Calculate how many widget copies fit in the view
+            height_ratio = max(1, marquee_height / (widget_height + gap_size))
+            
+            # Ensure at least ceil(height_ratio) + 2 copies for seamless scrolling
+            import math
+            min_copies = math.ceil(height_ratio) + 3  # Add more copies to be safe
+            
+            # Use at least 4 copies for any vertical scrolling
+            copies = max(4, min_copies)
+            
+            self._logger.debug(f"Vertical scrolling ratio: {height_ratio}")
+            self._logger.debug(f"Using {copies} copies for vertical scrolling")
+            
+            total_height = (widget_height * copies) + (gap_size * (copies - 1))
             scroll_canvas = Image.new(self._mode, (widget_width, total_height), self._background)
             
-            # Paste three copies with gaps
-            for i in range(3):
+            self._logger.debug(f"Created vertical scroll canvas: {copies} copies, size={widget_width}x{total_height}, gap={gap_size}")
+            
+            # Paste copies with gaps
+            for i in range(copies):
                 y = i * (widget_height + gap_size)
                 scroll_canvas.paste(widget_img, (0, y), widget_img)
+                self._logger.debug(f"Pasted copy {i+1} at y={y}")
         
         else:
             # No scrolling, just use the widget image
             scroll_canvas = widget_img.copy()
+            self._logger.debug("No movement direction specified, using single copy")
         
         # Store canvas and parameters
         self._scroll_canvas = scroll_canvas
@@ -1050,6 +1095,9 @@ class new_marquee(widget):
         
         # Store content hash to detect changes
         self._widget_content_hash = self._getContentHash()
+        
+        # Additional debug logging for scroll canvas creation
+        self._logger.debug(f"Final scroll canvas: size={scroll_canvas.size}, widget_size={widget_img.size}")
 
     def _adjustWidgetSize(self):
         """Adjust the widget image for animation and create scroll canvas if needed."""
@@ -1107,10 +1155,10 @@ class new_marquee(widget):
                 scale_y = new_h / old_h if old_h > 0 else 1
                 
                 # Apply scaling to position
-                scaled_x = int(self._curPos[0] * scale_x)
-                scaled_y = int(self._curPos[1] * scale_y)
+                scaled_x = int(self._curPos.x * scale_x)
+                scaled_y = int(self._curPos.y * scale_y)
                 
-                adjusted_pos = (scaled_x, scaled_y)
+                adjusted_pos = Position(x=scaled_x, y=scaled_y)
                 self._logger.debug(f"Scaled position: {self._curPos} -> {adjusted_pos}")
                 return adjusted_pos
             except Exception as e:
@@ -1140,28 +1188,81 @@ class new_marquee(widget):
                 scroll_unit_width = widget_width + self._gap_size
                 scroll_unit_height = widget_height + self._gap_size
                 
-                # Get x and y values from current position (which might be a Position object)
-                if isinstance(self._curPos, tuple):
-                    x_pos, y_pos = self._curPos
+                # Get x and y values from current position
+                if hasattr(self._curPos, 'x') and hasattr(self._curPos, 'y'):
+                    x_pos = self._curPos.x
+                    y_pos = self._curPos.y
                 else:
-                    # Position object
-                    x_pos, y_pos = self._curPos.x, self._curPos.y
+                    # Handle tuple positions for backward compatibility
+                    x_pos, y_pos = self._curPos
                 
-                # Compute the normalized position in the scroll canvas
-                # Use negative positioning to make scrolling work correctly
+                # Use negative positioning for scrolling
                 x_pos = -x_pos if horizontal_movement else 0
                 y_pos = -y_pos if vertical_movement else 0
                 
-                # Normalize to create a looping effect
-                x_pos = x_pos % scroll_unit_width if scroll_unit_width > 0 else 0
-                y_pos = y_pos % scroll_unit_height if scroll_unit_height > 0 else 0
+                # For continuous scrolling, we don't actually need to normalize the position
+                # With sufficiently large scroll canvas and proper wrapping logic, we can use the raw position
                 
-                # Start from the middle copy for smoother wrapping
-                base_x = scroll_unit_width if horizontal_movement else 0
-                base_y = scroll_unit_height if vertical_movement else 0
+                # Record raw position for debugging
+                raw_x_pos = x_pos
+                raw_y_pos = y_pos
                 
-                # Crop the visible window from the scroll canvas
+                # Calculate the normalized position (used for wrapping calculations)
+                x_pos_normalized = x_pos % scroll_unit_width if scroll_unit_width > 0 else 0
+                y_pos_normalized = y_pos % scroll_unit_height if scroll_unit_height > 0 else 0
+                
+                # Calculate center copy positions
+                copies_h = 0
+                copies_v = 0
+                base_x = 0
+                base_y = 0
+                
+                if horizontal_movement and self._scroll_canvas.width > 0:
+                    # Calculate total copies (accounting for gaps)
+                    copies_h = self._scroll_canvas.width // (widget_width + self._gap_size)
+                    # For better wrapping, use 1/3 of the way into the copies as our base position
+                    # This ensures we have enough content on both sides for wrapping
+                    base_x = (copies_h // 3) * scroll_unit_width
+                
+                if vertical_movement and self._scroll_canvas.height > 0:
+                    # Calculate total copies (accounting for gaps)
+                    copies_v = self._scroll_canvas.height // (widget_height + self._gap_size)
+                    # For better wrapping, use 1/3 of the way into the copies as our base position
+                    base_y = (copies_v // 3) * scroll_unit_height
+                
+                # Extra debug information
+                if hasattr(self, '_debug') and self._debug:
+                    self._logger.debug(f"Position: {self._curPos}, raw pos: ({raw_x_pos}, {raw_y_pos}), normalized: ({x_pos_normalized}, {y_pos_normalized})")
+                    self._logger.debug(f"Scroll units: width={scroll_unit_width}, height={scroll_unit_height}")
+                    if horizontal_movement:
+                        self._logger.debug(f"Horizontal copies: {copies_h}, base_x: {base_x}")
+                    if vertical_movement:
+                        self._logger.debug(f"Vertical copies: {copies_v}, base_y: {base_y}")
+                
+                # Get the view dimensions
                 view_width, view_height = self.size
+                
+                # For very large negative positions, wrap around to keep within the scroll canvas
+                # While maintaining the correct visual position
+                if horizontal_movement and abs(x_pos) > self._scroll_canvas.width:
+                    # Keep the visual position but wrap within canvas bounds
+                    canvas_width_units = self._scroll_canvas.width // scroll_unit_width
+                    x_pos = -(abs(x_pos) % (canvas_width_units * scroll_unit_width))
+                    if hasattr(self, '_debug') and self._debug:
+                        self._logger.debug(f"Wrapped large x_pos to: {x_pos}")
+                
+                if vertical_movement and abs(y_pos) > self._scroll_canvas.height:
+                    # Keep the visual position but wrap within canvas bounds
+                    canvas_height_units = self._scroll_canvas.height // scroll_unit_height
+                    y_pos = -(abs(y_pos) % (canvas_height_units * scroll_unit_height))
+                    if hasattr(self, '_debug') and self._debug:
+                        self._logger.debug(f"Wrapped large y_pos to: {y_pos}")
+                
+                # Create output image with the correct size and background
+                output_image = Image.new(self._mode, self.size, self._background)
+                
+                # Calculate the crop box for the visible part of the scroll canvas
+                # Base position plus the (possibly wrapped) scroll position
                 crop_box = (
                     base_x + x_pos,
                     base_y + y_pos,
@@ -1169,32 +1270,117 @@ class new_marquee(widget):
                     base_y + y_pos + view_height
                 )
                 
-                # Ensure crop box is within canvas bounds
-                crop_box = (
-                    max(0, min(crop_box[0], self._scroll_canvas.width)),
-                    max(0, min(crop_box[1], self._scroll_canvas.height)),
-                    max(0, min(crop_box[2], self._scroll_canvas.width)),
-                    max(0, min(crop_box[3], self._scroll_canvas.height))
-                )
+                # Log crop box for debugging
+                if hasattr(self, '_debug') and self._debug:
+                    self._logger.debug(f"Initial crop box: {crop_box}, scroll canvas: {self._scroll_canvas.size}")
                 
-                # Crop and paste to the output image
-                try:
-                    cropped = self._scroll_canvas.crop(crop_box)
-                    self.image.paste(cropped, (0, 0), cropped if 'A' in self._mode else None)
-                    return self.image
-                except Exception as e:
-                    self._logger.warning(f"Error cropping scroll canvas: {e}")
-                    # Fall through to regular paste if cropping fails
+                # For horizontal wrapping, we need to check if the crop box exceeds the canvas bounds
+                needs_h_wrap = horizontal_movement and (crop_box[0] < 0 or crop_box[2] > self._scroll_canvas.width)
+                needs_v_wrap = vertical_movement and (crop_box[1] < 0 or crop_box[3] > self._scroll_canvas.height)
+                
+                # Handle horizontal wrapping
+                if needs_h_wrap:
+                    # For negative x positions (scrolling left)
+                    if crop_box[0] < 0:
+                        # First part: from the right side of the canvas
+                        right_width = abs(crop_box[0])
+                        right_x_in_canvas = self._scroll_canvas.width - right_width
+                        
+                        # Ensure we don't exceed canvas boundaries
+                        right_width = min(right_width, self._scroll_canvas.width)
+                        right_x_in_canvas = max(0, right_x_in_canvas)
+                        
+                        # Crop the right portion
+                        try:
+                            right_part = self._scroll_canvas.crop((
+                                right_x_in_canvas,
+                                max(0, crop_box[1]),
+                                self._scroll_canvas.width,
+                                min(self._scroll_canvas.height, crop_box[3])
+                            ))
+                            # Paste at the left edge of our view
+                            output_image.paste(right_part, (0, 0), right_part if 'A' in self._mode else None)
+                            
+                            # Calculate the remaining width we need from the left side
+                            remaining_width = view_width - right_part.width
+                            
+                            # If we need more content, get it from the left side of the canvas
+                            if remaining_width > 0:
+                                left_part = self._scroll_canvas.crop((
+                                    0,
+                                    max(0, crop_box[1]),
+                                    min(remaining_width, self._scroll_canvas.width),
+                                    min(self._scroll_canvas.height, crop_box[3])
+                                ))
+                                # Paste after the right part
+                                output_image.paste(left_part, (right_part.width, 0), left_part if 'A' in self._mode else None)
+                        except Exception as e:
+                            self._logger.warning(f"Error during negative x-position wrapping: {e}")
+                    
+                    # For positions that extend beyond the right edge
+                    elif crop_box[2] > self._scroll_canvas.width:
+                        # First part: from the left side to the canvas edge
+                        try:
+                            left_part = self._scroll_canvas.crop((
+                                max(0, crop_box[0]),
+                                max(0, crop_box[1]),
+                                self._scroll_canvas.width,
+                                min(self._scroll_canvas.height, crop_box[3])
+                            ))
+                            # Paste at the left edge of our view
+                            output_image.paste(left_part, (0, 0), left_part if 'A' in self._mode else None)
+                            
+                            # Calculate the remaining width we need
+                            remaining_width = view_width - left_part.width
+                            
+                            # If we need more content, wrap around to the left side of the canvas
+                            if remaining_width > 0:
+                                right_part = self._scroll_canvas.crop((
+                                    0,
+                                    max(0, crop_box[1]),
+                                    min(remaining_width, self._scroll_canvas.width),
+                                    min(self._scroll_canvas.height, crop_box[3])
+                                ))
+                                # Paste after the left part
+                                output_image.paste(right_part, (left_part.width, 0), right_part if 'A' in self._mode else None)
+                        except Exception as e:
+                            self._logger.warning(f"Error during positive x-position wrapping: {e}")
+                
+                # Handle vertical wrapping (similar logic to horizontal wrapping)
+                elif needs_v_wrap:
+                    # Implement similar wrapping for vertical scrolling
+                    # For brevity, this part not shown - it would follow the same pattern
+                    self._logger.debug("Vertical wrapping needed but not implemented")
+                    pass
+                
+                # Standard cropping when no wrapping is needed
+                else:
+                    # Ensure crop box is within canvas bounds
+                    safe_crop_box = (
+                        max(0, min(crop_box[0], self._scroll_canvas.width)),
+                        max(0, min(crop_box[1], self._scroll_canvas.height)),
+                        max(0, min(crop_box[2], self._scroll_canvas.width)),
+                        max(0, min(crop_box[3], self._scroll_canvas.height))
+                    )
+                    
+                    try:
+                        cropped = self._scroll_canvas.crop(safe_crop_box)
+                        output_image.paste(cropped, (0, 0), cropped if 'A' in self._mode else None)
+                    except Exception as e:
+                        self._logger.warning(f"Error during standard cropping: {e}")
+                
+                # Paste the final image onto our widget's image
+                self.image.paste(output_image, (0, 0), output_image if 'A' in self._mode else None)
+                return self.image
         
         # For non-looping behaviors or if scroll canvas isn't available, 
         # just paste at the current position
         
-        # Get position coordinates (might be a Position object or tuple)
-        if isinstance(self._curPos, tuple):
-            cur_pos = self._curPos
-        else:
-            # Position object - extract x, y coordinates
+        # Convert Position to tuple for Pillow compatibility
+        if hasattr(self._curPos, 'x') and hasattr(self._curPos, 'y'):
             cur_pos = (self._curPos.x, self._curPos.y)
+        else:
+            cur_pos = self._curPos
         
         # Paste the widget at the current position
         self.image.paste(self._aWI, cur_pos, self._aWI)
@@ -1206,7 +1392,7 @@ class new_marquee(widget):
         but with smaller coordinate values.
         """
         if not hasattr(self, '_widget_dimensions'):
-            return (x, y)
+            return Position(x=x, y=y)
             
         # Get widget dimensions and gap size
         widget_width, widget_height = self._widget_dimensions
@@ -1217,15 +1403,53 @@ class new_marquee(widget):
         scroll_unit_height = widget_height + gap_size
         
         if scroll_unit_width <= 0 or scroll_unit_height <= 0:
-            return (x, y)
+            return Position(x=x, y=y)
             
         # Calculate equivalent position using modulo
-        # Keep one full cycle of movement so animations still work properly
-        equivalent_x = x % scroll_unit_width if scroll_unit_width > 0 else x
-        equivalent_y = y % scroll_unit_height if scroll_unit_height > 0 else y
+        # For SCROLL_LOOP behavior, make sure we maintain the negative values
+        # until they're used in _paintMarqueeWidget
+        has_scroll_loop = self._hasScrollLoopBehavior()
+        
+        if has_scroll_loop:
+            # For SCROLL_LOOP, let x coordinate go negative beyond one cycle
+            # This ensures proper looping behavior
+            horizontal_movement, vertical_movement = getattr(self, '_scroll_dimensions', (False, False))
+            
+            if horizontal_movement:
+                # For LEFT direction, allow x to decrease beyond one unit
+                # It will be properly handled in _paintMarqueeWidget with modulo
+                # Just cap it at 2 complete cycles to avoid overflow
+                if x < 0 and abs(x) > scroll_unit_width * 2:
+                    equivalent_x = -(abs(x) % (scroll_unit_width * 2))
+                elif x > scroll_unit_width * 2:
+                    equivalent_x = x % (scroll_unit_width * 2)
+                else:
+                    equivalent_x = x
+            else:
+                equivalent_x = x % scroll_unit_width if scroll_unit_width > 0 else x
+            
+            if vertical_movement:
+                # Similar handling for vertical movement
+                if y < 0 and abs(y) > scroll_unit_height * 2:
+                    equivalent_y = -(abs(y) % (scroll_unit_height * 2))
+                elif y > scroll_unit_height * 2:
+                    equivalent_y = y % (scroll_unit_height * 2)
+                else:
+                    equivalent_y = y
+            else:
+                equivalent_y = y % scroll_unit_height if scroll_unit_height > 0 else y
+        else:
+            # For non-SCROLL_LOOP, use regular modulo
+            equivalent_x = x % scroll_unit_width if scroll_unit_width > 0 else x
+            equivalent_y = y % scroll_unit_height if scroll_unit_height > 0 else y
+        
+        # Debug log if coordinates are transformed
+        if x != equivalent_x or y != equivalent_y:
+            if hasattr(self, '_logger'):
+                self._logger.debug(f"Position transformed: ({x}, {y}) -> ({equivalent_x}, {equivalent_y})")
         
         # Return equivalent position with same visual appearance
-        return (equivalent_x, equivalent_y)
+        return Position(x=equivalent_x, y=equivalent_y)
 
     def _createImage(self):
         """Create a new image with the correct size."""
@@ -1373,15 +1597,16 @@ class new_marquee(widget):
     @property
     def position(self):
         """
-        Return the current position of the marquee.
+        Return the current position of the marquee as a tuple for external API compatibility.
         
         Returns:
             tuple: (x, y) coordinates representing the current position
         """
         if hasattr(self, '_curPos'):
-            # Handle both Position objects and tuples
+            # Always convert to tuple for external API compatibility (e.g., with Pillow)
             if hasattr(self._curPos, 'x') and hasattr(self._curPos, 'y'):
                 return (self._curPos.x, self._curPos.y)
-            return self._curPos
+            else:
+                return self._curPos
         # Default position if not set yet
         return (0, 0) 

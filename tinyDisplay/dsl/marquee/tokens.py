@@ -20,6 +20,9 @@ class TokenType(Enum):
     STRING = auto()
     IDENTIFIER = auto()
     
+    # Keywords - Sequence definition
+    DEFINE = auto()
+    
     # Keywords - Movement
     MOVE = auto()
     PAUSE = auto()
@@ -118,6 +121,9 @@ class Token:
 
 # Keywords mapping
 KEYWORDS = {
+    # Sequence definition
+    "DEFINE": TokenType.DEFINE,
+    
     # Movement commands
     "MOVE": TokenType.MOVE,
     "PAUSE": TokenType.PAUSE,

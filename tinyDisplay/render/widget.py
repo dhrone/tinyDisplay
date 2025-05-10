@@ -17,8 +17,9 @@ from collections import deque
 from inspect import currentframe, getargvalues, getfullargspec, isclass
 from time import monotonic
 from urllib.request import urlopen
+import textwrap
 
-from PIL import Image, ImageChops, ImageColor, ImageDraw
+from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageFont
 
 from tinyDisplay import globalVars
 from tinyDisplay.exceptions import DataError, RenderError
@@ -2158,3 +2159,17 @@ for k, v in PARAMS.items():
         if arg not in NDD:
             nv.append(f"d{arg}")
     PARAMS[k] = nv
+
+def create_font(size=14):
+    """
+    Try to get a default font, with reasonable fallbacks.
+    """
+    try:
+        return ImageFont.truetype("DejaVuSans.ttf", size)
+    except IOError:
+        # Fall back to default font
+        try:
+            return ImageFont.load_default(size)
+        except:
+            # If size parameter not supported (older versions)
+            return ImageFont.load_default()

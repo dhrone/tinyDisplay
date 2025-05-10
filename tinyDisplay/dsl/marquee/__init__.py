@@ -16,6 +16,7 @@ from .ast import (
     StartAtStatement, SegmentStatement, PositionAtStatement, ScheduleAtStatement,
     OnVariableChangeStatement, ScrollStatement, ScrollClipStatement, 
     ScrollLoopStatement, ScrollBounceStatement, SlideStatement, PopUpStatement,
+    DefineStatement, SequenceInvocationStatement,
     Program
 )
 from .parser import Parser, ParseError

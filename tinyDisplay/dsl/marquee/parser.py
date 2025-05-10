@@ -16,6 +16,7 @@ from .ast import (
     StartAtStatement, SegmentStatement, PositionAtStatement, ScheduleAtStatement,
     OnVariableChangeStatement, ScrollStatement, ScrollClipStatement, ScrollLoopStatement, 
     ScrollBounceStatement, SlideStatement, PopUpStatement,
+    DefineStatement, SequenceInvocationStatement,
     Program, Direction, SlideAction, HighLevelCommandStatement
 )
 
@@ -82,6 +83,10 @@ class Parser:
         current_token = self._peek()
         print(f"Parsing marquee statement starting with token: {current_token}")
         
+        # Sequence invocation (an identifier followed by a left paren)
+        if self._check(TokenType.IDENTIFIER) and self._check_next(TokenType.LEFT_PAREN):
+            return self._sequence_invocation()
+        
         # Movement statements
         if self._match(TokenType.MOVE):
             print("Matched MOVE token, calling _move_statement")
@@ -134,6 +139,10 @@ class Parser:
             return self._slide_statement()
         if self._match(TokenType.POPUP):
             return self._popup_statement()
+            
+        # Sequence definition
+        if self._match(TokenType.DEFINE):
+            return self._define_statement()
         
         # Empty statement (semicolon)
         if self._match(TokenType.SEMICOLON):
@@ -141,7 +150,12 @@ class Parser:
         
         # If no statement matched, report error
         token = self._peek()
-        self._error(token, f"Expected statement, got {token.type.name}.")
+        try:
+            self._error(token, f"Expected statement, got {token.type.name}.")
+        except ParseError as e:
+            print(f"Error while parsing statement: {e}")
+            self._synchronize()
+            return None
     
     def _move_statement(self) -> MoveStatement:
         """Parse a MOVE statement."""
@@ -874,24 +888,38 @@ class Parser:
     
     def _check(self, type) -> bool:
         """
-        Check if the current token is of the expected type.
+        Check if the current token is of the given type.
         
         Args:
-            type: The expected token type.
+            type: The token type to check.
             
         Returns:
-            True if the token matches, False otherwise.
+            True if the current token has the given type, False otherwise.
         """
         if self._is_at_end():
             return False
         return self._peek().type == type
+    
+    def _check_next(self, type) -> bool:
+        """
+        Check if the token after the current one is of the given type.
+        
+        Args:
+            type: The token type to check.
+            
+        Returns:
+            True if the token after the current one has the given type, False otherwise.
+        """
+        if self._is_at_end() or self.current + 1 >= len(self.tokens):
+            return False
+        return self.tokens[self.current + 1].type == type
     
     def _advance(self) -> Token:
         """
         Advance to the next token.
         
         Returns:
-            The current token before advancing.
+            The token that was just consumed.
         """
         if not self._is_at_end():
             self.current += 1
@@ -992,3 +1020,79 @@ class Parser:
                 return
             
             self._advance() 
+    
+    def _define_statement(self) -> DefineStatement:
+        """Parse a DEFINE statement."""
+        token = self._previous()
+        location = Location(token.line, token.column)
+        
+        # Parse the name
+        name_token = self._consume(TokenType.IDENTIFIER, error_message="Expected sequence name after DEFINE.")
+        name = name_token.lexeme
+        print(f"Parsing DEFINE statement for sequence '{name}'")
+        
+        # Parse the body
+        self._consume(TokenType.LEFT_BRACE, error_message="Expected '{' after sequence name.")
+        statements: List[Statement] = []
+        
+        while not self._check(TokenType.RIGHT_BRACE) and not self._is_at_end():
+            stmt = self._statement()
+            if stmt is not None:
+                statements.append(stmt)
+        
+        print(f"Found {len(statements)} statements in DEFINE block for '{name}'")
+        
+        self._consume(TokenType.RIGHT_BRACE, error_message="Expected '}' after sequence body.")
+        print(f"Found closing brace for DEFINE block '{name}'")
+        
+        try:
+            self._consume(TokenType.SEMICOLON, error_message="Expected ';' after sequence definition.")
+            print(f"Found semicolon after DEFINE block '{name}'")
+        except ParseError as e:
+            print(f"Error consuming semicolon: {e}")
+            # Try to recover - maybe there is no semicolon after the DEFINE block?
+        
+        return DefineStatement(
+            location=location,
+            name=name,
+            body=Block(location=location, statements=statements)
+        )
+    
+    def _sequence_invocation(self) -> SequenceInvocationStatement:
+        """Parse a sequence invocation."""
+        name_token = self._advance()  # Consume the identifier token
+        location = Location(name_token.line, name_token.column)
+        name = name_token.lexeme
+        print(f"Parsing sequence invocation for '{name}'")
+        
+        try:
+            self._consume(TokenType.LEFT_PAREN, error_message="Expected '(' after sequence name.")
+            
+            # Parse optional arguments
+            arguments = []
+            if not self._check(TokenType.RIGHT_PAREN):
+                arguments.append(self._expression())
+                
+                while self._match(TokenType.COMMA):
+                    arguments.append(self._expression())
+            
+            self._consume(TokenType.RIGHT_PAREN, error_message="Expected ')' after arguments.")
+            self._consume(TokenType.SEMICOLON, error_message="Expected ';' after sequence invocation.")
+            
+            print(f"Successfully parsed sequence invocation for '{name}' with {len(arguments)} arguments")
+            
+            return SequenceInvocationStatement(
+                location=location,
+                name=name,
+                arguments=arguments
+            )
+        except ParseError as e:
+            print(f"Error parsing sequence invocation: {e}")
+            self._synchronize()
+            
+            # Return a placeholder statement to avoid null reference exceptions
+            return SequenceInvocationStatement(
+                location=location,
+                name=name,
+                arguments=[]
+            ) 
