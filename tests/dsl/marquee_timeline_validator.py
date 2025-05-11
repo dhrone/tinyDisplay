@@ -499,93 +499,478 @@ class MarqueeTimelineValidator:
         min_y = min(pos.y for pos in self.timeline)
         max_y = max(pos.y for pos in self.timeline)
         
-        # Add some padding
-        padding = 20
-        canvas_width = max(max_x - min_x + 1, self.widget_size[0]) + padding * 2
-        canvas_height = max(max_y - min_y + 1, self.widget_size[1]) + padding * 2
+        # Define sizes and parameters
+        padding = 70  # Increased padding further
+        left_padding = 180  # Further increased left padding for grid labels
+        top_padding = 20   # Additional padding for top grid labels
+        legend_width = 220  # Width of the legend section (increased)
+        title_height = 60  # Height for the title
+        # More generous segment list height calculation - at least 35px per segment plus some extra
+        segment_list_height = max(35 * max(len(self.actual_segments), 1) + 50, 150)
+        dot_size = 5  # Dot size
+        grid_spacing = 20  # Grid spacing
+        font_size = 12  # Define a standard font size
         
-        # Create a canvas
-        canvas = Image.new("RGB", (canvas_width, canvas_height), (0, 0, 0))
+        # Generate segment colors - use distinct colors for each segment
+        segment_colors = [
+            (255, 50, 50),    # Red
+            (50, 150, 255),   # Blue
+            (50, 255, 50),    # Green
+            (255, 200, 50),   # Yellow
+            (200, 50, 255),   # Purple
+            (255, 150, 50),   # Orange
+            (50, 200, 200),   # Teal
+            (200, 200, 50),   # Lime
+            (255, 100, 150),  # Pink
+            (150, 100, 200),  # Lavender
+        ]
+        # If we have more segments than colors, cycle through colors
+        while len(segment_colors) < len(self.actual_segments):
+            segment_colors.extend(segment_colors)
+        
+        # Try to load a system font for better clarity
+        try:
+            # Try to use a clear system font - fallback to default if not available
+            font = ImageFont.truetype("Arial", font_size)
+            large_font = ImageFont.truetype("Arial", font_size + 2)
+        except IOError:
+            # If Arial is not available, use default
+            font = ImageFont.load_default()
+            large_font = font
+        
+        # Calculate main visualization area size with extra space
+        viz_width = max(max_x - min_x + 1, self.widget_size[0]) * 1.5 + padding * 2 + left_padding
+        viz_height = max(max_y - min_y + 1, self.widget_size[1]) * 1.5 + padding * 2
+        
+        # Add space for legend on the right and segment list at the bottom
+        canvas_width = int(viz_width + legend_width)
+        canvas_height = int(viz_height + title_height + segment_list_height)
+        
+        # Create a larger canvas with improved background color
+        canvas = Image.new("RGB", (canvas_width, canvas_height), (15, 15, 30))  # Slightly lighter background
         draw = ImageDraw.Draw(canvas)
         
-        # Draw a grid for reference
-        grid_color = (30, 30, 30)
-        grid_spacing = 10
-        for x in range(0, canvas_width, grid_spacing):
-            draw.line([(x, 0), (x, canvas_height)], fill=grid_color)
-        for y in range(0, canvas_height, grid_spacing):
-            draw.line([(0, y), (canvas_width, y)], fill=grid_color)
+        # STEP 1: Draw background elements first
+        # -----------------------------------------------------
         
-        # Draw origin marker
-        origin_x = padding - min_x
-        origin_y = padding - min_y
+        # Draw title area background
+        draw.rectangle([(0, 0), (canvas_width, title_height)], fill=(30, 30, 50))
+        
+        # Draw segment list area background
         draw.rectangle(
-            [(origin_x-3, origin_y-3), (origin_x+3, origin_y+3)],
-            outline=(100, 100, 100),
-            fill=(50, 50, 50)
+            [(0, title_height + viz_height), (canvas_width, canvas_height)],
+            fill=(25, 25, 40)  # Slightly darker than main background
         )
         
-        # Draw positions in the timeline
-        line_points = []
-        for i, pos in enumerate(self.timeline):
-            # Convert to canvas coordinates
-            x = padding + pos.x - min_x
-            y = padding + pos.y - min_y
-            
-            # Add to the line
-            line_points.append((x, y))
-            
-            # Draw position dot
-            color = (0, 255, 0)  # Green for normal positions
-            
-            # Different colors for different position types
-            if hasattr(pos, 'pause') and pos.pause:
-                color = (0, 0, 255)  # Blue for pauses
-            if hasattr(pos, 'terminal') and pos.terminal:
-                color = (255, 0, 0)  # Red for terminal positions
-            
-            # Draw the dot
-            draw.ellipse([(x-2, y-2), (x+2, y+2)], fill=color)
-            
-            # Draw a text label for some key positions
-            if i == 0 or i == len(self.timeline) - 1 or i % 10 == 0:
-                draw.text((x+5, y-10), str(i), fill=(200, 200, 200))
+        # Define the visualization area boundaries for easier reference
+        viz_area_left = left_padding
+        viz_area_top = title_height + top_padding
+        viz_area_right = viz_area_left + viz_width - left_padding
+        viz_area_bottom = viz_area_top + viz_height - top_padding
         
-        # Draw line connecting all positions
-        if len(line_points) > 1:
-            draw.line(line_points, fill=(100, 100, 100), width=1)
+        # Calculate the center point (origin) in canvas coordinates
+        # This ensures the origin (0,0) is centered in the visualization area
+        origin_x = viz_area_left + (viz_area_right - viz_area_left) / 2
+        origin_y = viz_area_top + (viz_area_bottom - viz_area_top) / 2
         
-        # Draw segment boundaries
+        # Calculate scale factor to fit all points in the visualization area
+        # Allow for both positive and negative coordinates
+        max_abs_x = max(abs(min_x), abs(max_x), 1)  # Ensure at least 1 to avoid division by zero
+        max_abs_y = max(abs(min_y), abs(max_y), 1)  # Ensure at least 1 to avoid division by zero
+        
+        # Determine the scale based on the maximum range in either direction
+        # We need to leave some padding, so we use a slightly smaller scale
+        scale_x = (viz_area_right - viz_area_left) / (max_abs_x * 2.2)
+        scale_y = (viz_area_bottom - viz_area_top) / (max_abs_y * 2.2)
+        
+        # Use the smaller of the two scales to maintain aspect ratio
+        scale = min(scale_x, scale_y)
+        if scale == 0:
+            scale = 1  # Default if no points
+            
+        # Draw a border around the visualization area
+        draw.rectangle(
+            [(viz_area_left, viz_area_top), (viz_area_right, viz_area_bottom)],
+            outline=(80, 80, 100),
+            width=2
+        )
+        
+        # Draw a grid for reference in main visualization area
+        grid_color = (40, 40, 60)
+        
+        # Draw vertical grid lines (for x coordinates)
+        # Start from origin and go outward in both directions
+        # Negative grid lines
+        x = 0
+        while True:
+            x -= grid_spacing
+            grid_x = origin_x + x * scale
+            if grid_x < viz_area_left:
+                break
+            draw.line([(grid_x, viz_area_top), (grid_x, viz_area_bottom)], fill=grid_color)
+        
+        # Positive grid lines
+        x = 0
+        while True:
+            x += grid_spacing
+            grid_x = origin_x + x * scale
+            if grid_x > viz_area_right:
+                break
+            draw.line([(grid_x, viz_area_top), (grid_x, viz_area_bottom)], fill=grid_color)
+        
+        # Draw horizontal grid lines (for y coordinates)
+        # Start from origin and go outward in both directions
+        # Negative grid lines
+        y = 0
+        while True:
+            y -= grid_spacing
+            # Positive Y is downward in Pillow coordinates
+            grid_y = origin_y + y * scale
+            if grid_y < viz_area_top:
+                break
+            draw.line([(viz_area_left, grid_y), (viz_area_right, grid_y)], fill=grid_color)
+        
+        # Positive grid lines
+        y = 0
+        while True:
+            y += grid_spacing
+            # Positive Y is downward in Pillow coordinates
+            grid_y = origin_y + y * scale
+            if grid_y > viz_area_bottom:
+                break
+            draw.line([(viz_area_left, grid_y), (viz_area_right, grid_y)], fill=grid_color)
+        
+        # Draw the center grid line (x=0 and y=0) with a slightly more visible color
+        center_grid_color = (60, 60, 80)
+        # Vertical center line (x=0)
+        draw.line([(origin_x, viz_area_top), (origin_x, viz_area_bottom)], fill=center_grid_color, width=1)
+        # Horizontal center line (y=0)
+        draw.line([(viz_area_left, origin_y), (viz_area_right, origin_y)], fill=center_grid_color, width=1)
+        
+        # Draw a separator for the legend
+        draw.line([(viz_width, 0), (viz_width, canvas_height)], fill=(100, 100, 130), width=2)
+        
+        # Draw a separator for the segment list
+        draw.line([(0, title_height + viz_height), (canvas_width, title_height + viz_height)], 
+                 fill=(100, 100, 130), width=2)
+        
+        # Define function to convert timeline position to canvas coordinates
+        def timeline_to_canvas(pos_x, pos_y):
+            canvas_x = origin_x + pos_x * scale
+            # In Pillow, positive Y is downward, so we add instead of subtract
+            canvas_y = origin_y + pos_y * scale
+            return canvas_x, canvas_y
+        
+        # STEP 2: Draw segment paths with different colors
+        # -----------------------------------------------------
+        
+        # We'll draw each segment's path separately with its own color
         if self.actual_segments:
             cumulative_pos = 0
-            for segment in self.actual_segments:
-                cumulative_pos += len(segment)
-                if cumulative_pos < len(self.timeline):
-                    # Get the boundary position
-                    pos = self.timeline[cumulative_pos]
-                    x = padding + pos.x - min_x
-                    y = padding + pos.y - min_y
+            
+            for i, segment in enumerate(self.actual_segments):
+                if not segment:
+                    cumulative_pos += 0
+                    continue
                     
-                    # Draw a vertical line at segment boundaries
-                    draw.line([(x, 0), (x, canvas_height)], fill=(255, 100, 100), width=1)
+                # Get the segment color
+                segment_color = segment_colors[i % len(segment_colors)]
+                
+                # Calculate start and end indices for this segment
+                start_idx = cumulative_pos
+                end_idx = cumulative_pos + len(segment)
+                
+                # Get positions for this segment
+                segment_positions = self.timeline[start_idx:end_idx]
+                
+                # Create line points for this segment
+                segment_line_points = []
+                for pos in segment_positions:
+                    # Convert to canvas coordinates with scaling
+                    x, y = timeline_to_canvas(pos.x, pos.y)
+                    segment_line_points.append((x, y))
+                
+                # Draw the segment line with its color if there are at least 2 points
+                if len(segment_line_points) > 1:
+                    # Using thinner lines (width=1) for the paths
+                    draw.line(segment_line_points, fill=segment_color, width=1)
+                
+                # Update cumulative position
+                cumulative_pos += len(segment)
         
-        # Add a legend
-        legend_y = canvas_height - 50
-        # Normal position
-        draw.ellipse([(10, legend_y), (14, legend_y+4)], fill=(0, 255, 0))
-        draw.text((20, legend_y-2), "Normal position", fill=(200, 200, 200))
+        # STEP 3: Draw coordinate grid values
+        # -----------------------------------------------------
+        # Draw coordinate values along the top and left edges
+        coord_color = (180, 180, 200)  # Light color for coordinate text
         
-        # Pause position
-        draw.ellipse([(10, legend_y+15), (14, legend_y+19)], fill=(0, 0, 255))
-        draw.text((20, legend_y+13), "Pause position", fill=(200, 200, 200))
+        # X-axis coordinates
+        # Display coordinates at each grid line
+        x = 0
+        while True:
+            x -= grid_spacing
+            grid_x = origin_x + x * scale
+            if grid_x < viz_area_left:
+                break
+            # Draw coordinate value above the visualization area
+            draw.text((grid_x - 8, viz_area_top - 20), 
+                      str(x), fill=coord_color, font=font)
+                      
+        x = 0  # Reset to draw positive values
+        draw.text((origin_x - 8, viz_area_top - 20), 
+                  "0", fill=coord_color, font=font)  # Draw 0 at origin
+                  
+        while True:
+            x += grid_spacing
+            grid_x = origin_x + x * scale
+            if grid_x > viz_area_right:
+                break
+            # Draw coordinate value above the visualization area
+            draw.text((grid_x - 8, viz_area_top - 20), 
+                      str(x), fill=coord_color, font=font)
         
-        # Terminal position
-        draw.ellipse([(10, legend_y+30), (14, legend_y+34)], fill=(255, 0, 0))
-        draw.text((20, legend_y+28), "Terminal position", fill=(200, 200, 200))
+        # Y-axis coordinates
+        # Display coordinates at each grid line
+        y = 0
+        while True:
+            y -= grid_spacing
+            # Positive Y is downward in Pillow coordinates
+            grid_y = origin_y + y * scale
+            if grid_y < viz_area_top:
+                break
+            # Draw coordinate value to the left of the visualization area
+            text = str(y)
+            text_width, text_height = draw.textbbox((0, 0), text, font=font)[2:]
+            draw.text((viz_area_left - text_width - 10, grid_y - text_height//2), 
+                      text, fill=coord_color, font=font)
+                      
+        y = 0  # Reset to draw positive values
+        draw.text((viz_area_left - 15, origin_y - 7), 
+                  "0", fill=coord_color, font=font)  # Draw 0 at origin
+                  
+        while True:
+            y += grid_spacing
+            # Positive Y is downward in Pillow coordinates
+            grid_y = origin_y + y * scale
+            if grid_y > viz_area_bottom:
+                break
+            # Draw coordinate value to the left of the visualization area
+            text = str(y)
+            text_width, text_height = draw.textbbox((0, 0), text, font=font)[2:]
+            draw.text((viz_area_left - text_width - 10, grid_y - text_height//2), 
+                      text, fill=coord_color, font=font)
+                      
+        # Draw axis labels
+        draw.text((viz_area_left + (viz_area_right - viz_area_left)//2 - 5, viz_area_top - 40), 
+                  "X", fill=coord_color, font=font)
+        draw.text((viz_area_left - 40, viz_area_top + (viz_area_bottom - viz_area_top)//2 - 5), 
+                  "Y", fill=coord_color, font=font)
         
-        # Add a title
-        draw.text((10, 10), f"Timeline Visualization ({len(self.timeline)} positions, {len(self.actual_segments)} segments)", 
-                  fill=(200, 200, 200))
+        # STEP 4: Draw position dots and segment lines
+        # -----------------------------------------------------
+        # Draw segment paths with different colors
+        if self.actual_segments:
+            cumulative_pos = 0
+            
+            for i, segment in enumerate(self.actual_segments):
+                if not segment:
+                    cumulative_pos += 0
+                    continue
+                    
+                # Get the segment color
+                segment_color = segment_colors[i % len(segment_colors)]
+                
+                # Calculate start and end indices for this segment
+                start_idx = cumulative_pos
+                end_idx = cumulative_pos + len(segment)
+                
+                # Get positions for this segment
+                segment_positions = self.timeline[start_idx:end_idx]
+                
+                # Create line points for this segment
+                segment_line_points = []
+                for pos in segment_positions:
+                    x, y = timeline_to_canvas(pos.x, pos.y)
+                    segment_line_points.append((x, y))
+                
+                # Draw the segment line with its color if there are at least 2 points
+                if len(segment_line_points) > 1:
+                    # Using thinner lines (width=1) for the paths
+                    draw.line(segment_line_points, fill=segment_color, width=1)
+                
+                # Update cumulative position
+                cumulative_pos += len(segment)
+        
+        # Draw position dots
+        for i, pos in enumerate(self.timeline):
+            x, y = timeline_to_canvas(pos.x, pos.y)
+            
+            # Different colors for different position types
+            color = (230, 230, 230)  # White-ish for normal positions
+            
+            if hasattr(pos, 'pause') and pos.pause:
+                color = (50, 50, 255)  # Blue for pauses
+            if hasattr(pos, 'terminal') and pos.terminal:
+                color = (255, 50, 50)  # Red for terminal positions
+            
+            # Draw the dot
+            draw.ellipse([(x-dot_size, y-dot_size), (x+dot_size, y+dot_size)], fill=color)
+        
+        # Draw origin marker at (0,0)
+        draw.rectangle(
+            [(origin_x-6, origin_y-6), (origin_x+6, origin_y+6)],
+            outline=(200, 200, 200),
+            fill=(100, 100, 100)
+        )
+        
+        # STEP 5: Draw all text elements on top
+        # -----------------------------------------------------
+        
+        # Draw title text
+        title = f"Timeline Visualization ({len(self.timeline)} positions, {len(self.actual_segments)} segments)"
+        draw.text((padding, padding//2), title, fill=(255, 255, 255), font=large_font)
+        
+        # Draw origin label with background
+        text = "Origin (0,0)"
+        text_width, text_height = draw.textbbox((0, 0), text, font=font)[2:]
+        
+        # Draw text background slightly offset from the origin marker
+        # Position it below the origin marker for better visibility
+        label_x = origin_x - text_width//2
+        label_y = origin_y + 15
+        
+        # Ensure the label stays within the visualization area
+        if label_x < viz_area_left + 10:
+            label_x = viz_area_left + 10
+        if label_x + text_width > viz_area_right - 10:
+            label_x = viz_area_right - text_width - 10
+            
+        # Draw text background
+        draw.rectangle(
+            [(label_x - 2, label_y - 2), (label_x + text_width + 2, label_y + text_height + 2)],
+            fill=(40, 40, 60)
+        )
+        draw.text((label_x, label_y), text, fill=(255, 255, 255), font=font)
+        
+        # STEP 6: Draw segment list at the bottom
+        # -----------------------------------------------------
+        if self.actual_segments:
+            # Draw "Segments:" header
+            segment_list_x = 20
+            segment_list_y = title_height + viz_height + 10
+            draw.text((segment_list_x, segment_list_y), 
+                     "SEGMENTS:", fill=(255, 255, 255), font=large_font)
+            segment_list_y += 30
+            
+            # Draw each segment in the list
+            for i, segment in enumerate(self.actual_segments):
+                if not segment or i >= len(self.expected_segments):
+                    continue
+                
+                # Get segment color
+                segment_color = segment_colors[i % len(segment_colors)]
+                
+                # Get segment name and pattern
+                segment_name = self.expected_segments[i].name
+                segment_pattern = self.expected_segments[i].pattern
+                
+                # Draw colored square for this segment
+                square_size = 12
+                draw.rectangle(
+                    [(segment_list_x, segment_list_y), 
+                     (segment_list_x + square_size, segment_list_y + square_size)],
+                    fill=segment_color
+                )
+                
+                # Segment description - potentially long so we need to handle it carefully
+                if segment:
+                    start_pos = segment[0]
+                    end_pos = segment[-1]
+                    dx = end_pos.x - start_pos.x
+                    dy = end_pos.y - start_pos.y
+                    
+                    # Format text with clear spacing
+                    text = f"Segment {i+1}: {segment_name} ({segment_pattern})"
+                    text += f"  -  Start: ({start_pos.x}, {start_pos.y}), End: ({end_pos.x}, {end_pos.y}), Delta: ({dx}, {dy})"
+                else:
+                    text = f"Segment {i+1}: {segment_name} ({segment_pattern}) - EMPTY"
+                
+                # Ensure text doesn't overflow into legend area
+                max_text_width = viz_width - segment_list_x - 40
+                
+                # Check if we need to truncate the text
+                text_width, text_height = draw.textbbox((0, 0), text, font=font)[2:]
+                if text_width > max_text_width:
+                    # Truncate with ellipsis
+                    truncated = True
+                    while text_width > max_text_width and len(text) > 10:
+                        text = text[:-1]
+                        text_width, text_height = draw.textbbox((0, 0), text, font=font)[2:]
+                    text = text[:-3] + "..."
+                
+                draw.text((segment_list_x + square_size + 10, segment_list_y), 
+                         text, fill=(255, 255, 255), font=font)
+                
+                # Move to next line with more spacing
+                segment_list_y += 30
+                
+        # STEP 7: Draw legend section
+        # -----------------------------------------------------
+        
+        # Add a legend header
+        legend_x = viz_width + 20
+        legend_y = title_height + 20
+        draw.text((legend_x, legend_y), "LEGEND", fill=(255, 255, 255), font=large_font)
+        legend_y += 30
+        
+        # Draw the legend items with bigger dots and better spacing
+        legend_items = [
+            ("Position", (230, 230, 230)),
+            ("Pause position", (50, 50, 255)),
+            ("Terminal position", (255, 50, 50))
+        ]
+        
+        for text, color in legend_items:
+            # Draw dot
+            draw.ellipse(
+                [(legend_x, legend_y), (legend_x + 2*dot_size, legend_y + 2*dot_size)], 
+                fill=color
+            )
+            # Draw text
+            draw.text((legend_x + 2*dot_size + 10, legend_y), 
+                      text, fill=(255, 255, 255), font=font)
+            legend_y += 30
+        
+        # Add spacing before shape examples
+        legend_y += 10
+        
+        # Draw origin marker example
+        draw.rectangle(
+            [(legend_x, legend_y), (legend_x + 12, legend_y + 12)],
+            outline=(200, 200, 200),
+            fill=(100, 100, 100)
+        )
+        draw.text((legend_x + 30, legend_y), 
+                  "Origin marker", fill=(255, 255, 255), font=font)
+        legend_y += 30
+        
+        # Add widget and container size information in a separate section
+        # Draw a dividing line
+        legend_y += 40
+        divider_y = legend_y - 20
+        draw.line([(legend_x, divider_y), (canvas_width - 20, divider_y)], 
+                 fill=(100, 100, 130), width=1)
+        
+        # Add section title
+        draw.text((legend_x, legend_y), "SIZE INFORMATION:", 
+                 fill=(255, 255, 255), font=large_font)
+        legend_y += 30
+        
+        # Draw size information
+        draw.text((legend_x, legend_y), f"Widget size: {self.widget_size[0]}x{self.widget_size[1]}", 
+                  fill=(255, 255, 255), font=font)
+        legend_y += 25
+        draw.text((legend_x, legend_y), f"Container size: {self.container_size[0]}x{self.container_size[1]}", 
+                  fill=(255, 255, 255), font=font)
         
         # Save the image
         output_path = os.path.join(output_dir, filename)
