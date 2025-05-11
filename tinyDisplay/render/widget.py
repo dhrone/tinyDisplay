@@ -18,6 +18,7 @@ from inspect import currentframe, getargvalues, getfullargspec, isclass
 from time import monotonic
 from urllib.request import urlopen
 import textwrap
+import re
 
 from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageFont
 
@@ -33,6 +34,7 @@ from tinyDisplay.utility import (
     image2Text,
     okPath,
 )
+from tinyDisplay.utility.dynamic import DynamicValue, dynamic, dependency_registry
 
 
 # from IPython.core.debugger import set_trace
@@ -170,26 +172,48 @@ class widget(metaclass=abc.ABCMeta):
         self._computeLocalDB()
 
     def _initArguments(self, argSpec, argValues, exclude=None):
-        kwargs = argValues[3]["kwargs"]
-        args = (
-            [item for item in argSpec[0][1:] if item not in exclude]
-            if exclude is not None
-            else argSpec[0][1:]
-        )
+        kwargs = argValues.locals.get("kwargs", {})
+        args = [item for item in argSpec[0][1:] if item not in exclude] if exclude is not None else argSpec[0][1:]
         defaults = argSpec[3]
+
+        self._logger.debug(f"args: {args}")
+        self._logger.debug(f"kwargs: {kwargs}")
+        
+        # Use the locals dictionary to access all arguments (both positional and keyword)
+        all_args = argValues.locals
+        
         for a in args:
-            kname = f"d{a}"
             aname = f"_{a}"
-            if kname in kwargs:
-                i = args.index(a)
-                self._compile(
-                    kwargs[kname],
-                    name=aname,
-                    default=defaults[i],
-                    dynamic=True,
-                )
+            dname = f"d{a}"
+            
+            # First check if it exists in locals and is a DynamicValue
+            if a in all_args and isinstance(all_args.get(a), DynamicValue):
+                dvalue = all_args.get(a)
+                self._logger.debug(f"Found DynamicValue for {a}: {dvalue.expression}")
+                self._compile(dvalue.expression, name=aname, 
+                             default=defaults[args.index(a)] if args.index(a) < len(defaults) else None, 
+                             dynamic=True)
+                # Register dependencies
+                for dep in dvalue.dependencies:
+                    dependency_registry.register(self, dep)
+            # Then check for d-prefixed parameter
+            elif dname in kwargs:
+                expression = kwargs[dname]
+                self._logger.debug(f"Found d-prefixed parameter {dname}: {expression}")
+                self._compile(expression, name=aname, 
+                            default=defaults[args.index(a)] if args.index(a) < len(defaults) else None, 
+                            dynamic=True)
+                # Register dependencies for string expressions
+                if isinstance(expression, str):
+                    matches = re.findall(r"([a-zA-Z_][a-zA-Z0-9_]*)\['[^']*'\]", expression)
+                    for db_name in matches:
+                        dependency_registry.register(self, db_name)
+            # Finally, handle static values
+            elif a in all_args:
+                self._compile(all_args.get(a), name=aname, dynamic=False)
             else:
-                self._compile(argValues[3][a], name=aname, dynamic=False)
+                # Use None as default
+                self._compile(None, name=aname, dynamic=False)
 
     def _compile(
         self, source, name, default=None, validator=None, dynamic=True
@@ -627,6 +651,11 @@ class widget(metaclass=abc.ABCMeta):
             )
         self._computeLocalDB()
 
+        # Check if widget is marked for update
+        if hasattr(self, "_needs_update") and self._needs_update:
+            force = True
+            self._needs_update = False
+
         if reset:
             force = True
 
@@ -892,6 +921,14 @@ class widget(metaclass=abc.ABCMeta):
             "changes": changes,
             "change_ratio": changes / len(buffer) if buffer else 0
         }
+
+    def mark_for_update(self):
+        """Mark this widget as needing update on next render cycle."""
+        self._needs_update = True
+        
+        # Propagate to parent if exists
+        if hasattr(self, "_parent") and self._parent is not None:
+            self._parent.mark_for_update()
 
 
 _textDefaultFont = bmImageFont(
@@ -2146,19 +2183,23 @@ class rectangle(shape):
         self.render(reset=True)
 
 
-PARAMS = {
-    k: getArgDecendents(v)
-    for k, v in Widgets.__dict__.items()
-    if isclass(v) and issubclass(v, widget) and k != "widget"
-}
-
-for k, v in PARAMS.items():
-    nv = list(v)
-    NDD = getNotDynamicDecendents(Widgets.__dict__[k])
-    for arg in v:
-        if arg not in NDD:
-            nv.append(f"d{arg}")
-    PARAMS[k] = nv
+PARAMS = {}
+# Make a copy of the items to avoid dictionary size changes during iteration
+widgets_items = list(Widgets.__dict__.items())
+for k, v in widgets_items:
+    if isclass(v) and issubclass(v, widget) and k != "widget":
+        # Get arguments from the class
+        args = getArgDecendents(v)
+        not_dynamic = getNotDynamicDecendents(v)
+        
+        # Create the combined list of parameters
+        params = []
+        for arg in args:
+            params.append(arg)
+            if arg not in not_dynamic:
+                params.append(f"d{arg}")
+        
+        PARAMS[k] = params
 
 def create_font(size=14):
     """

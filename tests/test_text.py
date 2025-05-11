@@ -13,6 +13,7 @@ from PIL import Image, ImageChops
 
 from tinyDisplay.render.widget import text
 from tinyDisplay.utility import dataset
+from tinyDisplay.utility.dynamic import dynamic
 
 
 def test_text_widget():
@@ -25,7 +26,10 @@ def test_text_widget():
     db = {"artist": "Sting"}
     ds = dataset({"db": db})
     w = text(
-        dvalue="f\"Artist {db['artist']}\"", dataset=ds, size=(60, 8), mode="1"
+        value=dynamic("f\"Artist {db['artist']}\""),
+        dataset=ds, 
+        size=(60, 8), 
+        mode="1"
     )
     renderImage = w.render()[0]
     bbox = ImageChops.difference(img, renderImage).getbbox()

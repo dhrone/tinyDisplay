@@ -57,7 +57,9 @@ def test_text_widget_buffer_change_detection():
     assert buffer[2][1] is True  # Third render should mark as changed
     
     # Verify images are different
-    assert not ci(buffer[0][0], buffer[2][0])
+    # The compareImage function returns (diff_image, percentage, diff_pixels)
+    _, percentage, _ = ci(buffer[0][0], buffer[2][0])
+    assert percentage > 0, "Images should be different but are identical"
 
 
 def test_scroll_widget_no_change_during_pause():

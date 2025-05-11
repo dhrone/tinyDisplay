@@ -14,6 +14,7 @@ import pytest
 from PIL import Image, ImageChops, ImageDraw
 
 from tinyDisplay.render.widget import progressBar
+from tinyDisplay.utility.dynamic import dynamic
 
 
 @pytest.mark.parametrize(
@@ -53,7 +54,7 @@ def test_defaultBar(db, dir, range, mask, file):
         direction=dir,
         dataset=ds,
         range=range,
-        dvalue='db["value"]',
+        value=dynamic('db["value"]'),
         mask=maskName,
         mode="1",
     ).render()[0]
@@ -69,7 +70,10 @@ def test_thinBar():
     drw.rectangle((0, 0, 4, 0), fill="white")
     ds = {"db": {"value": 50}}
     pImg = progressBar(
-        size=(10, 1), dataset=ds, dvalue='db["value"]', mode="1"
+        size=(10, 1), 
+        dataset=ds, 
+        value=dynamic('db["value"]'),
+        mode="1"
     ).render()[0]
 
     bbox = ImageChops.difference(img, pImg).getbbox()
@@ -81,7 +85,12 @@ def test_out_of_range():
     drw = ImageDraw.Draw(img)
     drw.rectangle((0, 0, 9, 0), fill="white")
     ds = {"db": {"value": 110}}
-    pb = progressBar(size=(10, 1), dataset=ds, dvalue='db["value"]', mode="1")
+    pb = progressBar(
+        size=(10, 1), 
+        dataset=ds, 
+        value=dynamic('db["value"]'),
+        mode="1"
+    )
     pImg = pb.render()[0]
 
     bbox = ImageChops.difference(img, pImg).getbbox()

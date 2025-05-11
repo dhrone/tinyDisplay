@@ -79,3 +79,61 @@ You can modify the program to:
 - Change animation duration by adjusting `ANIMATION_SECONDS` and `FPS` constants
 - Add or modify animation types by creating new demo functions
 - Customize text, colors, speeds, and other parameters 
+
+# tinyDisplay
+
+tinyDisplay is a flexible and powerful system for creating and managing displays with dynamic content.
+
+## Dynamic Values
+
+tinyDisplay now supports an improved way to define dynamic properties for widgets. There are two ways to use dynamic values:
+
+### 1. Using the `dynamic()` function (recommended)
+
+```python
+from tinyDisplay.utility.dynamic import dynamic
+from tinyDisplay.render.widget import text
+
+# Create a text widget with dynamic foreground color
+my_text = text(
+    value="Hello World",
+    foreground=dynamic("sys['theme']['text_color']"),
+    background=dynamic("sys['theme']['background']")
+)
+```
+
+The `dynamic()` function automatically:
+- Makes the property evaluate at runtime
+- Tracks dependencies between data sources and widgets
+- Triggers updates only for affected widgets when data changes
+
+### 2. Using the legacy "d"-prefix (backward compatibility)
+
+```python
+# Legacy approach still works
+my_text = text(
+    value="Hello World",
+    dforeground="sys['theme']['text_color']",
+    dbackground="sys['theme']['background']"
+)
+```
+
+## Benefits of the New Approach
+
+The new dynamic value system offers several advantages:
+- More intuitive and clearer code
+- Explicit marking of dynamic values
+- Efficient updates through dependency tracking
+- Self-documenting code that makes the dynamic nature explicit
+
+## Dependency Tracking
+
+The system automatically tracks dependencies between widgets and data sources. When a data source changes, only the affected widgets are updated, improving performance:
+
+```python
+# Update a data source
+sys_data.update('theme', {'text_color': 'red'})
+
+# All widgets that depend on sys['theme']['text_color'] will automatically
+# be marked for update during the next render cycle
+``` 

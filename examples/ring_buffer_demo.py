@@ -20,6 +20,7 @@ if parent_dir not in sys.path:
 
 from tinyDisplay.render.widget import scroll, text
 from tinyDisplay.utility import dataset
+from tinyDisplay.utility.dynamic import dynamic
 
 
 def demo_text_widget_variable():
@@ -33,7 +34,12 @@ def demo_text_widget_variable():
     
     # Create text widget with buffer size 4
     print("Creating text widget with buffer size 4 and dynamic value")
-    w = text(name="DynamicText", dvalue="db['value']", dataset=ds, bufferSize=4)
+    w = text(
+        name="DynamicText", 
+        value=dynamic("db['value']"),  # Use dynamic() instead of dvalue
+        dataset=ds, 
+        bufferSize=4
+    )
     
     # Render twice with same value
     print("\nRendering twice with same value 'initial'")

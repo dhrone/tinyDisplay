@@ -13,6 +13,7 @@ from PIL import Image, ImageChops, ImageDraw
 from tinyDisplay import globalVars
 from tinyDisplay.render.widget import rectangle, text
 from tinyDisplay.utility import compareImage as ci, dataset
+from tinyDisplay.utility.dynamic import dynamic
 
 
 def test_image_placement():
@@ -104,7 +105,11 @@ def test_request_size():
     db = {"value": s}
     ds = dataset()
     ds.add("db", db)
-    w = text(dvalue="db['value']", dataset=ds, size=(10, 8))
+    w = text(
+        value=dynamic("db['value']"),
+        dataset=ds, 
+        size=(10, 8)
+    )
     db["value"] = s[0]
     ds.update("db", db)
     w.render()

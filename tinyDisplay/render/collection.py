@@ -110,7 +110,7 @@ class canvas(widget):
 
         self.render(reset=True)
 
-    def _renderWidgets(self, force=False, *args, **kwargs):
+    def _renderWidgets(self, force=False, newData=None, *args, **kwargs):
         # Increment tick counter
         self._tick += 1
 
@@ -148,21 +148,25 @@ class canvas(widget):
                             "atPause": wid.atPause,
                             "atPauseEnd": wid.atPauseEnd,
                         }.get(wid._wait):
+                            # Pass newData to the widget's render method
                             img, updated = wid.render(
-                                force=force, *args, **kwargs
+                                force=force, newData=newData, *args, **kwargs
                             )
                         else:
                             img = wid.image
                             updated = False
                     else:
                         # If everyone is ready, then it's ok to render all of the waiting widgets
-                        img, updated = wid.render(force=force, *args, **kwargs)
+                        # Pass newData to the widget's render method
+                        img, updated = wid.render(force=force, newData=newData, *args, **kwargs)
                 else:
                     # If this widget isn't part of a wait type, then it always gets rendered
-                    img, updated = wid.render(force=force, *args, **kwargs)
+                    # Pass newData to the widget's render method
+                    img, updated = wid.render(force=force, newData=newData, *args, **kwargs)
             else:
                 # If force then all widgets get rendered
-                img, updated = wid.render(force=force, *args, **kwargs)
+                # Pass newData to the widget's render method
+                img, updated = wid.render(force=force, newData=newData, *args, **kwargs)
 
             if updated:
                 changed = True
@@ -181,7 +185,7 @@ class canvas(widget):
         return (results, changed)
 
     def _render(self, force=False, newData=None, *args, **kwargs):
-        results, changed = self._renderWidgets(force, *args, **kwargs)
+        results, changed = self._renderWidgets(force, newData=newData, *args, **kwargs)
 
         # If any have changed, render a fresh canvas
         if changed or newData:
@@ -498,13 +502,17 @@ class sequence(canvas):  # noqa: D101
         return (None, False)
 
 
+# Make a copy of collection items to avoid dictionary size changes during iteration
+collection_items = list(collection.__dict__.items())
 PARAMS = {
     k: getArgDecendents(v)
-    for k, v in collection.__dict__.items()
+    for k, v in collection_items
     if isclass(v) and issubclass(v, canvas)
 }
 
-for k, v in PARAMS.items():
+# Make a copy of the PARAMS items to avoid dictionary size changes during iteration
+params_items = list(PARAMS.items()) 
+for k, v in params_items:
     nv = list(v)
     NDD = getNotDynamicDecendents(collection.__dict__[k])
     for arg in v:

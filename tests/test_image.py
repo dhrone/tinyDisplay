@@ -27,5 +27,5 @@ def test_image_widget():
 
     w = image(file=path, mode=img.mode)
     assert compareImage(
-        img, w.render()[0], debug=True
+        img, w.render()[0]
     ), f"{path} did not match image within widget. {image2Text(img)}\n{w}"
