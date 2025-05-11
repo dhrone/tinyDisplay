@@ -24,6 +24,11 @@ class TimelineCoordinationManager:
         self.sync_events = {}  # Maps event_name -> (widget_id, tick_position)
         self.dependencies = {}  # Maps widget_id -> set of dependent widget_ids
         self.resolved = set()  # Set of widget_ids with resolved timelines
+        
+        # Add centralized event tracking
+        self.shared_events = {}  # Maps event_name -> boolean (triggered status)
+        self.shared_sync_events = set()  # Set of defined SYNC event names
+        
         self.logger = logging.getLogger("tinyDisplay.render.coordination")
         
     def register_widget(self, widget_id, widget):
@@ -49,6 +54,10 @@ class TimelineCoordinationManager:
         """
         self.logger.debug(f"Registering SYNC event '{event_name}' from widget {widget_id} at tick {tick_position}")
         self.sync_events[event_name] = (widget_id, tick_position)
+        
+        # Update shared events collections
+        self.shared_events[event_name] = True
+        self.shared_sync_events.add(event_name)
         
     def register_dependency(self, dependent_widget_id, event_name):
         """
@@ -230,6 +239,8 @@ class TimelineCoordinationManager:
         self.sync_events.clear()
         self.dependencies.clear()
         self.resolved.clear()
+        self.shared_events.clear()
+        self.shared_sync_events.clear()
 
 
 # Create singleton instance

@@ -41,9 +41,11 @@ class new_marquee(widget):
     :type position_reset_mode: str
     :param dynamic_execution: Whether to use dynamic execution for conditionals
     :type dynamic_execution: bool
-    :param shared_events: Dictionary to share events between marquees
+    :param shared_events: Optional custom dictionary to share events between marquees.
+        If not provided, the system automatically uses a centralized dictionary.
     :type shared_events: dict
-    :param shared_sync_events: Set to share defined sync events
+    :param shared_sync_events: Optional custom set to share defined sync events.
+        If not provided, the system automatically uses a centralized set.
     :type shared_sync_events: set
     """
 
@@ -96,8 +98,10 @@ class new_marquee(widget):
         self._program = program
         self._variables = variables or {}
         self._position_reset_mode = position_reset_mode
-        self._shared_events = shared_events  # For cross-marquee coordination
-        self._shared_sync_events = shared_sync_events  # For cross-marquee coordination
+        
+        # Use timeline_manager's centralized collections by default
+        self._shared_events = shared_events if shared_events is not None else timeline_manager.shared_events
+        self._shared_sync_events = shared_sync_events if shared_sync_events is not None else timeline_manager.shared_sync_events
         
         # Ensure size is properly set - if not passed, use widget size
         if not self._size:
@@ -262,10 +266,10 @@ class new_marquee(widget):
                     # Make sure the event is set to True in the executor's context
                     self._executor.context.events[event_name] = True
                     
-                    # If shared_events is provided, copy the event to it
-                    if self._shared_events is not None:
-                        self._shared_events[event_name] = True
-                        self._logger.debug(f"Copied event '{event_name}' to shared_events dictionary")
+                    # Events will be automatically stored in timeline_manager's shared collections
+                    # We only need to sync with the executor context
+                    self._executor.context.events = self._shared_events
+                    self._executor.context.defined_sync_events = self._shared_sync_events
             
             # Register any WAIT_FOR dependencies
             for event_name in self._executor.context.waiting_for_events:
@@ -298,16 +302,12 @@ class new_marquee(widget):
                     self._executor.context.event_positions[event_name] = tick_position
                     self._executor.context.events[event_name] = True
             
+            # Ensure the executor context is using the shared collections
+            self._executor.context.events = self._shared_events
+            self._executor.context.defined_sync_events = self._shared_sync_events
+            
             # Now compute the timeline normally
             self._computeTimeline()
-            
-            # After computation, ensure that all events are properly copied to shared_events
-            if self._shared_events is not None and hasattr(self._executor, 'context') and hasattr(self._executor.context, 'events'):
-                # Copy all events from the executor's context to the shared dictionary
-                for event_name, is_triggered in self._executor.context.events.items():
-                    if is_triggered:
-                        self._shared_events[event_name] = True
-                        self._logger.debug(f"Copied event '{event_name}' to shared_events after timeline computation")
             
             # Mark this widget's timeline as resolved
             self._timeline_resolved = True
@@ -569,17 +569,15 @@ class new_marquee(widget):
                 return (self.image, False)
         
         # Sync SYNC events from executor context to shared_events
-        if self._shared_events is not None and hasattr(self._executor, 'context') and hasattr(self._executor.context, 'events'):
+        if hasattr(self._executor, 'context') and hasattr(self._executor.context, 'events'):
             # Check if we're at a SYNC point in the timeline
             current_sync_pos = self._tick % len(self._timeline)
             if current_sync_pos in self._executor.context.pauses and self._atPause:
-                self._logger.debug(f"At SYNC point (tick {self._tick}), checking for events to share")
+                self._logger.debug(f"At SYNC point (tick {self._tick}), events will be shared through timeline_manager")
                 
-            # Copy all triggered events from executor context to shared dictionary
-            for event_name, is_triggered in self._executor.context.events.items():
-                if is_triggered and event_name not in self._shared_events:
-                    self._shared_events[event_name] = True
-                    self._logger.debug(f"Copied event '{event_name}' to shared_events during rendering")
+            # Ensure the executor's context is using the shared collections
+            self._executor.context.events = self._shared_events
+            self._executor.context.defined_sync_events = self._shared_sync_events
         
         # Make sure image exists with correct size
         if self.image.size == (0, 0) or self.image.size != self._size:

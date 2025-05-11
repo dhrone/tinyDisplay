@@ -1020,6 +1020,5 @@ if __name__ == "__main__":
     test_position_reset_modes()
     test_marquee_sync()
     test_sync_command()
-    test_wait_for_command()
     test_sync_wait_for_coordination()
     print("All tests passed!") 
