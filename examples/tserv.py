@@ -215,4 +215,4 @@ if __name__ == "__main__":
     
     webbrowser.get("open -a /Applications/Google\ Chrome.app %s").open(
         "http://localhost:5000"
-    )
+    ) 

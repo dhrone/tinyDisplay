@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image, ImageFont
 
 from tinyDisplay.render.collection import canvas, index, sequence, stack
-from tinyDisplay.render.profileWidget import profileText
+from benchmarks.profileWidget import profileText
 from tinyDisplay.render.widget import rectangle, text
 from tinyDisplay.utility import dataset
 
@@ -132,4 +132,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main() 
