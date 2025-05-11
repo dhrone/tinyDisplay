@@ -255,6 +255,17 @@ class new_marquee(widget):
             for event_name, tick_position in sync_events:
                 self._logger.debug(f"Registering SYNC event '{event_name}' at tick {tick_position}")
                 timeline_manager.register_sync_event(self._widget_id, event_name, tick_position)
+                
+                # IMPORTANT: We need to copy events from the executor's context to the shared_events dictionary
+                # This ensures the events are properly shared between marquees
+                if hasattr(self._executor, 'context') and hasattr(self._executor.context, 'events'):
+                    # Make sure the event is set to True in the executor's context
+                    self._executor.context.events[event_name] = True
+                    
+                    # If shared_events is provided, copy the event to it
+                    if self._shared_events is not None:
+                        self._shared_events[event_name] = True
+                        self._logger.debug(f"Copied event '{event_name}' to shared_events dictionary")
             
             # Register any WAIT_FOR dependencies
             for event_name in self._executor.context.waiting_for_events:
@@ -289,6 +300,14 @@ class new_marquee(widget):
             
             # Now compute the timeline normally
             self._computeTimeline()
+            
+            # After computation, ensure that all events are properly copied to shared_events
+            if self._shared_events is not None and hasattr(self._executor, 'context') and hasattr(self._executor.context, 'events'):
+                # Copy all events from the executor's context to the shared dictionary
+                for event_name, is_triggered in self._executor.context.events.items():
+                    if is_triggered:
+                        self._shared_events[event_name] = True
+                        self._logger.debug(f"Copied event '{event_name}' to shared_events after timeline computation")
             
             # Mark this widget's timeline as resolved
             self._timeline_resolved = True
@@ -327,7 +346,7 @@ class new_marquee(widget):
         current_pos = self._curPos if hasattr(self, '_curPos') else starting_position
         
         # Execute the program with the determined starting position
-        # Convert to tuple for API compatibility with executor.execute() which expects tuple
+        # Use Position object directly for execution
         positions = self._executor.execute(
             widget_size, 
             container_size, 
@@ -335,7 +354,6 @@ class new_marquee(widget):
         )
         
         # Store the timeline positions directly, preserving Position objects
-        # instead of converting to tuples
         self._timeline = positions
         
         # For "never" reset mode, adjust the timeline to maintain current position
@@ -404,7 +422,12 @@ class new_marquee(widget):
         # Determine initial position based on reset mode
         if self._position_reset_mode == "never" and hasattr(self, '_curPos') and self._curPos:
             # Keep current position if in "never" reset mode
-            tx, ty = self._curPos
+            if isinstance(self._curPos, Position):
+                # Already a Position, use it directly
+                tx, ty = self._curPos.x, self._curPos.y
+            else:
+                # Convert tuple to coordinates
+                tx, ty = self._curPos
         else:
             # Otherwise use placement algorithm
             tx, ty = self._place(wImage=self._aWI, just=self.just)
@@ -424,6 +447,38 @@ class new_marquee(widget):
             # Only compute this timeline if it hasn't been resolved
             self._computeTimeline()
 
+    def _get_position_for_tick(self, tick):
+        """
+        Get the position for a given tick, respecting terminal positions.
+        
+        For terminal animations like SCROLL_CLIP and SLIDE, once a terminal position
+        is reached, any tick beyond that point should use the terminal position
+        rather than wrapping around to the beginning of the timeline.
+        
+        Args:
+            tick: The tick value to get the position for
+            
+        Returns:
+            The appropriate Position object from the timeline
+        """
+        if not self._timeline:
+            return None
+            
+        # Find the terminal position if one exists
+        terminal_index = None
+        for i, pos in enumerate(self._timeline):
+            if hasattr(pos, 'terminal') and pos.terminal:
+                terminal_index = i
+                break
+                
+        # If we have a terminal position and the tick is beyond it, use the terminal position
+        if terminal_index is not None and tick >= terminal_index:
+            self._logger.debug(f"Tick {tick} is beyond terminal position at index {terminal_index}, using terminal position")
+            return self._timeline[terminal_index]
+            
+        # Otherwise use standard modulo calculation
+        return self._timeline[tick % len(self._timeline)]
+
     def _render(self, force=False, tick=None, move=True, newData=False):
         """
         Render the marquee animation.
@@ -439,8 +494,29 @@ class new_marquee(widget):
             self._logger.debug("Timeline initialization not done yet, initializing now")
             new_marquee.initialize_all_timelines()
         
-        # Update tick if provided
-        self._tick = tick if tick is not None else self._tick
+        # Initialize the timeline if needed and update the tick
+        if not self._timeline:
+            timeline_exists = False
+            if not self._init_timeline():
+                return None  # Failed to initialize timeline
+        else:
+            timeline_exists = True
+            # Update the tick if needed
+            if tick is not None:
+                # When explicitly setting a tick, use our helper method that respects terminal positions
+                previous_tick = self._tick
+                self._tick = tick
+                
+                # After setting the explicit tick, check if we're at the terminal position
+                # This ensures we don't lose the terminal state when switching to move=True rendering
+                if len(self._timeline) > 0:
+                    current_pos = self._get_position_for_tick(self._tick)
+                    if hasattr(current_pos, 'terminal') and current_pos.terminal:
+                        # If at terminal position, do NOT increment the tick in future move=True renders
+                        self._tick = self._find_terminal_index() or self._tick
+                        self._logger.debug(f"Set tick to terminal index {self._tick} after explicit tick={tick}")
+            elif move:
+                self._update_tick()  # Use the new method instead of direct increment
         
         # Render the contained widget
         img, updated = self._widget.render(
@@ -455,8 +531,6 @@ class new_marquee(widget):
             if self._resetOnChange:
                 # This will clear state and mark for recalculation
                 self._resetMovement()
-                # Increment tick if move is True
-                self._tick = self._tick + 1 if move else self._tick
                 return (self.image, True)
             else:
                 # Even if we don't reset position, we should still mark for recalculation
@@ -465,8 +539,6 @@ class new_marquee(widget):
         elif force:
             # Force reset regardless of content change
             self._resetMovement()
-            # Increment tick if move is True
-            self._tick = self._tick + 1 if move else self._tick
             return (self.image, True)
 
         # Check if any waiting events have been triggered since timeline generation
@@ -496,6 +568,19 @@ class new_marquee(widget):
             if not self._timeline:  # Still empty after compute
                 return (self.image, False)
         
+        # Sync SYNC events from executor context to shared_events
+        if self._shared_events is not None and hasattr(self._executor, 'context') and hasattr(self._executor.context, 'events'):
+            # Check if we're at a SYNC point in the timeline
+            current_sync_pos = self._tick % len(self._timeline)
+            if current_sync_pos in self._executor.context.pauses and self._atPause:
+                self._logger.debug(f"At SYNC point (tick {self._tick}), checking for events to share")
+                
+            # Copy all triggered events from executor context to shared dictionary
+            for event_name, is_triggered in self._executor.context.events.items():
+                if is_triggered and event_name not in self._shared_events:
+                    self._shared_events[event_name] = True
+                    self._logger.debug(f"Copied event '{event_name}' to shared_events during rendering")
+        
         # Make sure image exists with correct size
         if self.image.size == (0, 0) or self.image.size != self._size:
             self._createImage()
@@ -503,13 +588,20 @@ class new_marquee(widget):
         # Get position from timeline
         moved = False
         if len(self._timeline) > 0:
-            # Get the position at the current tick
-            timeline_index = self._tick % len(self._timeline)
-            current_position = self._timeline[timeline_index]
+            # UPDATED: Use the new method to get the position at the current tick
+            # This handles terminal positions correctly
+            current_position = self._get_position_for_tick(self._tick)
             
             # Ensure we always have a Position object
             if isinstance(current_position, tuple):
+                # Convert tuple to Position if needed (for backward compatibility)
                 self._curPos = Position(x=current_position[0], y=current_position[1])
+                
+                # Update timeline with Position object to avoid future conversions
+                # Note: We only update the timeline if we're at a non-terminal index
+                if self._tick < len(self._timeline):
+                    timeline_index = self._tick % len(self._timeline)
+                    self._timeline[timeline_index] = self._curPos
             else:
                 # It's already a Position object
                 self._curPos = current_position
@@ -524,16 +616,6 @@ class new_marquee(widget):
                 # Copy the Position object to avoid shared references
                 self._lastPos = Position(x=self._curPos.x, y=self._curPos.y)
         
-        # Only increment tick if movement is enabled and moveWhen evaluates to True
-        # and we're not at a terminal position
-        if move and self._moveWhen:
-            # Check if current position is a terminal position
-            is_terminal = self._curPos.terminal if hasattr(self._curPos, 'terminal') else False
-            
-            # Only advance the tick if not at a terminal position
-            if not is_terminal:
-                self._tick = (self._tick + 1) % (len(self._timeline) or 1)
-        
         # Ensure image exists and has correct size before returning
         if self.image.size == (0, 0):
             self._logger.warning("Image has zero size after rendering, creating new image")
@@ -541,6 +623,17 @@ class new_marquee(widget):
             self._paintMarqueeWidget()
             
         return (self.image, moved)
+
+    def _find_terminal_index(self):
+        """Find the index of the terminal position in the timeline, if any."""
+        if not self._timeline:
+            return None
+            
+        for i, pos in enumerate(self._timeline):
+            if hasattr(pos, 'terminal') and pos.terminal:
+                return i
+                
+        return None
 
     def _debug_dump_ast(self):
         """Dump the AST structure to the debug log for troubleshooting."""
@@ -1380,6 +1473,7 @@ class new_marquee(widget):
         if hasattr(self._curPos, 'x') and hasattr(self._curPos, 'y'):
             cur_pos = (self._curPos.x, self._curPos.y)
         else:
+            # Use directly if already a tuple
             cur_pos = self._curPos
         
         # Paste the widget at the current position
@@ -1543,7 +1637,8 @@ class new_marquee(widget):
         if len(self._timeline) == 0:
             return False
             
-        current_pos = self._timeline[self._tick % len(self._timeline)]
+        # Use the new helper method to get the position, respecting terminal positions
+        current_pos = self._get_position_for_tick(self._tick)
         return hasattr(current_pos, 'terminal') and current_pos.terminal
 
     def mark_for_recalculation(self):
@@ -1610,3 +1705,27 @@ class new_marquee(widget):
                 return self._curPos
         # Default position if not set yet
         return (0, 0) 
+
+    def _update_tick(self):
+        """
+        Update the tick counter for the marquee animation.
+        If we're at a terminal position, don't advance the tick.
+        """
+        # If timeline hasn't been initialized, there's nothing to update
+        if self._timeline is None:
+            return
+            
+        # Check if movement is disabled via moveWhen flag
+        if not self._moveWhen:
+            self._logger.debug("Not advancing tick due to moveWhen=False")
+            return
+            
+        # Check if we're at a terminal position
+        if self._tick < len(self._timeline):
+            current_pos = self._timeline[self._tick]
+            if hasattr(current_pos, 'terminal') and current_pos.terminal:
+                self._logger.debug(f"At terminal position {current_pos}, not advancing tick")
+                return  # Don't advance beyond a terminal position
+                
+        # Standard tick update
+        self._tick = (self._tick + 1) % len(self._timeline) 

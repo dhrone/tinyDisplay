@@ -225,9 +225,29 @@ def test_coordinated_marquees():
             shared_sync_events=shared_sync_events,
         )
         
+        # Log the state of shared events before initialization
+        logger.info(f"Before initialization - shared_events: {shared_events}")
+        logger.info(f"Before initialization - shared_sync_events: {shared_sync_events}")
+        
         # Initialize all timelines and resolve dependencies
         logger.info("Initializing all marquee timelines")
         new_marquee.initialize_all_timelines()
+        
+        # Log the state of shared events after initialization
+        logger.info(f"After initialization - shared_events: {shared_events}")
+        logger.info(f"After initialization - shared_sync_events: {shared_sync_events}")
+        
+        # Inspect internal event tracking in the executor contexts
+        if hasattr(marquee1, '_executor') and hasattr(marquee1._executor, 'context'):
+            logger.info(f"Marquee1 executor events: {marquee1._executor.context.events}")
+            logger.info(f"Marquee1 executor defined_sync_events: {marquee1._executor.context.defined_sync_events}")
+        
+        if hasattr(marquee2, '_executor') and hasattr(marquee2._executor, 'context'):
+            logger.info(f"Marquee2 executor events: {marquee2._executor.context.events}")
+            logger.info(f"Marquee2 executor defined_sync_events: {marquee2._executor.context.defined_sync_events}")
+            
+        # Log timeline manager state
+        logger.info(f"Timeline manager sync_events: {timeline_manager.sync_events}")
         
         # Render just a few frames for the test
         num_frames = 30  # Reduced from 500 for quick testing
@@ -250,8 +270,18 @@ def test_coordinated_marquees():
             
             # We don't sleep in test mode to keep it fast
         
-        # Verify that events are functioning
-        assert 'cycle_complete' in shared_events, "SYNC event not created"
+        # Log the state of shared events after rendering
+        logger.info(f"After rendering - shared_events: {shared_events}")
+        
+        # Modified assertion to see more details if it fails
+        if 'cycle_complete' not in shared_events:
+            logger.error("SYNC event not created - shared_events content: {shared_events}")
+            # Check if event is in executor context but not in shared_events
+            if hasattr(marquee1, '_executor') and hasattr(marquee1._executor, 'context'):
+                if 'cycle_complete' in marquee1._executor.context.events:
+                    logger.error("Event exists in executor context but not in shared_events!")
+            assert False, "SYNC event not created"
+            
         assert len(timeline_manager.sync_events) > 0, "No sync events registered"
         
         logger.info("Test complete")

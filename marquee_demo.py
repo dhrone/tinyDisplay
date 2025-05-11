@@ -377,7 +377,7 @@ def create_complex_animation():
     widget = text(
         "Complex Animation",
         size=(150, 20),
-        font=font,
+        #font=font,
         mode="1",
         color=1,  # White text
         background=0,  # Black background
@@ -392,7 +392,7 @@ def create_complex_animation():
     # Define the sequence once, then use LOOP to repeat it 3 times
     DEFINE sequence {
         # Slide animation - move RIGHT by 60 pixels
-        SLIDE(RIGHT, 60) { 
+        SCROLL_LOOP(RIGHT, 60) { 
             step=2,
             interval=1
         };
@@ -411,7 +411,7 @@ def create_complex_animation():
         PAUSE(5);
         
         # Clip scroll animation - move DOWN by 20 pixels (increased from 8)
-        SCROLL_CLIP(DOWN, 20) { 
+        SCROLL_BOUNCE(DOWN, 20) { 
             step=2,
             interval=1
         };

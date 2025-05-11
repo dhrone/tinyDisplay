@@ -1119,12 +1119,18 @@ class MarqueeExecutor:
                         pause_pos = Position(x=current_x, y=current_y, terminal=True)
                         self.context.timeline.append(pause_pos)
                         self.context.tick_position += 1
-                        self.logger.debug(f"Added stabilization position at ({current_x}, {current_y})")
+                        self.logger.debug(f"Added stabilization position at ({current_x}, {current_y}) with terminal=True")
                     else:
                         # The last position is already at the target, just mark it as terminal
                         if hasattr(last_pos, 'terminal'):
                             last_pos.terminal = True
-                        self.logger.debug(f"Last position is already at target, not adding duplicate")
+                            self.logger.debug(f"Marked existing position as terminal: {last_pos}")
+                        else:
+                            # Replace with proper Position object if needed
+                            self.logger.debug(f"Converting tuple position to Position with terminal=True")
+                            idx = len(self.context.timeline) - 1
+                            self.context.timeline[idx] = Position(x=last_x, y=last_y, terminal=True)
+                        self.logger.debug(f"Last position is already at target, marked as terminal")
                     
                     # Mark that we've stabilized this ScrollClip command
                     self.context.scroll_clip_stabilized = True
@@ -1189,7 +1195,8 @@ class MarqueeExecutor:
                 for _ in range(interval):
                     # Use the exact target position for the last step
                     if is_last_step:
-                        pos = Position(x=target_x, y=target_y)
+                        pos = Position(x=target_x, y=target_y, terminal=True)  # Mark as terminal
+                        self.logger.debug("Marking final SCROLL_CLIP position as terminal")
                     else:
                         pos = Position(x=pos_x, y=pos_y)
                     self.context.timeline.append(pos)
@@ -1224,40 +1231,33 @@ class MarqueeExecutor:
             interval = self._get_option(stmt.options, "interval", 1)
             gap = self._get_option(stmt.options, "gap", 0)
             
-            # Calculate modulo units for position equivalence
-            scroll_unit = widget_width + gap if direction in [Direction.LEFT, Direction.RIGHT] else widget_height + gap
+            # Calculate the actual distance to use for SCROLL_LOOP
+            # For SCROLL_LOOP, the distance parameter should represent the actual distance to move
+            # not an infinite loop length
+            if distance <= 0:
+                self.logger.warning(f"Invalid distance for SCROLL_LOOP: {distance}, using default")
+                distance = 30  # Default to reasonable distance if not specified properly
             
-            # Mathematical optimization: calculate minimal cycle length
-            def gcd(a, b):
-                while b:
-                    a, b = b, a % b
-                return a
+            # Calculate steps needed to cover the specified distance
+            steps_needed = distance // step
+            if distance % step != 0:
+                steps_needed += 1
+                
+            self.logger.debug(f"SCROLL_LOOP will generate {steps_needed} steps to cover {distance} pixels")
             
-            step_gcd = gcd(step, scroll_unit)
-            min_cycle_len = scroll_unit // step_gcd
-            self.logger.debug(f"Optimized cycle length: {min_cycle_len} steps for scroll unit {scroll_unit} and step {step}")
-            
-            # Create a move statement for the scroll loop
+            # Create a move statement for the controlled scroll
             move_stmt = MoveStatement(
                 location=stmt.location,
                 direction=direction,
-                distance=distance,
+                distance=distance,  # Use the exact distance specified
                 options=stmt.options
             )
             
-            # Calculate how many moves we need for a full cycle
-            moves_needed = min_cycle_len
-            
-            # Execute the move multiple times to generate a complete cycle
-            for i in range(moves_needed):
-                self._execute_move_once(move_stmt)
-                
-                # Debug every few positions
-                if i % 10 == 0 or i == moves_needed - 1:
-                    self.logger.debug(f"SCROLL_LOOP generating position {i+1}/{moves_needed}")
+            # Execute the move once to generate the positions
+            self._execute_move_once(move_stmt)
             
             # Set period if not already defined
-            # This is the key optimization - we only need one full cycle of positions
+            # This limits the timeline to just one cycle of the specified distance
             if self.context.period is None:
                 cycle_length = len(self.context.timeline)
                 self.context.period = cycle_length
