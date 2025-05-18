@@ -34,7 +34,8 @@ from tinyDisplay.utility import (
     image2Text,
     okPath,
 )
-from tinyDisplay.utility.dynamic import DynamicValue, dynamic, dependency_registry
+from tinyDisplay.utility.evaluator import dynamicValue
+from tinyDisplay.utility.dynamic import dynamic, dependency_registry
 
 
 # from IPython.core.debugger import set_trace
@@ -187,10 +188,10 @@ class widget(metaclass=abc.ABCMeta):
             dname = f"d{a}"
             
             # First check if it exists in locals and is a DynamicValue
-            if a in all_args and isinstance(all_args.get(a), DynamicValue):
+            if a in all_args and isinstance(all_args.get(a), dynamicValue):
                 dvalue = all_args.get(a)
-                self._logger.debug(f"Found DynamicValue for {a}: {dvalue.expression}")
-                self._compile(dvalue.expression, name=aname, 
+                self._logger.debug(f"Found DynamicValue for {a}: {dvalue.source}")
+                self._compile(dvalue.source, name=aname, 
                              default=defaults[args.index(a)] if args.index(a) < len(defaults) else None, 
                              dynamic=True)
                 # Register dependencies
@@ -305,13 +306,14 @@ class widget(metaclass=abc.ABCMeta):
                     # Use direct dictionary access to set attribute
                     self.__dict__[name] = value
                     changed = True
+                    self._logger.debug(f"Canvas {self.name} dynamic value changed: {name}")
             except KeyError:
                 continue
             except Exception as ex:
                 # Log errors but continue processing other values
                 self._logger.debug(f"Error evaluating {name}: {ex}")
                 continue
-                
+                    
         return changed
 
     def _fixColors(self):
@@ -678,6 +680,11 @@ class widget(metaclass=abc.ABCMeta):
         changed = False
 
         try:
+            # Add debug logging for newData propagation
+            if newData:
+                self._logger.debug(f"Widget {self.name} render called with newData=True. "
+                                 f"force={force}, nd={nd}, _needs_update={getattr(self, '_needs_update', False)}")
+            
             img, changed = self._render(
                 force=force, tick=tick, move=move, newData=nd or newData
             )
@@ -1575,11 +1582,17 @@ class marquee(widget):
         pass  # pragma: no cover
 
     def _render(self, force=False, tick=None, move=True, newData=False):
+        if newData:
+            self._logger.debug(f"Scroll {self.name} received newData=True. "
+                              f"force={force}, tick={self._tick}, move={move}")
+        
         self._tick = tick or self._tick
         img, updated = self._widget.render(
             force=force, tick=tick, move=move, newData=newData
         )
         if updated:
+            self._logger.debug(f"Scroll {self.name} widget updated. "
+                              f"tick={self._tick}, _resetOnChange={self._resetOnChange}")
             self._adjustWidgetSize()
         if (updated and self._resetOnChange) or force:
             self._resetMovement()

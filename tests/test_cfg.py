@@ -9,6 +9,7 @@ Test of CFG class for the tinyDisplay system
 """
 import time
 from pathlib import Path
+import logging
 
 import pytest
 from PIL import Image, ImageChops
@@ -17,6 +18,15 @@ from tinyDisplay.cfg import _tdLoader, load
 from tinyDisplay.font import bmImageFont
 from tinyDisplay.render.widget import rectangle, scroll, text
 from tinyDisplay.utility import dataset, image2Text
+
+# Configure the tinyDisplay logger for tests
+logger = logging.getLogger("tinyDisplay")
+logger.setLevel(logging.DEBUG)
+if not logger.hasHandlers():
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 
 @pytest.fixture(scope="function")

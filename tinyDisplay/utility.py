@@ -9,7 +9,7 @@ new utility package structure for backward compatibility.
 
 # Import all utility components from the utility package
 from tinyDisplay.utility import (
-    dataset, evaluator, dynamicValue, animate, 
+    dataset, evaluator, dynamicValue, animate,
     image2Text, compareImage, okPath,
     getArgDecendents, getNotDynamicDecendents,
     dynamic, DynamicValue, dependency_registry

@@ -34,21 +34,19 @@
 #   - CRITICAL DISTINCTION: In a command like "MOVE LEFT 100":
 #     * The "100" is the TOTAL DISTANCE the widget will eventually travel
 #     * It is NOT how many pixels move in a single tick
-#     * The actual per-tick movement is controlled by the 'step_size' parameter (formerly 'distance')
-#   - When no total distance is specified, movement continues until reaching a boundary
+#     * The actual per-tick movement is controlled by the 'step_size' parameter 
+#   - When no total distance is specified, movement continues until reaching a boundary or forever for animations that loop (e.g. scroll)
 #
 # - Speed and Step Size Parameters:
 #   - The 'step_size' parameter determines how many pixels are moved in a single movement step
-#   - The 'speed' parameter determines how many ticks must pass before a movement step occurs
 #   - IMPORTANT: The 'step_size' parameter is DIFFERENT from the distance value in MOVE commands:
 #     * MOVE LEFT 100 = "Eventually move a total of 100 pixels to the left"
 #     * step_size=5 = "When movement occurs, move 5 pixels at a time"
-#   - Example: For "MOVE LEFT 100" with speed=2 and step_size=5:
+#   - Example: For "MOVE LEFT 100" and step_size=5:
 #     - The widget will eventually move a total of 100 pixels leftward
 #     - It will move in increments of 5 pixels per movement step
-#     - Each movement step occurs every 2 ticks
-#     - The complete animation requires 20 movement steps (100÷5) over 40 ticks (20×2)
-
+#
+#
 # 2. SYNTAX DEFINITION
 # -------------------
 #

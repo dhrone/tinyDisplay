@@ -22,6 +22,7 @@ from tinyDisplay.exceptions import (
     ValidationError,
 )
 from tinyDisplay.utility.dynamic import dependency_registry
+from tinyDisplay.utility.variable_dependencies import variable_registry
 
 class dataset:
     """
@@ -558,11 +559,18 @@ class dataset:
 
         # Copy update
         update = update.copy()
+        
+        # Keep track of changed fields for dependency tracking
+        changed_fields = []
+        field_paths = []  # Store the full field paths for notification
 
         # Add timestamp to update
         update["__timestamp__"] = time.time() - self._startedAt
 
         update = self.validateUpdate(dbName, update)
+
+        self._logger.debug(f"Updating database '{dbName}' with {update}")
+        print(f"DEBUG: Updating database '{dbName}' with {update}")
 
         if dbName not in self._dataset:
             self._checkForReserved(dbName)
@@ -570,24 +578,66 @@ class dataset:
             # Initialize _prevDS with current values
             self._prevDS[dbName] = deque(maxlen=self._lookBack)
             self._prevDS[dbName].append(db)
+            # All fields in a new database are considered changed
+            for key in update.keys():
+                changed_fields.append(key)
+                field_paths.append(f"{dbName}['{key}']")
+            self._logger.debug(f"New database: all fields considered changed: {changed_fields}")
         else:
             # Update prevDS with the current values that are about to get updated
             self._prevDS[dbName].append(
                 {**self._prevDS[dbName][-1], **self._dataset[dbName]}
             )
 
+            # Identify which fields are actually changing
+            for key, value in update.items():
+                if key not in self._dataset[dbName]:
+                    self._logger.debug(f"New field '{key}': '{value}'")
+                    changed_fields.append(key)
+                    field_paths.append(f"{dbName}['{key}']")
+                elif not self._values_equal(self._dataset[dbName][key], value):
+                    self._logger.debug(f"Field '{key}' changed: '{self._dataset[dbName][key]}' -> '{value}'")
+                    print(f"DEBUG: Field '{key}' changed from {self._dataset[dbName][key]} to {value}")
+                    print(f"DEBUG: Types - old: {type(self._dataset[dbName][key])}, new: {type(value)}")
+                    
+                    changed_fields.append(key)
+                    field_paths.append(f"{dbName}['{key}']")
+                    
+                    # Handle nested dictionaries - detect specific nested field changes
+                    if isinstance(value, dict) and isinstance(self._dataset[dbName][key], dict):
+                        print(f"DEBUG: Detecting nested changes in {key}")
+                        self._detect_nested_changes(dbName, key, self._dataset[dbName][key], value, changed_fields, field_paths)
+                else:
+                    self._logger.debug(f"Field '{key}' unchanged: '{value}'")
+
             # Merge current db values with new values
             db = {**self._dataset[dbName], **update} if merge else update
 
         # Update d with any cached values
-        db = {**db, **self._cacheDB[dbName]} if dbName in self._cacheDB else db
+        if dbName in self._cacheDB:
+            for key, value in self._cacheDB[dbName].items():
+                if key not in db or not self._values_equal(db[key], value):
+                    self._logger.debug(f"Cached field '{key}' changed: {value}")
+                    changed_fields.append(key)
+                    field_paths.append(f"{dbName}['{key}']")
+            db = {**db, **self._cacheDB[dbName]}
 
         self.__dict__[dbName] = db
         self._dataset[dbName] = db
         self._ringBuffer.append({dbName: update})
 
-        # Notify dependent widgets about the data change
+        # Notify dependent widgets about the data change (traditional way)
         dependency_registry.notify_data_change(dbName)
+        
+        self._logger.debug(f"Changed fields: {changed_fields}")
+        print(f"DEBUG: Changed fields: {changed_fields}")
+        print(f"DEBUG: Field paths for notification: {field_paths}")
+        
+        # Notify field-level dependencies about specific changes
+        for field_path in field_paths:
+            self._logger.debug(f"Notifying field change: {field_path}")
+            print(f"DEBUG: Notifying field change: {field_path}")
+            variable_registry.notify_field_change(field_path)
 
         # If any cache values were for different databases, merge update them
         if len(self._cacheDB) > 0:
@@ -595,6 +645,94 @@ class dataset:
             self._clearCache()
             for k, v in cdb.items():
                 self.update(k, v, merge=True)
+    
+    def _values_equal(self, value1, value2):
+        """
+        Compare two values with special handling for dictionaries.
+        For dictionaries, does a deep comparison of values.
+        
+        Args:
+            value1: First value to compare
+            value2: Second value to compare
+            
+        Returns:
+            True if values are equal, False otherwise
+        """
+        print(f"DEBUG: _values_equal comparing {value1} and {value2}")
+        if type(value1) != type(value2):
+            print(f"DEBUG: Different types: {type(value1)} != {type(value2)}")
+            return False
+            
+        if isinstance(value1, dict) and isinstance(value2, dict):
+            # If dictionaries have different keys, they're not equal
+            if set(value1.keys()) != set(value2.keys()):
+                print(f"DEBUG: Different keys: {set(value1.keys())} != {set(value2.keys())}")
+                return False
+                
+            # Check each key-value pair recursively
+            for key in value1:
+                print(f"DEBUG: Comparing nested key '{key}': {value1[key]} vs {value2[key]}")
+                if not self._values_equal(value1[key], value2[key]):
+                    print(f"DEBUG: Nested values different for key '{key}'")
+                    return False
+            
+            print(f"DEBUG: Dictionaries are equal")
+            return True
+        else:
+            # For non-dictionary types, use normal equality
+            result = value1 == value2
+            print(f"DEBUG: Simple comparison result: {result}")
+            return result
+
+    def _detect_nested_changes(self, dbName, parent_key, old_dict, new_dict, changed_fields, field_paths):
+        """
+        Recursively detect changes in nested dictionaries and add field paths to changed_fields.
+        
+        Args:
+            dbName: Name of the database
+            parent_key: Key of the parent dictionary
+            old_dict: Previous version of the dictionary
+            new_dict: New version of the dictionary
+            changed_fields: List to store changed field paths
+            field_paths: List to store full field paths for notification
+        """
+        print(f"DEBUG: _detect_nested_changes for {parent_key}")
+        print(f"DEBUG: old_dict = {old_dict}")
+        print(f"DEBUG: new_dict = {new_dict}")
+        
+        # Check for keys in new_dict but not in old_dict
+        for key in new_dict:
+            # Build the proper field path for notifications
+            field_path = f"{dbName}['{parent_key}']['{key}']"
+            
+            # Record the nested field
+            nested_key = f"{parent_key}['{key}']"
+                
+            if key not in old_dict:
+                self._logger.debug(f"New nested field '{nested_key}': '{new_dict[key]}'")
+                print(f"DEBUG: New nested field '{nested_key}': '{new_dict[key]}'")
+                changed_fields.append(nested_key)
+                field_paths.append(field_path)
+            elif old_dict[key] != new_dict[key]:
+                self._logger.debug(f"Nested field '{nested_key}' changed: '{old_dict[key]}' -> '{new_dict[key]}'")
+                print(f"DEBUG: Nested field '{nested_key}' changed: '{old_dict[key]}' -> '{new_dict[key]}'")
+                changed_fields.append(nested_key)
+                field_paths.append(field_path)
+                
+                # Recursive check for nested dictionaries
+                if isinstance(new_dict[key], dict) and isinstance(old_dict[key], dict):
+                    self._detect_nested_changes(dbName, f"{parent_key}['{key}']", old_dict[key], new_dict[key], changed_fields, field_paths)
+                    
+        # Check for keys in old_dict but not in new_dict
+        for key in old_dict:
+            if key not in new_dict:
+                field_path = f"{dbName}['{parent_key}']['{key}']"
+                nested_key = f"{parent_key}['{key}']"
+                
+                self._logger.debug(f"Removed nested field '{nested_key}'")
+                print(f"DEBUG: Removed nested field '{nested_key}'")
+                changed_fields.append(nested_key)
+                field_paths.append(field_path)
 
     def _update(self, dbName, update, merge=False):
         # Initial update method used when _ringBuffer is not full

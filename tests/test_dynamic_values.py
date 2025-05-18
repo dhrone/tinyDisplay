@@ -7,7 +7,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 from tinyDisplay.utility import dataset
-from tinyDisplay.utility.dynamic import dynamic, DynamicValue, dependency_registry
+from tinyDisplay.utility.evaluator import dynamicValue
+from tinyDisplay.utility.dynamic import dynamic, dependency_registry
 from tinyDisplay.render.widget import text
 
 
@@ -26,15 +27,15 @@ class TestDynamicValues(unittest.TestCase):
 
     def test_dynamic_value_creation(self):
         """Test creating a DynamicValue."""
-        dv = DynamicValue("test['color']")
-        self.assertEqual(dv.expression, "test['color']")
+        dv = dynamic("test['color']")
+        self.assertEqual(dv.source, "test['color']")
         self.assertIn('test', dv.dependencies)
 
     def test_dynamic_function(self):
         """Test the dynamic() function."""
         dv = dynamic("test['value'] * 2")
-        self.assertEqual(dv.expression, "test['value'] * 2")
-        self.assertIsInstance(dv, DynamicValue)
+        self.assertEqual(dv.source, "test['value'] * 2")
+        self.assertIsInstance(dv, dynamicValue)
 
     def test_widget_with_dynamic_values(self):
         """Test creating a widget with dynamic values."""

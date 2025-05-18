@@ -13,6 +13,8 @@ __version__ = "0.1.2"
 import logging
 import os
 import sys
+from tinyDisplay.utility.variable_dependencies import variable_registry
+import tinyDisplay.global_dataset as global_dataset
 
 def setup_logging(log_level=logging.INFO, log_file=None):
     """
@@ -52,3 +54,6 @@ def setup_logging(log_level=logging.INFO, log_file=None):
 
 # Initialize default logger
 setup_logging()
+
+# Make globally accessible modules available
+__all__ = ['variable_registry', 'global_dataset']

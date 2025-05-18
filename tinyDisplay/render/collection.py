@@ -10,6 +10,7 @@ Collection widgets to present, and animate the display canvases.
 import bisect
 from inspect import currentframe, getargvalues, getfullargspec, isclass
 import logging
+import fnmatch
 
 from PIL import Image
 
@@ -110,77 +111,72 @@ class canvas(widget):
 
         self.render(reset=True)
 
-    def _renderWidgets(self, force=False, newData=None, *args, **kwargs):
-        # Increment tick counter
-        self._tick += 1
+    def _renderWidgets(self, force=False, tick=None, move=True, newData=False):
+        """
+        Render all widgets in the canvas.
 
-        notReady = {}
-        # Check wait status for any widgets that have wait settings
-        for i in self._placements:
-            wid, off, anc = i
-            if hasattr(wid, "_wait") and wid._wait is not None:
-                waiting = {
-                    "atStart": wid.atStart,
-                    "atPause": wid.atPause,
-                    "atPauseEnd": wid.atPauseEnd,
-                }.get(wid._wait)
-                notReady[wid._wait] = not waiting or notReady.get(
-                    wid._wait, False
-                )
-
-        changed = (
-            False if not force and not self._newWidget and self.image else True
-        )
-        results = []
-
-        for i, p in enumerate(self._placements):
-            wid, off, anc = p
-
-            if not force:
-                # If widget has wait setting
-                if hasattr(wid, "_wait"):
-                    # Check to see if any widgets of this widgets wait type are not ready
-                    if notReady[wid._wait]:
-                        # If there are widgets waiting, see if this widget should still be
-                        # rendered because it has not reached the point it should wait
-                        if not {
-                            "atStart": wid.atStart,
-                            "atPause": wid.atPause,
-                            "atPauseEnd": wid.atPauseEnd,
-                        }.get(wid._wait):
-                            # Pass newData to the widget's render method
-                            img, updated = wid.render(
-                                force=force, newData=newData, *args, **kwargs
-                            )
-                        else:
-                            img = wid.image
-                            updated = False
-                    else:
-                        # If everyone is ready, then it's ok to render all of the waiting widgets
-                        # Pass newData to the widget's render method
-                        img, updated = wid.render(force=force, newData=newData, *args, **kwargs)
+        :param force: Set force True to force the widget to re-render itself
+        :type force: bool
+        :param tick: Change the current tick (e.g. time) for animated widgets
+        :type tick: int
+        :param move: Determine whether time moves forward during the render.
+            Default is True.
+        :type move: bool
+        :param newData: Render widget regardless of change in data
+        :type newData: bool
+        :returns: a 2-tuple with the widget's current image and a flag to
+            indicate whether the image has just changed.  If force was set, it
+            will always return changed
+        :rtype: (PIL.Image, bool)
+        """
+        if newData:
+            self._logger.debug(f"Canvas {self.name} _renderWidgets called with newData=True. "
+                             f"force={force}, tick={tick}, move={move}")
+            
+        if self._activeWhen is not None:
+            try:
+                if not self._activeWhen:
+                    return (self.image, False)
+            except Exception as ex:
+                if self._debug:
+                    raise
                 else:
-                    # If this widget isn't part of a wait type, then it always gets rendered
-                    # Pass newData to the widget's render method
-                    img, updated = wid.render(force=force, newData=newData, *args, **kwargs)
-            else:
-                # If force then all widgets get rendered
-                # Pass newData to the widget's render method
-                img, updated = wid.render(force=force, newData=newData, *args, **kwargs)
+                    self._logger.warning(
+                        f"Unable to evaluate activeWhen: {ex}"
+                    )
+                    return (self.image, False)
 
+        changed = False
+        results = []
+        for widget, offset, just in self._placements:
+            if widget._activeWhen is not None:
+                try:
+                    if not widget._activeWhen:
+                        continue
+                except Exception as ex:
+                    if self._debug:
+                        raise
+                    else:
+                        self._logger.warning(
+                            f"Unable to evaluate widget activeWhen: {ex}"
+                        )
+                        continue
+
+            # Add debug logging for widget state changes
+            if hasattr(widget, '_needs_update') and widget._needs_update:
+                self._logger.debug(f"Canvas {self.name} widget {widget.name} marked for update")
+            
+            img, updated = widget.render(
+                force=force, tick=tick, move=move, newData=newData
+            )
             if updated:
+                self._logger.debug(f"Canvas {self.name} widget {widget.name} updated. "
+                                 f"force={force}, newData={newData}")
                 changed = True
-
-            # Only display active widgets
-            if wid.active:
-                if not self._activeList[i]:
-                    changed = True
-                    self._activeList[i] = True
-                results.append((img, off, anc))
-            else:
-                if self._activeList[i]:
-                    changed = True
-                    self._activeList[i] = False
+                if self._imageBuffer is not None:
+                    self._imageBuffer.append((img.copy(), True))
+            
+            results.append((img, offset, just))
 
         return (results, changed)
 
@@ -194,7 +190,123 @@ class canvas(widget):
             for img, off, just in results:
                 self._place(wImage=img, offset=off, just=just)
 
+        # Always reset _newWidget flag after rendering to allow correct change detection
+        self._newWidget = False
+        
         return (self.image, changed)
+    
+    def find_widgets(self, name=None, widget_type=None):
+        """
+        Recursively search for widgets by name and/or type.
+        
+        :param name: Name of the widget to search for. Can include wildcards (*) for partial matches.
+        :type name: str
+        :param widget_type: Type of widget to search for. Can be a class, string class name, or string with wildcards.
+        :type widget_type: type or str
+        :returns: A single widget if only one match is found, or a list of widgets if multiple matches
+        :raises ValueError: If widget_type is not a valid widget class or string
+        """
+        from tinyDisplay.render.widget import widget as BaseWidget
+        
+        results = []
+        
+        def _is_valid_widget_type(type_obj):
+            """Check if the type is a valid widget class."""
+            if isinstance(type_obj, type):
+                return issubclass(type_obj, BaseWidget)
+            return False
+        
+        def _get_widget_class(type_name):
+            """Convert string class name to actual class."""
+            if '*' in type_name:
+                return None  # Wildcard type names are handled differently
+            
+            # Try to find the class in the widget hierarchy
+            for module in ['tinyDisplay.render.widget', 'tinyDisplay.render.marquee', 
+                          'tinyDisplay.render.new_marquee', 'tinyDisplay.render.collection']:
+                try:
+                    class_obj = getattr(__import__(module, fromlist=[type_name]), type_name)
+                    if _is_valid_widget_type(class_obj):
+                        return class_obj
+                except (ImportError, AttributeError):
+                    continue
+            return None
+        
+        def _type_matches(widget_obj, type_spec):
+            """Check if widget matches the type specification."""
+            if type_spec is None:
+                return True
+            
+            if isinstance(type_spec, type):
+                return isinstance(widget_obj, type_spec)
+            
+            if isinstance(type_spec, str):
+                if '*' in type_spec:
+                    # Handle wildcard type matching
+                    return fnmatch.fnmatch(widget_obj.__class__.__name__, type_spec)
+                else:
+                    # Handle exact type name matching
+                    class_obj = _get_widget_class(type_spec)
+                    if class_obj:
+                        return isinstance(widget_obj, class_obj)
+                    return False
+                
+            return False
+        
+        def _name_matches(widget_obj, name_spec):
+            """Check if widget name matches the name specification."""
+            if name_spec is None:
+                return True
+            
+            if not hasattr(widget_obj, 'name'):
+                return False
+            
+            if '*' in name_spec:
+                return fnmatch.fnmatch(widget_obj.name, name_spec)
+            return widget_obj.name == name_spec
+        
+        def _search_recursive(container_obj):
+            # For canvas objects
+            if hasattr(container_obj, '_placements'):
+                for widget_obj, _, _ in container_obj._placements:
+                    _check_widget(widget_obj)
+            
+            # For marquee and new_marquee objects
+            elif hasattr(container_obj, '_widget'):
+                _check_widget(container_obj._widget)
+            
+            # Check for any other collections of widgets
+            if hasattr(container_obj, '_widgets'):
+                if isinstance(container_obj._widgets, list):
+                    for w in container_obj._widgets:
+                        if isinstance(w, tuple) and len(w) > 0:
+                            _check_widget(w[0])  # Handle (widget, gap) tuples in stack
+                        else:
+                            _check_widget(w)
+        
+        def _check_widget(widget_obj):
+            if _type_matches(widget_obj, widget_type) and _name_matches(widget_obj, name):
+                results.append(widget_obj)
+            
+            # Recursively search inside container-type widgets
+            if isinstance(widget_obj, canvas):
+                _search_recursive(widget_obj)
+            # Check for marquee and new_marquee
+            elif (widget_obj.__class__.__module__.startswith('tinyDisplay.render.marquee') or
+                  widget_obj.__class__.__module__.startswith('tinyDisplay.render.new_marquee')):
+                _search_recursive(widget_obj)
+        
+        # Start the recursive search
+        _search_recursive(self)
+        
+        # Return appropriate result based on number of matches
+        if len(results) == 0:
+            return []
+        elif len(results) == 1:
+            return results[0]
+        else:
+            return results
+
 
 
 class stack(canvas):
@@ -519,3 +631,4 @@ for k, v in params_items:
         if arg not in NDD:
             nv.append(f"d{arg}")
     PARAMS[k] = nv
+
