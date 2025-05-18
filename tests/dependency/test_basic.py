@@ -191,6 +191,74 @@ class TestCascadingEvents:
         assert final.events_received[0].source == intermediate
 
 
+class TestDependencyQueries:
+    """Test dependency query methods like get_dependents."""
+    
+    def test_get_dependents_basic(self):
+        """Test getting dependents for an observable with a single dependent."""
+        dm = DependencyManager()
+        observable = MockObservable(dm, "source1")
+        dependent = MockDependent("dep1")
+        
+        # Before registration
+        assert not dm.get_dependents(observable)
+        
+        # After registration
+        dm.register(dependent, observable)
+        dependents = dm.get_dependents(observable)
+        assert len(dependents) == 1
+        assert dependent in dependents
+        
+    def test_get_dependents_multiple(self):
+        """Test getting dependents when there are multiple."""
+        dm = DependencyManager()
+        observable = MockObservable(dm, "source1")
+        
+        # Create and register multiple dependents
+        dependents = [MockDependent(f"dep{i}") for i in range(3)]
+        for dep in dependents:
+            dm.register(dep, observable)
+            
+        # Check all are returned
+        result = dm.get_dependents(observable)
+        assert len(result) == len(dependents)
+        assert all(dep in result for dep in dependents)
+        
+    def test_get_dependents_after_unregister(self):
+        """Test that unregistering removes a dependent from get_dependents."""
+        dm = DependencyManager()
+        observable = MockObservable(dm, "source1")
+        dep1 = MockDependent("dep1")
+        dep2 = MockDependent("dep2")
+        
+        # Register both
+        handle1 = dm.register(dep1, observable)
+        handle2 = dm.register(dep2, observable)
+        assert len(dm.get_dependents(observable)) == 2
+        
+        # Unregister one
+        dm.unregister(handle1)
+        result = dm.get_dependents(observable)
+        assert len(result) == 1
+        assert dep2 in result
+        assert dep1 not in result
+        
+    def test_get_dependents_after_clear(self):
+        """Test that clearing removes all dependents."""
+        dm = DependencyManager()
+        observable = MockObservable(dm, "source1")
+        
+        # Add some dependents
+        for i in range(3):
+            dm.register(MockDependent(f"dep{i}"), observable)
+            
+        assert len(dm.get_dependents(observable)) == 3
+        
+        # Clear and verify
+        dm.clear()
+        assert not dm.get_dependents(observable)
+
+
 class CascadingDependent(MockDependent):
     """A dependent that also raises events when it processes changes."""
     
@@ -201,11 +269,11 @@ class CascadingDependent(MockDependent):
     def process_change(self, events: List[ChangeEventProtocol]):
         """Process events and generate a new cascading event."""
         super().process_change(events)
-        
-        # Generate a cascading event
-        cascading_event = ChangeEvent(
-            event_type="cascaded",
-            source=self,
-            metadata={"original_events": len(events)}
-        )
-        self.manager.raise_event(cascading_event)
+        # Raise a new event for each received event
+        for event in events:
+            new_event = ChangeEvent(
+                event_type="cascaded",
+                source=self,
+                metadata=getattr(event, 'metadata', {})
+            )
+            self.manager.raise_event(new_event)

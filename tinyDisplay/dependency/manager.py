@@ -34,15 +34,47 @@ def get_global_manager():
 class DependencyManager:
     """Manages dependencies between objects and dispatches change events.
     
-    This class is responsible for:
-    1. Tracking dependency relationships between observables and dependents
-    2. Collecting change events from observables
-    3. Dispatching batched change events to dependents
-    4. Managing the dependency graph and handling cycles
+    The DependencyManager is the core class that handles the registration of dependencies,
+    event propagation, and change notification in a reactive programming model. It maintains
+    a directed acyclic graph (DAG) of dependencies where:
+    - Nodes represent observable objects and their dependents
+    - Edges represent "depends on" relationships (A → B means "B depends on A")
+    
+    Key Features:
+    - Automatic cycle detection and resolution
+    - Batched event processing
+    - Support for weak references to prevent memory leaks
+    - Namespacing support for isolated dependency graphs
+    - Thread-safe operations
+    
+    Example:
+        >>> manager = DependencyManager()
+        >>> 
+        >>> class DataSource:
+        ...     def __init__(self, manager):
+        ...         self.manager = manager
+        ...     def update(self, value):
+        ...         self.manager.raise_event(ChangeEvent("data_updated", self, value))
+        >>>
+        >>> class DataProcessor(ChangeProcessorProtocol):
+        ...     def process_change(self, events):
+        ...         for event in events:
+        ...             print(f"Processed: {event.data}")
+        >>>
+        >>> source = DataSource(manager)
+        >>> processor = DataProcessor()
+        >>> manager.register(processor, source)
+        >>> source.update(42)  # Will trigger processor.process_change
+        >>> manager.dispatch_events()
+        Processed: 42
     """
     
     def __init__(self):
-        """Initialize a new dependency manager."""
+        """Initialize a new dependency manager.
+        
+        Creates a new, empty dependency graph. The manager will track all
+        dependencies and handle event propagation between registered objects.
+        """
         # Mapping from observable to set of subscription handles
         self._dependencies: Dict[Any, Set[SubscriptionHandle]] = defaultdict(set)
         
@@ -128,7 +160,7 @@ class DependencyManager:
         self._reverse_dependencies[dependent].add(handle)
         
         return handle
-    
+            
     def unregister(self, handle_or_dependent: Any, target: Any = None) -> None:
         """Unregister a dependency relationship.
         
@@ -182,11 +214,30 @@ class DependencyManager:
             for handle in handles:
                 self.unregister(handle)
     
-    def raise_event(self, event: ChangeEventProtocol) -> None:
-        """Enqueue a change event for later dispatch.
+    def raise_event(self, event: ChangeEventProtocol):
+        """Raise a change event to be processed in the next dispatch cycle.
+        
+        This method queues an event for processing. The event will be delivered to all
+        registered dependents during the next call to `dispatch_events()`. Events are
+        batched and processed in the order they were raised.
         
         Args:
-            event: The change event to enqueue.
+            event: The change event to process. Must be an instance of `ChangeEvent`
+                  or implement `ChangeEventProtocol`.
+                  
+        Note:
+            Events are not processed immediately. Call `dispatch_events()` to process
+            all queued events.
+            
+        Example:
+            >>> manager = DependencyManager()
+            >>> source = object()
+            >>> manager.raise_event(ChangeEvent("data_updated", source, {"value": 42}))
+            >>> # Events are queued but not yet processed
+            >>> manager.dispatch_events()  # Now events are processed
+            
+        See Also:
+            dispatch_events: Process all queued events.
         """
         # Check if the event has a namespace
         event_namespace = getattr(event, 'namespace', None)
@@ -289,14 +340,55 @@ class DependencyManager:
                        namespace_filter: Optional[Set[str]] = None,
                        intra_tick_cascade: bool = True, 
                        delegate_to_namespaces: bool = True) -> None:
-        """Dispatch all queued events to their dependents.
+        """Process and dispatch all queued events to their registered dependents.
+        
+        This method is the core of the event processing system, responsible for:
+        1. Processing events in the order they were raised
+        2. Filtering events based on visibility and namespaces
+        3. Handling cascading events within the same tick
+        4. Delegating to namespaced managers when appropriate
+        
+        The method processes events in batches, with configurable behavior for
+        cascading events and namespace delegation. It's optimized to minimize redundant
+        processing when the visibility set hasn't changed.
         
         Args:
-            visible: Optional set of objects that are visible and should receive events.
-            namespace_filter: Optional set of namespaces to filter events by.
-            intra_tick_cascade: Whether to handle cascading events within this tick.
-            delegate_to_namespaces: Whether to delegate events to registered namespaces.
-                                   This is only relevant for the global dependency manager.
+            visible: Optional set of objects that are currently visible. If provided,
+                   only these objects will receive events, unless they are part of an
+                   active propagation chain. This is used for performance optimization
+                   in UI scenarios where only visible elements need updates.
+                   
+            namespace_filter: Optional set of namespaces to filter events by. If specified,
+                           only events matching these namespaces will be processed.
+                           This is particularly useful in multi-tenant applications.
+                           
+            intra_tick_cascade: If True (default), events raised during processing will be
+                             handled in the same tick, up to a maximum number of iterations.
+                             Set to False to process only the current event queue.
+                             
+            delegate_to_namespaces: If True (default), the global manager will delegate
+                                 events to registered namespaces. This allows for
+                                 hierarchical event processing where global events can
+                                 be handled by specific namespaces.
+        
+        Example:
+            # Basic usage
+            manager.dispatch_events()
+            
+            # With visibility filtering
+            visible_widgets = {widget1, widget2}
+            manager.dispatch_events(visible=visible_widgets)
+            
+            # Namespace-specific processing
+            manager.dispatch_events(namespace_filter={"user1"})
+            
+        Note:
+            - This method is not reentrant. Nested calls will be processed after the
+              current batch completes.
+            - Performance is optimized when the visibility set remains stable between
+              calls, as it caches the pruned dependency graph.
+            - For complex UIs, consider using visibility filtering to skip processing
+              of non-visible components.
         """
         start_time = time.time()
         
@@ -718,6 +810,40 @@ class DependencyManager:
         if self._debug_mode:
             print(f"Pruned batch dispatch: {len(events)} events to {len(affected_dependents)} dependents in {(end_time - start_time) * 1000:.2f}ms")
             
+    def get_dependents(self, observable: Any) -> Set[Any]:
+        """Get all direct dependents of an observable.
+        
+        This method returns all objects that are registered to receive change events
+        when the specified observable changes. The returned set includes only direct
+        dependents (one level deep in the dependency graph).
+        
+        Args:
+            observable: The observable object to get dependents for.
+            
+        Returns:
+            A set of dependent objects that will be notified when the observable changes.
+            Returns an empty set if the observable has no dependents.
+            
+        Example:
+            >>> manager = DependencyManager()
+            >>> source = object()
+            >>> processor1 = object()
+            >>> processor2 = object()
+            >>> manager.register(processor1, source)
+            >>> manager.register(processor2, source)
+            >>> deps = manager.get_dependents(source)
+            >>> len(deps)
+            2
+            >>> processor1 in deps and processor2 in deps
+            True
+            
+        Note:
+            This method returns only direct dependents. To get the complete set of
+            objects that might be affected by a change (including indirect dependents),
+            you would need to traverse the dependency graph.
+        """
+        return {h.dependent for h in self._dependencies.get(observable, set())}
+    
     def clear(self, namespace: Optional[str] = None) -> None:
         """Clear all dependencies or those in a specific namespace.
         
