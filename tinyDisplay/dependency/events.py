@@ -34,3 +34,28 @@ class ChangeEvent:
         # Add timestamp to metadata if not already present
         if 'timestamp' not in self.metadata:
             self.metadata['timestamp'] = self.timestamp
+
+
+class VisibilityChangeEvent(ChangeEvent):
+    """Specialized event for visibility changes.
+    
+    This event is raised when the visibility of an object changes. It extends
+    the base ChangeEvent with a boolean 'visible' field for convenience.
+    
+    Args:
+        source: The source object that raised this event.
+        visible: The new visibility state (default: True).
+        **kwargs: Additional arguments to pass to the parent class.
+    """
+    
+    def __init__(self, source: Any, visible: bool = True, **kwargs):
+        """Initialize the event with source and visibility."""
+        # Set default values for ChangeEvent
+        kwargs.setdefault('event_type', 'visibility_change')
+        
+        # Initialize the parent class
+        super().__init__(source=source, **kwargs)
+        
+        # Set our custom fields
+        self.visible = visible
+        self.metadata['visible'] = visible

@@ -13,6 +13,7 @@ import time
 from .protocols import ChangeEventProtocol, ChangeProcessorProtocol
 from .subscription import SubscriptionHandle
 from .graph import topological_sort, identify_strongly_connected_components, break_cycles
+from .events import ChangeEvent, VisibilityChangeEvent
 
 
 # Global dependency manager instance
@@ -294,6 +295,11 @@ class DependencyManager:
         This optimization creates a subgraph of the dependency graph that only
         includes dependencies that are visible or that have visible dependents.
         
+        The pruned graph preserves paths through active propagation nodes
+        (objects that implement ChangeProcessorProtocol) in the dependency chain,
+        ensuring event propagation works correctly even when some intermediate
+        objects are invisible.
+        
         Args:
             visible: Set of objects that are visible.
             
@@ -303,11 +309,11 @@ class DependencyManager:
         # Start with objects that are directly visible
         pruned_graph = {}
         visited = set()
-        processing_queue = deque(visible)
+        to_process = deque(visible)
         
-        # Traverse the dependency graph in reverse, from dependents to observables
-        while processing_queue:
-            dependent = processing_queue.popleft()
+        # First pass: Build the pruned graph starting with visible objects
+        while to_process:
+            dependent = to_process.popleft()
             
             # Skip if already processed
             if dependent in visited:
@@ -315,24 +321,55 @@ class DependencyManager:
                 
             visited.add(dependent)
             
-            # Get observables this dependent depends on
+            # Get sources this dependent depends on
             if dependent in self._reverse_dependencies:
-                observables = set()
-                
                 for handle in self._reverse_dependencies[dependent]:
                     if handle.is_valid() and handle.observable is not None:
-                        observable = handle.observable
-                        observables.add(observable)
+                        source = handle.observable
                         
-                        # Add this dependent to the pruned graph for this observable
-                        if observable not in pruned_graph:
-                            pruned_graph[observable] = set()
-                        pruned_graph[observable].add(dependent)
+                        # Add this dependent to the pruned graph for this source
+                        if source not in pruned_graph:
+                            pruned_graph[source] = set()
+                        pruned_graph[source].add(dependent)
                         
-                        # Add the observable to the processing queue to continue traversal
-                        # Only if it's not already visited
-                        if observable not in visited:
-                            processing_queue.append(observable)
+                        # Continue traversal if not already visited
+                        if source not in visited:
+                            to_process.append(source)
+        
+        # Second pass: Special handling for active propagation nodes
+        # Find all active propagators in the visible set
+        active_propagators = [obj for obj in visible if isinstance(obj, ChangeProcessorProtocol)]
+        
+        # For each active propagator, ensure its source is in the pruned graph
+        for propagator in active_propagators:
+            # Find all sources this propagator depends on
+            if propagator in self._reverse_dependencies:
+                for handle in self._reverse_dependencies[propagator]:
+                    if handle.is_valid() and handle.observable is not None:
+                        source = handle.observable
+                        
+                        # Add the source and connection to the pruned graph
+                        if source not in pruned_graph:
+                            pruned_graph[source] = set()
+                        pruned_graph[source].add(propagator)
+                        
+                        # If this source is also an active propagator's target,
+                        # we need to ensure its sources are included too
+                        for other_handle in self._dependencies.get(source, set()):
+                            if not other_handle.is_valid():
+                                continue
+                                
+                            if other_handle.dependent in active_propagators and other_handle.dependent in visible:
+                                # This forms a chain of active propagation
+                                other_propagator = other_handle.dependent
+                                # Make sure all sources for other_propagator are in the graph
+                                if other_propagator in self._reverse_dependencies:
+                                    for another_handle in self._reverse_dependencies[other_propagator]:
+                                        if another_handle.is_valid() and another_handle.observable is not None:
+                                            another_source = another_handle.observable
+                                            if another_source not in pruned_graph:
+                                                pruned_graph[another_source] = set()
+                                            pruned_graph[another_source].add(other_propagator)
         
         return pruned_graph
     
@@ -390,16 +427,27 @@ class DependencyManager:
             - For complex UIs, consider using visibility filtering to skip processing
               of non-visible components.
         """
+        # Flag that we're processing the current batch to direct events to the secondary queue
+        self._processing_batch = True
+        
         start_time = time.time()
         
-        # OPTIMIZATION: Update visibility cache if visibility has changed
-        if visible is not None and visible != self._last_visible_set:
-            self._last_visible_set = visible
-            # Compute pruned dependency graph based on new visibility
-            self._pruned_dependency_cache = self.compute_pruned_dependencies(visible)
+        # Cache visibility pruning - if the visible set is the same, reuse previous pruning
+        pruned_graph = None
+        if visible is not None:         
+            # If visible set is unchanged, reuse pruned dependencies
+            if self._last_visible_set == visible and self._pruned_dependency_cache:
+                pruned_graph = self._pruned_dependency_cache
+            else:
+                # Otherwise compute and cache new pruned dependencies
+                self._last_visible_set = visible.copy() if visible else None
+                if visible:  # Only prune if there's a visible set
+                    pruned_graph = self.compute_pruned_dependencies(visible)
+                    self._pruned_dependency_cache = pruned_graph
         
-        # Collect all events to dispatch based on namespace filtering
-        events_to_dispatch = []
+        # Collect events to dispatch, separating visibility change events
+        regular_events = []
+        visibility_events = []
         
         # Get current namespace context, if any
         current_namespace = None
@@ -415,7 +463,11 @@ class DependencyManager:
             if not current_namespace:
                 # If we're dispatching in global scope, process all global events
                 # and clear the global queue
-                events_to_dispatch.extend(global_events)
+                for event in global_events:
+                    if isinstance(event, VisibilityChangeEvent):
+                        visibility_events.append(event)
+                    else:
+                        regular_events.append(event)
                 self._primary_queue.clear()
             else:
                 # If we're dispatching in a namespace, only process global events
@@ -431,7 +483,10 @@ class DependencyManager:
                     
                     # If this namespace hasn't processed this event yet, include it
                     if current_namespace not in self._processed_events.get(event_id, set()):
-                        events_to_dispatch.append(event)
+                        if isinstance(event, VisibilityChangeEvent):
+                            visibility_events.append(event)
+                        else:
+                            regular_events.append(event)
                         processed_global_events.append(event)
                         # Mark this event as processed by this namespace
                         self._processed_events[event_id].add(current_namespace)
@@ -443,7 +498,11 @@ class DependencyManager:
                 if ns_id in self._namespace_queues and self._namespace_queues[ns_id]:
                     ns_events = list(self._namespace_queues[ns_id])
                     self._namespace_queues[ns_id].clear()
-                    events_to_dispatch.extend(ns_events)
+                    for event in ns_events:
+                        if isinstance(event, VisibilityChangeEvent):
+                            visibility_events.append(event)
+                        else:
+                            regular_events.append(event)
         elif not self._delegating_to_namespaces:
             # If no namespace filter and this is a direct call (not delegation),
             # include events from all namespaces
@@ -451,20 +510,29 @@ class DependencyManager:
                 if queue:
                     ns_events = list(queue)
                     queue.clear()
-                    events_to_dispatch.extend(ns_events)
+                    for event in ns_events:
+                        if isinstance(event, VisibilityChangeEvent):
+                            visibility_events.append(event)
+                        else:
+                            regular_events.append(event)
             
             # Also clean up the processed events tracking when doing a full dispatch
             self._processed_events.clear()
         
-        # Dispatch the collected events
-        if events_to_dispatch:
+        # First process visibility change events without visibility filtering
+        # This ensures visibility state is properly propagated regardless of current visibility
+        if visibility_events:
+            self._dispatch_events_batch(visibility_events, None, namespace_filter)  # No visibility filtering
+            
+        # Then dispatch regular events with normal visibility filtering
+        if regular_events:
             # OPTIMIZATION: Use the pruned dependency graph if visibility is enabled
             if visible is not None and self._pruned_dependency_cache:
                 # If we have a pruned dependency graph, use it for efficient dispatch
-                self._dispatch_events_batch_pruned(events_to_dispatch, self._pruned_dependency_cache, namespace_filter)
+                self._dispatch_events_batch_pruned(regular_events, self._pruned_dependency_cache, namespace_filter)
             else:
                 # Otherwise, use the standard dispatch method
-                self._dispatch_events_batch(events_to_dispatch, visible, namespace_filter)
+                self._dispatch_events_batch(regular_events, visible, namespace_filter)
         
         # Update performance metrics
         end_time = time.time()
@@ -473,18 +541,31 @@ class DependencyManager:
         self._perf_metrics['dispatch_count'] += 1
         
         if self._debug_mode:
-            print(f"Dispatch took {dispatch_time * 1000:.2f}ms for {len(events_to_dispatch)} events")
+            print(f"Dispatch took {dispatch_time * 1000:.2f}ms for {len(regular_events) + len(visibility_events)} events")
         
         # Handle cascading events if enabled
         if intra_tick_cascade and self._secondary_queue:
             iterations = 0
             while self._secondary_queue and iterations < self._max_iterations:
-                # Process secondary queue
-                cascading_events = list(self._secondary_queue)
+                # Process secondary queue, separating visibility events
+                cascading_regular = []
+                cascading_visibility = []
+                
+                for event in self._secondary_queue:
+                    if isinstance(event, VisibilityChangeEvent):
+                        cascading_visibility.append(event)
+                    else:
+                        cascading_regular.append(event)
+                
                 self._secondary_queue.clear()
                 
-                # Dispatch cascading events
-                self._dispatch_events_batch(cascading_events, visible, namespace_filter)
+                # Process visibility events first without filtering
+                if cascading_visibility:
+                    self._dispatch_events_batch(cascading_visibility, None, namespace_filter)
+                
+                # Then process regular events with visibility filtering
+                if cascading_regular:
+                    self._dispatch_events_batch(cascading_regular, visible, namespace_filter)
                 
                 iterations += 1
                 
@@ -526,6 +607,13 @@ class DependencyManager:
             visible: Optional set of objects that are visible and should receive events.
             namespace_filter: Optional set of namespaces to filter events by.
         """
+        print(f"\n=== DISPATCH BATCH: {len(events)} events with visible={visible is not None})")
+        # Debug visibility events
+        visibility_events = [e for e in events if isinstance(e, VisibilityChangeEvent)]
+        if visibility_events:
+            print(f"  Visibility events in batch: {len(visibility_events)}")
+            for event in visibility_events:
+                print(f"  - Source: {event.source}, Name: {getattr(event.source, 'name', '<no name>')}, Visible: {event.visible}")
         start_time = time.time()
         
         if not events:
@@ -593,6 +681,26 @@ class DependencyManager:
             # Get all valid handles for this source
             handles = [h for h in self._dependencies[source] if h.is_valid()]
             
+            # Handle visibility change events specially
+            is_visibility_change = any(isinstance(e, VisibilityChangeEvent) for e in events_by_source[source])
+            
+            if is_visibility_change:
+                print(f"  Found visibility change event for source: {source}")
+                print(f"  Source name: {getattr(source, 'name', '<no name>')}")
+                print(f"  Dependents for this source: {len(handles)} handle(s)")
+            
+            # If this is a visibility change event, we want to process it regardless of visibility
+            # to ensure visibility state is properly updated
+            bypass_visibility = is_visibility_change
+            
+            # For visibility changes, we need to ensure the source is in the visible set
+            # so it can update its dependents
+            if is_visibility_change and visible is not None and source not in visible:
+                print(f"  Adding source to visible set for visibility change event")
+                # Add the source to the visible set for this event
+                visible = set(visible) | {source}
+                print(f"  New visible set size: {len(visible)}")
+            
             # Filter by namespace and visibility
             valid_dependents = []
             for handle in handles:
@@ -600,19 +708,27 @@ class DependencyManager:
                 if not handle.is_valid():
                     # Clean up invalid handles
                     self.unregister(handle)
+                    if is_visibility_change:
+                        print(f"  Skipping invalid handle for visibility change")
                     continue
-                
+                    
                 if namespace_filter and handle.namespace not in namespace_filter:
+                    if is_visibility_change:
+                        print(f"  Skipping handle due to namespace filter")
+                    continue
+                    
+                # Skip if source is not in the visible set (unless it's a visibility change event)
+                if not bypass_visibility and visible is not None and source not in visible:
+                    if is_visibility_change:
+                        print(f"  SHOULD NOT HAPPEN: Skipping visibility event due to source not in visible set")
                     continue
                 
-                dependent = handle.dependent
-                
-                # Skip if not visible (if visibility filtering is enabled)
-                if visible is not None and dependent not in visible:
-                    continue
-                
-                valid_dependents.append(dependent)
-                affected_dependents.add(dependent)
+                if is_visibility_change:
+                    print(f"  Adding dependent: {handle.dependent} to valid dependents")
+                    print(f"  Dependent name: {getattr(handle.dependent, 'name', '<no name>')}")
+                    
+                valid_dependents.append(handle.dependent)
+                affected_dependents.add(handle.dependent)
             
             # Add to subgraph
             for dependent in valid_dependents:
@@ -653,6 +769,10 @@ class DependencyManager:
                 # Add events to each dependent's batch
                 for dependent in reverse_subgraph[source]:
                     for event in source_events:
+                        if isinstance(event, VisibilityChangeEvent):
+                            print(f"  Adding visibility event to dependent: {dependent}")
+                            print(f"  Dependent name: {getattr(dependent, 'name', '<no name>')}")
+                        # Add to dependent's event batch
                         dependent_events[dependent].append(event)
             
             # Deliver events to each dependent in topological order

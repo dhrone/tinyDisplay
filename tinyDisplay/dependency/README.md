@@ -189,6 +189,52 @@ with manager.temporary_subscription(processor, source):
 - **Event Deduplication**: Duplicate events in the same tick are automatically deduplicated
 - **Lazy Evaluation**: Dependencies are only evaluated when needed
 
+## Visibility State Management
+
+### Handling Visibility Changes
+
+When using the visibility system, it's important to understand how events are handled when objects transition between visible and invisible states:
+
+1. **Invisible Objects**: 
+   - Objects that are invisible will not receive events while in that state
+   - Events raised while an object is invisible are not queued or buffered
+
+2. **Becoming Visible**:
+   - When an object transitions from invisible to visible, it should explicitly check and update its state
+   - The object should request or recompute any data it needs to display correctly
+   - This is typically done in the `process_change` method when handling a `VisibilityChangeEvent`
+
+3. **Best Practices**:
+   - Always handle `VisibilityChangeEvent` in your change processors
+   - When becoming visible, validate that all dependent data is up to date
+   - Consider implementing a `refresh()` method that can be called when visibility is restored
+
+Example:
+
+```python
+class MyVisibleComponent(ChangeProcessorProtocol):
+    def __init__(self, data_source):
+        self.data_source = data_source
+        self.last_data = None
+        self.is_visible = True
+    
+    def process_change(self, events):
+        for event in events:
+            if isinstance(event, VisibilityChangeEvent):
+                self.is_visible = event.visible
+                if self.is_visible:
+                    # We just became visible - refresh our data
+                    self.refresh()
+            elif self.is_visible:
+                # Only process regular events if we're visible
+                self.handle_event(event)
+    
+    def refresh(self):
+        """Refresh data when becoming visible"""
+        self.last_data = self.data_source.get_latest_data()
+        # Trigger UI update or other necessary actions
+```
+
 ## Troubleshooting
 
 ### Common Issues
