@@ -22,7 +22,6 @@ The `RenderOrchestrator` class serves as the master controller for a tinyDisplay
 2. **Rendering Execution**: Trigger the render process and collect the resulting image
 3. **Parallel Processing**: Utilize threads or multiprocessing to generate images ahead of time
 4. **Render Queue Management**: Maintain an ordered queue of pre-rendered images
-5. **State Change Detection**: Monitor system changes that invalidate pre-rendered images
 
 ### Architecture
 
@@ -32,7 +31,7 @@ The `RenderOrchestrator` class serves as the master controller for a tinyDisplay
 ├─────────────────────────────────┤
 │ - dependency_manager            │
 │ - dataset                       │
-│ - scene_graph                   │
+│ - display_canvas                │
 │ - render_queue                  │
 │ - worker_pool                   │
 ├─────────────────────────────────┤
@@ -58,7 +57,6 @@ The `RenderOrchestrator` class serves as the master controller for a tinyDisplay
 #### Render Queue
 - Tick-ordered queue of pre-rendered images
 - Configurable maximum size
-- FIFO structure with timestamp/tick information
 - Thread-safe implementation for concurrent access
 
 #### Worker Pool
@@ -66,6 +64,10 @@ The `RenderOrchestrator` class serves as the master controller for a tinyDisplay
 - Workers render images for future ticks
 - Configurable number of workers based on system capabilities
 - Mechanism to terminate workers when necessary
+
+#### Display Canvas
+- The display canvas is the image that is sent to the display
+- It is updated with the rendered image from the render queue
 
 ### State Invalidation Strategy
 
@@ -82,11 +84,11 @@ The DependencyManagement system's event filtering will help ensure that only rel
 
 ```python
 class RenderOrchestrator:
-    def __init__(self, dependency_manager, dataset, scene_graph, max_queue_size=10):
+    def __init__(self, dependency_manager, dataset, display_canvas, max_queue_size=10):
         # Take ownership of system components
         self.dependency_manager = dependency_manager
         self.dataset = dataset
-        self.scene_graph = scene_graph
+        self.display_canvas = display_canvas
         
         self.render_queue = Queue(maxsize=max_queue_size)
         self.worker_pool = None
