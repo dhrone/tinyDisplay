@@ -148,9 +148,13 @@ class canvas(widget):
 
         changed = False
         results = []
-        for widget, offset, just in self._placements:
+
+        for i, p in enumerate(self._placements):
+            widget, offset, just = p
+            
             if widget._activeWhen is not None:
                 try:
+                    widget._eval('_activeWhen')
                     if not widget._activeWhen:
                         continue
                 except Exception as ex:
@@ -173,10 +177,18 @@ class canvas(widget):
                 self._logger.debug(f"Canvas {self.name} widget {widget.name} updated. "
                                  f"force={force}, newData={newData}")
                 changed = True
-                if self._imageBuffer is not None:
-                    self._imageBuffer.append((img.copy(), True))
-            
-            results.append((img, offset, just))
+
+            # Only display active widgets
+            if widget.active:
+                if not self._activeList[i]:
+                    changed = True
+                    self._activeList[i] = True
+                results.append((img, offset, just))
+            else:
+                if self._activeList[i]:
+                    changed = True
+                    self._activeList[i] = False
+
 
         return (results, changed)
 

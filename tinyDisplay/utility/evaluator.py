@@ -128,7 +128,6 @@ class evaluator:
                 
             for dep in depends_on:
                 variable_registry.register_variable_to_variable_dependency(ds, dep)
-                self._logger.debug(f"Registered dependency: {getattr(ds, 'name', ds)} depends on {getattr(dep, 'name', dep)}")
         
         return ds
 
@@ -155,11 +154,9 @@ class evaluator:
         :returns: True if any of the values have changed
         :rtype: bool
         """
-        self._logger.debug("Starting evalAll")
         changed = False
         # Direct dictionary access for better performance
         statements = self._statements.values()
-        self._logger.debug(f"Number of statements to evaluate: {len(statements)}")
         
         # Track which variables have been evaluated in this cycle
         evaluated = set()
@@ -170,11 +167,9 @@ class evaluator:
                 return  # Already evaluated in this cycle
                 
             dv_name = getattr(dv, 'name', str(dv))
-            self._logger.debug(f"Evaluating dependencies for {dv_name}")
                 
             # First, find all variables this one depends on and evaluate them
             dependencies = variable_registry.variable_to_fields.get(dv, set())
-            self._logger.debug(f"Field dependencies for {dv_name}: {dependencies}")
             
             # Check variable-to-variable dependencies
             var_dependencies = []
@@ -182,48 +177,39 @@ class evaluator:
                 if dv in variable_registry.variable_dependencies[dep_var]:
                     # This variable depends on dep_var, so evaluate dep_var first
                     dep_name = getattr(dep_var, 'name', str(dep_var))
-                    self._logger.debug(f"{dv_name} depends on variable {dep_name}")
                     var_dependencies.append(dep_var)
                     if dep_var in self._statements.values():
                         evaluate_with_dependencies(dep_var)
-            
-            self._logger.debug(f"Variable dependencies for {dv_name}: {[getattr(v, 'name', str(v)) for v in var_dependencies]}")
             
             # Now evaluate this variable
             try:
                 # Only evaluate if marked for update or static
                 needs_update = hasattr(dv, "_needs_update") and dv._needs_update
                 is_static = getattr(dv, "static", False)
-                self._logger.debug(f"Variable {dv_name}: needs_update={needs_update}, static={is_static}")
                 
                 if needs_update or is_static:
                     prev_value = getattr(dv, "prevValue", "undefined")
-                    self._logger.debug(f"Evaluating {dv_name} (previous value: {prev_value})")
                     dv.eval()
                     # Direct attribute access instead of property for better performance
                     if hasattr(dv, "_changed") and dv._changed:
                         nonlocal changed
                         changed = True
-                        self._logger.debug(f"Value changed for {dv_name}: {prev_value} -> {getattr(dv, 'prevValue', 'undefined')}")
                         
                         # Notify any variables that depend on this one
-                        self._logger.debug(f"Notifying dependents of change to {dv_name}")
                         if hasattr(dv, 'name'):
                             variable_registry.notify_field_change(dv.name)
                 else:
-                    self._logger.debug(f"Skipping evaluation of {dv_name} (already evaluated or no update needed)")
+                    pass
                 
                 # Mark as evaluated in this cycle
                 evaluated.add(dv)
-            except Exception as e:
-                # Log the error but continue
-                self._logger.error(f"Error evaluating {dv_name}: {str(e)}")
+            except Exception:  # Continue to next variable on error
+                pass
         
         # Process all statements
         for dv in statements:
             evaluate_with_dependencies(dv)
         
-        self._logger.debug(f"Completed evalAll, changed={changed}, evaluated {len(evaluated)} variables")
         return changed
 
     def addValidator(self, name, func):
@@ -321,6 +307,7 @@ class dynamicValue:
     _allowedBuiltIns = {
         k: getattr(builtins, k)
         for k in [
+            "abs",
             "bin",
             "bool",
             "bytes",
@@ -361,7 +348,20 @@ class dynamicValue:
         "__contains__",
         "__len__",
         "get",
+        "lower",
+        "upper",
+        "split",
+        "capitalize",
+        "title",
+        "find",
+        "strftime",
+        "gmtime",
+        "localtime",
+        "timezone",
+        "monotonic",
+        "items",
         "keys",
+        "values",
         "format",
     ]
 
@@ -421,15 +421,9 @@ class dynamicValue:
     def _register_field_dependencies(self):
         """Register field-level dependencies with the variable registry."""
         if isinstance(self.source, str):
-            self._logger.debug(f"Parsing dependencies from source: '{self.source}' for variable {self.name}")
-            # Use the advanced parser from variable_registry
             field_deps = variable_registry.parse_dependencies_from_expression(self.source)
-            self._logger.debug(f"Found {len(field_deps)} potential dependencies for {self.name}: {field_deps}")
             for field_path in field_deps:
-                self._logger.debug(f"Registering field dependency: {self.name} -> {field_path}")
                 variable_registry.register_variable_dependency(self, field_path)
-        else:
-            self._logger.debug(f"Source for {self.name} is not a string, cannot parse dependencies")
     
     def _register_dynamic_value_dependencies(self, depends_on):
         """Register dependencies on other dynamic values.
@@ -444,7 +438,6 @@ class dynamicValue:
         # Register each dependency
         for dep in depends_on:
             variable_registry.register_variable_to_variable_dependency(self, dep)
-            self._logger.debug(f"Registered dependency: {self.name} depends on {getattr(dep, 'name', dep)}")
 
     def store(self, dbName=None, key=None, value=None, when=True):
         """
@@ -488,7 +481,6 @@ class dynamicValue:
     def mark_for_update(self):
         """Mark this variable as needing re-evaluation."""
         self._needs_update = True
-        self._logger.debug(f"Marking {self.name} for update")
 
     def compile(self, source=None, default=None, validator=None, dynamic=True):
         """
@@ -595,32 +587,24 @@ class dynamicValue:
         :raises ValidationError: If validator fails.
         """
         dv_name = self.name if hasattr(self, 'name') else f"at 0x{id(self)}"
-        self._logger.debug(f"eval() called for {dv_name}")
         
         # Check if re-evaluation is needed
-        if not self._needs_update and not self.static and hasattr(self, "prevValue"):
-            # Skip re-evaluation - return cached value
-            self._logger.debug(f"Skipping re-evaluation for {dv_name} (not marked for update)")
-            return self.prevValue
+        # if not self._needs_update and not self.static and hasattr(self, "prevValue"):
+        #     return self.prevValue
             
         from tinyDisplay import globalVars
         
-        self._logger.debug(f"Evaluating {dv_name}, needs_update={getattr(self, '_needs_update', 'undefined')}, static={getattr(self, 'static', 'undefined')}")
-
         try:
             # Save old value for change detection
             oldValue = getattr(self, "prevValue", None)
-            self._logger.debug(f"Current value of {dv_name}: {oldValue}")
 
             # If not yet compiled, source will be returned
             try:
                 if self.func is None:
-                    self._logger.debug(f"{dv_name} has no compiled function, returning source")
                     newValue = self.source
                 else:
                     # Create a namespace from the dataset and the locals
                     namespace = ChainMap(self._localDataset, self._dataset)
-                    self._logger.debug(f"Created namespace for {dv_name}, dataset keys: {list(self._dataset.keys()) if hasattr(self._dataset, 'keys') else 'unknown'}")
                     
                     # Add dynamicValues from the evaluator to the namespace
                     if hasattr(self, "_dataset") and hasattr(self._dataset, "_dV"):
@@ -629,11 +613,8 @@ class dynamicValue:
                         for name, dv in statements.items():
                             if isinstance(name, str) and dv is not self:  # Avoid self-references
                                 namespace[name] = dv
-                        self._logger.debug(f"Added {len(statements)} dynamicValues to namespace")
                     
-                    self._logger.debug(f"Evaluating function for {dv_name} with source: {getattr(self, 'source', 'unknown')}")
                     newValue = self.func(namespace)
-                    self._logger.debug(f"Function for {dv_name} returned: {newValue}")
             except (NameError, AttributeError, TypeError, KeyError) as ex:
                 message = str(ex)
                 # Deal with SyntaxError
@@ -642,18 +623,12 @@ class dynamicValue:
                 ):
                     message += f" at line {ex.lineno}"
                 if self.default is not None:
-                    self._logger.debug(
-                        f"Error [{ex.__class__.__name__}] evaluating {dv_name}: {message} using default of {self.default}"
-                    )
                     newValue = self.default
                 elif self._debug or globalVars.__DEBUG__:
                     raise EvaluationError(
                         f"Error [{ex.__class__.__name__}] evaluating {dv_name} with '{self.source}': {message}"
                     )
                 else:
-                    self._logger.debug(
-                        f"Error [{ex.__class__.__name__}] evaluating {dv_name} with '{self.source}': {message}"
-                    )
                     return oldValue
             except Exception as ex:
                 message = str(ex)
@@ -662,36 +637,24 @@ class dynamicValue:
                 ):
                     message += f" at line {ex.lineno}"
                 if self.default is not None:
-                    self._logger.debug(
-                        f"Error [{ex.__class__.__name__}] evaluating {dv_name} with '{self.source}': {message} using default of {self.default}"
-                    )
                     newValue = self.default
                 elif self._debug or globalVars.__DEBUG__:
                     raise EvaluationError(
                         f"Error [{ex.__class__.__name__}] evaluating {dv_name} with '{self.source}': {message}"
                     )
                 else:
-                    self._logger.debug(
-                        f"Error [{ex.__class__.__name__}] evaluating {dv_name} with '{self.source}': {message}"
-                    )
                     return oldValue
 
             # Validate if necessary
             try:
                 if self.validator is not None and not self.validator(newValue):
                     if self.default is not None:
-                        self._logger.debug(
-                            f"Validation failed for {dv_name}: {newValue} using default of {self.default}"
-                        )
                         newValue = self.default
                     elif self._debug or globalVars.__DEBUG__:
                         raise ValidationError(
                             f"Validation failed for {dv_name}: {newValue}"
                         )
                     else:
-                        self._logger.debug(
-                            f"Validation failed for {dv_name}: {newValue}"
-                        )
                         return oldValue
             except AttributeError:
                 # self.validator was None
@@ -699,14 +662,12 @@ class dynamicValue:
 
             # Check if value has changed
             self._changed = newValue != oldValue
-            self._logger.debug(f"Value for {dv_name}: old={oldValue}, new={newValue}, changed={self._changed}")
 
             # Store previous value (current becomes previous)
             self.prevValue = newValue
 
             # Mark as evaluated
             self._needs_update = False
-            self._logger.debug(f"Completed evaluation of {dv_name}, needs_update={self._needs_update}")
             
             return newValue
         except Exception as ex:
@@ -716,10 +677,7 @@ class dynamicValue:
             # Set _changed flag
             self._changed = False
             
-            # Log the error
-            self._logger.error(f"Exception during eval of {dv_name}: {str(ex)}")
-            
-            # re-raise exception
+            # Re-raise the exception
             raise
 
     @property
@@ -776,6 +734,4 @@ class dynamicValue:
         """
         for var in other_variables:
             variable_registry.register_variable_to_variable_dependency(self, var)
-            self._logger.debug(f"Registered explicit dependency: {self.name} depends on {getattr(var, 'name', var)}")
-        
         return self  # Enable method chaining 

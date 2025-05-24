@@ -36,12 +36,14 @@ from tinyDisplay.utility import (
 )
 from tinyDisplay.utility.evaluator import dynamicValue
 from tinyDisplay.utility.dynamic import dynamic, dependency_registry
+from tinyDisplay.dependency.manager import get_global_manager
+from tinyDisplay.dependency.protocols import ChangeProcessorProtocol, ChangeEventProtocol
 
 
 # from IPython.core.debugger import set_trace
 
 
-class widget(metaclass=abc.ABCMeta):
+class widget(ChangeProcessorProtocol, metaclass=abc.ABCMeta):
     """
     Base class for all widgets.
 
@@ -124,6 +126,10 @@ class widget(metaclass=abc.ABCMeta):
 
         # Initialize logging system
         self._logger = logging.getLogger("tinyDisplay")
+        
+        # Initialize dependency management
+        self._dependency_manager = get_global_manager()
+        self._dependencies = set()  # Track dependencies for cleanup
 
         # Image Cache
         self._cache = {}  # Currently only used by image widget
@@ -383,19 +389,18 @@ class widget(metaclass=abc.ABCMeta):
 
     def _computeLocalDB(self):
         """Compute the local database for the widget."""
-        wdb = {
-            "name": self.name,
-            "just": self.just,
-        }
+        wdb = {}
+        pdb = {}
 
         # Use direct dictionary access to avoid recursion
         if "_size" in self.__dict__:
             wdb["size"] = self._size
-        elif "image" in self.__dict__ and hasattr(self.image, "size"):
-            wdb["size"] = self.image.size
+        if "_name" in self.__dict__:
+            wdb["name"] = self._name
+        if "_just" in self.__dict__:
+            wdb["just"] = self._just
 
         # Use direct dictionary access to check for parent
-        pdb = {}
         if "_parent" in self.__dict__ and self._parent is not None:
             pdb = {
                 "size": self._parent.size,
@@ -529,14 +534,12 @@ class widget(metaclass=abc.ABCMeta):
                     else self._currentDuration - 1
                 )
             if self._minDuration is not None:
-                self._currentMinDuration = self._currentMinDuration - 1
+                self._currentMinDuration -= 1
             if (
                 self._coolingPeriod is not None
                 and self._currentCoolingPeriod > 0
             ):
-                self._currentCoolingPeriod = self._coolingPeriod = (
-                    self._currentCoolingPeriod - 1
-                )
+                self._currentCoolingPeriod -= 1
 
     def resetMovement(self):
         """Reset widget back to starting position."""
@@ -681,12 +684,14 @@ class widget(metaclass=abc.ABCMeta):
 
         try:
             # Add debug logging for newData propagation
-            if newData:
-                self._logger.debug(f"Widget {self.name} render called with newData=True. "
-                                 f"force={force}, nd={nd}, _needs_update={getattr(self, '_needs_update', False)}")
+            if newData or nd:
+                self._logger.debug(f"Widget {self.name} render called with newData={newData}, nd={nd}. "
+                                 f"force={force}, _needs_update={getattr(self, '_needs_update', False)}")
             
+            # Only pass newData if it was explicitly set to True
+            # Don't combine with nd to prevent continuous re-renders
             img, changed = self._render(
-                force=force, tick=tick, move=move, newData=nd or newData
+                force=force, tick=tick, move=move, newData=newData
             )
             # If any trim is selected, perform trim if image has changed
             if self._trim is not None and changed:
@@ -932,6 +937,35 @@ class widget(metaclass=abc.ABCMeta):
     def mark_for_update(self):
         """Mark this widget as needing update on next render cycle."""
         self._needs_update = True
+        
+    def add_dependency(self, dependency):
+        """Add a dependency to this widget.
+        
+        Args:
+            dependency: The object this widget depends on.
+        """
+        if dependency not in self._dependencies:
+            self._dependency_manager.register(self, dependency)
+            self._dependencies.add(dependency)
+    
+    def remove_dependency(self, dependency):
+        """Remove a dependency from this widget.
+        
+        Args:
+            dependency: The dependency to remove.
+        """
+        if dependency in self._dependencies:
+            self._dependency_manager.unregister(self, dependency)
+            self._dependencies.remove(dependency)
+    
+    def clear_dependencies(self):
+        """Remove all dependencies from this widget."""
+        for dep in list(self._dependencies):
+            self.remove_dependency(dep)
+    
+    def __del__(self):
+        """Clean up resources when widget is destroyed."""
+        self.clear_dependencies()
         
         # Propagate to parent if exists
         if hasattr(self, "_parent") and self._parent is not None:

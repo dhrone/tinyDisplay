@@ -103,6 +103,15 @@ class dataset:
 
         # Initialize prev dataset
         self._prevDS = {}
+        
+        # Dictionary to store timestamps of database updates
+        self._timestamps = {}
+        
+        # Dictionary to store hash values of databases and datasets
+        self._hashes = {}
+        
+        # Initialize Zobrist hashing tables
+        self._init_zobrist_tables()
 
         # If data was provided during initialization, update the state of the dataset with it
         if dataset:
@@ -564,8 +573,19 @@ class dataset:
         changed_fields = []
         field_paths = []  # Store the full field paths for notification
 
-        # Add timestamp to update
-        update["__timestamp__"] = time.time() - self._startedAt
+        # Track timestamp in dedicated member variable instead of in the update
+        current_time = time.time() - self._startedAt
+        if dbName not in self._timestamps:
+            self._timestamps[dbName] = current_time
+        else:
+            self._timestamps[dbName] = current_time
+            
+        # Store old values for hash updates
+        old_values = {}
+        if dbName in self._dataset:
+            for key in update:
+                if key in self._dataset[dbName]:
+                    old_values[key] = self._dataset[dbName][key]
 
         update = self.validateUpdate(dbName, update)
 
@@ -625,6 +645,9 @@ class dataset:
         self.__dict__[dbName] = db
         self._dataset[dbName] = db
         self._ringBuffer.append({dbName: update})
+        
+        # Update hash value for this database using Zobrist hashing
+        self._update_hash_zobrist(dbName, update, old_values)
 
         # Notify dependent widgets about the data change (traditional way)
         dependency_registry.notify_data_change(dbName)
@@ -830,4 +853,275 @@ class dataset:
             # Return the previous value of 'title' from the 'db' database
             "prev.db['title']"
         """
-        return self._PrevData(self._prevDS) 
+        return self._PrevData(self._prevDS)
+        
+    def _init_zobrist_tables(self):
+        """
+        Initialize Zobrist hashing tables with random 128-bit values.
+        Uses a fixed bit pattern for reproducibility.
+        """
+        # Use fixed values for complete determinism across instances
+        base_bytes = bytes([i % 256 for i in range(16)])
+        
+        # Initialize table for database names
+        self._db_name_table = {}
+        
+        # Initialize table for keys
+        self._key_table = {}
+        
+        # Initialize table for primitive values (types and common values)
+        self._type_table = {
+            'int': self._hash_bytes(base_bytes, b'int'),
+            'float': self._hash_bytes(base_bytes, b'float'),
+            'str': self._hash_bytes(base_bytes, b'str'),
+            'bool': self._hash_bytes(base_bytes, b'bool'),
+            'dict': self._hash_bytes(base_bytes, b'dict'),
+            'list': self._hash_bytes(base_bytes, b'list'),
+            'tuple': self._hash_bytes(base_bytes, b'tuple'),
+            'set': self._hash_bytes(base_bytes, b'set'),
+            'None': self._hash_bytes(base_bytes, b'None'),
+        }
+        
+        # Special values table for common values
+        self._value_table = {
+            # Boolean values
+            True: self._hash_bytes(base_bytes, b'True'),
+            False: self._hash_bytes(base_bytes, b'False'),
+            # None value
+            None: self._hash_bytes(base_bytes, b'None_val'),
+            # Common numeric values
+            0: self._hash_bytes(base_bytes, b'int_0'),
+            1: self._hash_bytes(base_bytes, b'int_1'),
+            -1: self._hash_bytes(base_bytes, b'int_-1'),
+            # Empty collections
+            "": self._hash_bytes(base_bytes, b'empty_str'),
+            (): self._hash_bytes(base_bytes, b'empty_tuple'),
+            frozenset(): self._hash_bytes(base_bytes, b'empty_frozenset'),
+        }
+        
+    def _hash_bytes(self, base, salt):
+        """
+        Generate a deterministic 16-byte hash from a base and salt.
+        
+        Args:
+            base: Base bytes to start with
+            salt: Salt bytes to mix in
+            
+        Returns:
+            A 16-byte hash value
+        """
+        import hashlib
+        md5 = hashlib.md5(base + salt)
+        return md5.digest()
+    
+    def _get_hash_for_value(self, value):
+        """
+        Get a zobrist hash for any value.
+        
+        Args:
+            value: The value to hash
+            
+        Returns:
+            A 128-bit hash as bytes
+        """
+        import hashlib
+        import pickle
+        import struct
+        
+        # Check if it's a common value in our table (only for hashable types)
+        if isinstance(value, (bool, int, float, str, type(None), tuple, frozenset)):
+            if value in self._value_table:
+                return self._value_table[value]
+        
+        # Generate hash based on type
+        value_type = type(value).__name__
+        if value_type in self._type_table:
+            type_hash = self._type_table[value_type]
+        else:
+            # Use a default hash for unknown types
+            type_hash = self._type_table['None']
+        
+        # For strings, numbers, and other simple types, hash the value
+        if isinstance(value, (str, int, float, bool, type(None))):
+            # Create a hash of the actual value
+            value_bytes = str(value).encode('utf-8')
+            value_md5 = hashlib.md5(value_bytes).digest()
+            
+            # XOR the type hash with the value hash
+            return bytes(a ^ b for a, b in zip(type_hash, value_md5))
+        elif isinstance(value, (list, tuple)):
+            # For lists and tuples, start with the type hash
+            result = type_hash
+            
+            # XOR with hashes of all elements
+            for i, item in enumerate(value):
+                item_hash = self._get_hash_for_value(item)
+                # XOR position with item hash to account for order
+                pos_bytes = struct.pack("<Q", i % 1000)[:8] + b'\x00' * 8  # Convert position to bytes
+                pos_item_hash = bytes(a ^ b for a, b in zip(pos_bytes, item_hash))
+                result = bytes(a ^ b for a, b in zip(result, pos_item_hash))
+            return result
+        elif isinstance(value, dict):
+            # For dictionaries, start with the type hash
+            result = type_hash
+            
+            # Sort keys for deterministic hashing
+            for key in sorted(value.keys()):
+                # Get key hash
+                if key not in self._key_table:
+                    # Use deterministic method to generate key hash
+                    key_bytes = str(key).encode('utf-8')
+                    self._key_table[key] = self._hash_bytes(key_bytes, b'key')
+                key_hash = self._key_table[key]
+                
+                # Get value hash
+                value_hash = self._get_hash_for_value(value[key])
+                
+                # Combine key and value hash
+                combined = bytes(a ^ b for a, b in zip(key_hash, value_hash))
+                
+                # XOR into result
+                result = bytes(a ^ b for a, b in zip(result, combined))
+            return result
+        else:
+            # For complex objects, use pickle and MD5
+            try:
+                pickled = pickle.dumps(value)
+                value_md5 = hashlib.md5(pickled).digest()
+                return bytes(a ^ b for a, b in zip(type_hash, value_md5))
+            except:
+                # Fallback for unpicklable objects
+                return type_hash
+    
+    def _update_hash_zobrist(self, dbName, update, old_values=None):
+        """
+        Update hash values for the specified database using Zobrist hashing.
+        This is an O(1) operation when only a few fields are updated.
+        
+        Args:
+            dbName: Name of the database to update hash for
+            update: Dictionary of updated values
+            old_values: Dictionary of previous values (for incremental updates)
+        """
+        # Ensure we have a hash entry for the database name
+        if dbName not in self._db_name_table:
+            self._db_name_table[dbName] = self._hash_bytes(dbName.encode('utf-8'), b'db_name')
+        
+        # If this is the first time we're hashing this database, do a full hash
+        if dbName not in self._hashes:
+            # Initialize with database name hash
+            db_hash = self._db_name_table[dbName]
+            
+            # XOR with all key-value pairs
+            for key, value in self._dataset[dbName].items():
+                # Get or create hash for key
+                if key not in self._key_table:
+                    # Use deterministic method to generate key hash
+                    key_bytes = str(key).encode('utf-8')
+                    self._key_table[key] = self._hash_bytes(key_bytes, b'key')
+                key_hash = self._key_table[key]
+                
+                # Get hash for value
+                value_hash = self._get_hash_for_value(value)
+                
+                # Combine key and value hash
+                combined = bytes(a ^ b for a, b in zip(key_hash, value_hash))
+                
+                # XOR into result
+                db_hash = bytes(a ^ b for a, b in zip(db_hash, combined))
+            
+            # Store the hash
+            self._hashes[dbName] = db_hash
+        else:
+            # Incremental update: start with existing hash
+            db_hash = self._hashes[dbName]
+            
+            # For each changed key, remove old value and add new value
+            for key, new_value in update.items():
+                # Get hash for key
+                if key not in self._key_table:
+                    self._key_table[key] = self._hash_bytes(str(key).encode('utf-8'), b'key')
+                key_hash = self._key_table[key]
+                
+                # If we have the old value, remove its contribution
+                if old_values and key in old_values:
+                    old_value = old_values[key]
+                    old_value_hash = self._get_hash_for_value(old_value)
+                    old_combined = bytes(a ^ b for a, b in zip(key_hash, old_value_hash))
+                    # XOR out the old value (XOR is its own inverse)
+                    db_hash = bytes(a ^ b for a, b in zip(db_hash, old_combined))
+                
+                # Add new value's contribution
+                new_value_hash = self._get_hash_for_value(new_value)
+                new_combined = bytes(a ^ b for a, b in zip(key_hash, new_value_hash))
+                db_hash = bytes(a ^ b for a, b in zip(db_hash, new_combined))
+            
+            # Store updated hash
+            self._hashes[dbName] = db_hash
+        
+        # Also update the whole dataset hash if it exists
+        if '__dataset__' in self._hashes:
+            # Start with deterministic base hash
+            dataset_hash = self._hash_bytes(b'dataset_base', b'hash')
+            
+            # XOR all database hashes
+            for db in self._dataset:
+                # Ensure we have a hash for this database
+                if db not in self._hashes:
+                    self._update_hash_zobrist(db, self._dataset[db])
+                
+                # XOR this database's hash into the result
+                dataset_hash = bytes(a ^ b for a, b in zip(dataset_hash, self._hashes[db]))
+            
+            self._hashes['__dataset__'] = dataset_hash
+    
+    def get_hash(self, dbName=None):
+        """
+        Get the hash value for a database or the entire dataset.
+        
+        Args:
+            dbName: Name of the database to get hash for. If None, get hash for entire dataset.
+            
+        Returns:
+            Hexadecimal string representation of the hash
+        """
+        if dbName is not None:
+            # Ensure hash is up to date
+            if dbName not in self._hashes and dbName in self._dataset:
+                self._update_hash_zobrist(dbName, self._dataset[dbName])
+                
+            # Convert bytes to hex string for user-friendly representation
+            hash_bytes = self._hashes.get(dbName)
+            return hash_bytes.hex() if hash_bytes else None
+        else:
+            # Calculate hash for entire dataset if not already done
+            if '__dataset__' not in self._hashes:
+                # Start with deterministic base hash
+                dataset_hash = self._hash_bytes(b'dataset_base', b'hash')
+                
+                # XOR all database hashes
+                for db in self._dataset:
+                    # Ensure we have a hash for this database
+                    if db not in self._hashes:
+                        self._update_hash_zobrist(db, self._dataset[db])
+                    
+                    # XOR this database's hash into the result
+                    dataset_hash = bytes(a ^ b for a, b in zip(dataset_hash, self._hashes[db]))
+                
+                self._hashes['__dataset__'] = dataset_hash
+                
+            # Convert bytes to hex string
+            hash_bytes = self._hashes.get('__dataset__')
+            return hash_bytes.hex() if hash_bytes else None
+    
+    def get_timestamp(self, dbName):
+        """
+        Get the timestamp of the last update for a database.
+        
+        Args:
+            dbName: Name of the database to get timestamp for
+            
+        Returns:
+            Timestamp (seconds since dataset creation) or None if database doesn't exist
+        """
+        return self._timestamps.get(dbName)

@@ -1,0 +1,101 @@
+Thoughts about Widgets
+
+
+Base Widget 
+* base class for all widgets
+* maintains an image that is the visual representation of the widget
+  + size, 
+  + color (mode, foreground, background)
+  + just to define the placement of the widget on the image
+* implements render() method to generate the image
+* implements visibility state to record if the widget is visible or not
+* implements dependency management to track the other objects that the widget depends on
+* implements ChangeProcessorProtocol to process change events received from the dependency manager
+* implements ChangeEventProtocol to emit change events when the widget's state changes
+ - batches all changes into a single change event
+ - emits size_change event when the size of the widget changes
+ - emits mode_change event when the mode of the widget changes
+ - emits image_change event when the image of the widget changes
+   + image_change provides a bounding box of the region that changed (x1, y1, x2, y2)
+   + an empty bounding box () means the entire image has changed
+
+
+ActiveWidget (inherit from widget)
+* base class for all active widgets
+* implements active state to determine if the widget is active or not
+  + activeWhen is the primary drive for the active state
+  + duration, minDuration, coolingPeriod, overRun are the secondary drives for the active state
+* implements duration to determine how long the widget should be active
+* implements minDuration to determine the minimum duration the widget should be active
+  - Even if activeWhen becomes false, the widget will remain active for at least minDuration
+* implements coolingPeriod to determine how long the widget should be inactive after it has been active
+  - After the widget has been inactive for coolingPeriod, it will become active again if activeWhen is true
+* implements overRun to determine if the widget should remain active after its duration has expired
+  - If overRun is set, then the widget will remain active for at least minDuration after its duration has expired
+
+Basic Widgets (inherit from widget)
+* text
+* progressBar
+* image
+* shape
+* line (inherit from shape)
+* rectangle (inherit from shape)
+
+Container Widgets (inherit from ActiveWidget)
+* base class for all container widgets
+* Holds a list of widgets
+* Responsible for maintaining the visibility state of the widgets
+  - If the container is invisible, all of the widgets it contains are invisible
+  - If the container is visible, all of the widgets it contains are visible
+    + Note: A widget within the container that is visible and also a container, may still have invisible widgets
+* Registers dependency relationship between itself and all of it's widgets
+* When a widget's visibility state changes, it calls set_visible on all of the widgets it contains
+* FYI, visibility changes are not communicated through the change event system
+
+Canvas (inherit from container)
+* Basic container type
+* Used to place a set of widgets on a canvas in a defined layout
+* Can be nested to create complex layouts
+* Responsible for determining which widgets are visible and which are not
+  - Uses z order, size, and placement to determine visibility
+  - If a widget is completely covered up by other widgets that are not transparent, it is not visible
+
+Stack (inherit from container)
+* Container that expands to contain a set of widgets.
+* As widgets are added to the stack, the stack expands in size to accomodate the new widgets. 
+  - This expansion can occur horizontally or vertically.
+  - A gap value can be specified to define the spacing between widgets.
+
+Index (inherit from container)
+* Container that displays a single widget from a list of widgets.
+* The index is used to determine which widget is displayed.
+* Often used to display variants of a widget such as volume levels, or toggles
+
+Animation (inherit from container)
+* base class for all animation widgets
+
+Sequence (inherit from animation)
+* used to display a sequence of widgets in the order they are added to the sequence
+* When a widget's turn arrives
+  - Each widget is displayed for a configurable number of ticks
+  - Normal the widgets that are displayed are canvases but this is not required
+  - If a widget is inactive it is skipped
+  - If a widget is active it is displayed
+
+
+Marquee (inherit from animation)
+* marquee base class
+  - Uses marquee DSL to define the animation
+* marquee types:
+  - scroll.  Helper class for marquee implementing scroll behavior
+  - slide.  Helper class for marquee implementing slide behavior
+  - popUp.  Helper class for marquee implementing popUp behavior
+
+
+
+
+
+
+
+
+

@@ -10,6 +10,7 @@ Test of CFG class for the tinyDisplay system
 import time
 from pathlib import Path
 import logging
+import sys
 
 import pytest
 from PIL import Image, ImageChops
@@ -94,7 +95,6 @@ def make_dataset():
     ],
 )
 def test_load(make_dataset, yaml, ref, ticks, db, update, utick):
-
     ds = make_dataset
 
     path = Path(__file__).parent / "reference/pageFiles" / yaml
@@ -104,13 +104,37 @@ def test_load(make_dataset, yaml, ref, ticks, db, update, utick):
     main = load(path, dataset=ds)
     ds = main._dataset
 
+    # Get the alert widget to monitor its timers
+    alert_widget = main._placements[2][0]
+
     first = True
     for i in range(ticks):
         if i == utick:
             if db:
+                logger.debug(f"\n--- Updating {db} with {update} at tick {i} ---")
                 ds.update(db, update)
+        
+        # Log timer values before rendering
+        if alert_widget:
+            logger.debug(f"\n--- Tick {i} ---")
+            logger.debug(f"Active: {alert_widget.active}")
+            logger.debug(f"activeWhen: {alert_widget._activeWhen}")
+            logger.debug(f"_currentDuration: {getattr(alert_widget, '_currentDuration', 'N/A')}")
+            logger.debug(f"_currentMinDuration: {getattr(alert_widget, '_currentMinDuration', 'N/A')}")
+            logger.debug(f"_currentCoolingPeriod: {getattr(alert_widget, '_currentCoolingPeriod', 'N/A')}")
+            logger.debug(f"_overRunning: {getattr(alert_widget, '_overRunning', 'N/A')}")
+            logger.debug(f"_currentActiveState: {getattr(alert_widget, '_currentActiveState', 'N/A')}")
+        
         main.render(force=first)
         first = False
+        
+        # Log timer values after rendering
+        if alert_widget:
+            logger.debug(f"After render - Active: {alert_widget.active}")
+            logger.debug(f"After render - _currentDuration: {getattr(alert_widget, '_currentDuration', 'N/A')}")
+            logger.debug(f"After render - _currentMinDuration: {getattr(alert_widget, '_currentMinDuration', 'N/A')}")
+            logger.debug(f"After render - _currentCoolingPeriod: {getattr(alert_widget, '_currentCoolingPeriod', 'N/A')}")
+            logger.debug(f"After render \n{main}") 
 
     assert image2Text(main.image) == image2Text(
         refImg
