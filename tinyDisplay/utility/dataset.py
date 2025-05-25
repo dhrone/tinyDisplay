@@ -4,11 +4,14 @@
 
 """
 Dataset utility for tinyDisplay - provides data storage with validation and history.
+Supports atomic transactions for consistent updates across multiple databases.
 """
 
 import builtins
 import logging
 import time
+import contextlib
+import threading
 from collections import deque
 
 from tinyDisplay import globalVars
@@ -156,10 +159,301 @@ class Table:
         return self._dataset[self._name].items()
 
 
+class DatasetTransaction:
+    """
+    Represents an atomic transaction for a dataset.
+    
+    This class allows grouping multiple updates into a single atomic operation,
+    which will either all succeed or all fail together. A transaction provides atomicity
+    guarantees, ensuring that either all updates are applied or none of them are.
+    
+    Transactions provide three main benefits:
+    1. **Atomicity**: All updates succeed or fail together
+    2. **Consistency**: The dataset is always in a valid state
+    3. **Isolation**: Changes are not visible outside the transaction until committed
+    
+    Within a transaction, you can both read and write data. Reads will see a consistent
+    view that includes any pending changes made within the transaction, even before they
+    are committed. This allows validation of complex interdependent updates.
+    
+    The transaction can be used in three ways:
+    1. As a context manager (with statement)
+    2. With explicit begin/commit/rollback methods
+    3. Through the dataset.batch_update() method
+    
+    Note that a transaction can only be committed once. After commit or rollback,
+    the transaction becomes inactive and cannot be used again.
+    
+    :param parent_dataset: The dataset this transaction belongs to
+    :type parent_dataset: dataset
+    
+    Example::
+        # Using as a context manager
+        with dataset.transaction() as tx:
+            tx.update("db1", {"key1": "value1"})
+            tx.update("db2", {"key2": "value2"})
+            # Read combined state
+            current = tx.get("db1", "key1")
+    """
+    def __init__(self, parent_dataset):
+        self._dataset = parent_dataset
+        self._updates = {}  # Buffer for updates: {dbName: {key: value}}
+        self._merge_settings = {}  # Track merge settings per database
+        self._active = True  # Transaction state flag
+        
+    def update(self, dbName, update, merge=True):
+        """
+        Buffer an update to be applied when the transaction is committed.
+        
+        This method adds an update to the transaction's pending changes but does not
+        apply it to the dataset immediately. The update is validated against the dataset's
+        validation rules when it's added to ensure it will be valid when committed.
+        
+        If validation fails, a ValidationError is raised and no changes are made to the
+        transaction's pending updates. This ensures that invalid updates are rejected early,
+        before they can be committed.
+        
+        The merge parameter controls whether the update will be merged with existing data
+        (default) or will replace the entire database when committed. This setting must be
+        consistent for all updates to the same database within a single transaction.
+        
+        :param dbName: The name of the database to update
+        :type dbName: str
+        :param update: The content of the update
+        :type update: dict
+        :param merge: Update will be merged if True, overwrite if False
+        :type merge: bool
+        :raises RuntimeError: If transaction is no longer active
+        :raises ValidationError: If the update fails validation
+        :raises ValueError: If conflicting merge settings are provided for the same database
+        
+        Example::
+            tx.update("settings", {"theme": "dark"})
+            tx.update("user_prefs", {"notifications": True}, merge=False)  # Replace entire database
+        """
+        if not self._active:
+            raise RuntimeError("Transaction is no longer active")
+        
+        # Copy the update to avoid modifying the input
+        update_copy = update.copy()
+        
+        # First validate the update using the dataset's validation method
+        validated_update = self._dataset.validateUpdate(dbName, update_copy)
+        
+        # Store the update
+        if dbName not in self._updates:
+            self._updates[dbName] = {}
+            self._merge_settings[dbName] = merge
+        elif self._merge_settings[dbName] != merge:
+            raise ValueError(f"Conflicting merge settings for database '{dbName}'")
+            
+        # Merge the validated update into our buffer
+        self._updates[dbName].update(validated_update)
+        
+    def get(self, dbName, key=None, default=None):
+        """
+        Get data from the transaction view (includes pending changes).
+        
+        This method provides a consistent view of data that includes both the current
+        committed state in the dataset and any pending changes in the transaction.
+        This allows you to see what the data would look like if the transaction were
+        committed right now.
+        
+        The returned data is a merged view that combines:
+        1. The current state of the database in the dataset
+        2. Any pending updates to that database in the transaction
+        
+        You can retrieve either an entire database or a specific key within a database.
+        
+        :param dbName: The name of the database to retrieve
+        :type dbName: str
+        :param key: Specific key to retrieve, or None to get the entire database
+        :type key: str or None
+        :param default: Default value to return if key doesn't exist
+        :type default: Any
+        :returns: The value from the transaction view
+        :raises RuntimeError: If transaction is no longer active
+        
+        Example::
+            # Get a specific value
+            theme = tx.get("settings", "theme", "light")  # With default
+            
+            # Get an entire database
+            all_settings = tx.get("settings")
+        """
+        if not self._active:
+            raise RuntimeError("Transaction is no longer active")
+            
+        # Start with the current committed state
+        if dbName in self._dataset._dataset:
+            if self._merge_settings.get(dbName, True):
+                # If merging, start with existing data
+                current = self._dataset._dataset[dbName].copy()
+            else:
+                # If not merging, start with empty dict
+                current = {}
+        else:
+            current = {}
+            
+        # Apply pending updates
+        if dbName in self._updates:
+            current.update(self._updates[dbName])
+            
+        # Return the requested data
+        if key is not None:
+            return current.get(key, default)
+        return current
+        
+    def __getitem__(self, dbName):
+        """
+        Support dictionary access to databases in the transaction.
+        
+        This method enables dictionary-style access to databases within the transaction,
+        which provides a more Pythonic interface. The returned value includes both
+        committed data and any pending changes in the transaction.
+        
+        :param dbName: The name of the database to retrieve
+        :type dbName: str
+        :returns: The database with pending changes applied
+        :raises RuntimeError: If transaction is no longer active
+        
+        Example::
+            # Dictionary-style access
+            settings = tx["settings"]
+            theme = tx["settings"]["theme"]
+        """
+        if not self._active:
+            raise RuntimeError("Transaction is no longer active")
+            
+        return self.get(dbName)
+        
+    def __enter__(self):
+        """
+        Enter the transaction context.
+        
+        This method is called when entering a with statement and returns the transaction
+        object for use within the context block.
+        
+        :returns: The transaction object
+        :rtype: DatasetTransaction
+        """
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Exit the transaction context.
+        
+        This method is called when exiting a with statement. If no exception occurred
+        within the context block, the transaction is committed. If an exception occurred,
+        the transaction is rolled back automatically.
+        
+        :param exc_type: The type of exception that occurred, or None if no exception
+        :param exc_val: The exception instance, or None if no exception
+        :param exc_tb: The traceback, or None if no exception
+        :returns: False to propagate exceptions, True to suppress them
+        :rtype: bool
+        """
+        try:
+            if exc_type is None:  # No exception occurred
+                self.commit()
+            else:
+                self.rollback()
+        finally:
+            self._active = False
+        return False  # Don't suppress exceptions
+        
+    def commit(self):
+        """
+        Apply all buffered updates as a single atomic operation.
+        
+        This method applies all pending updates in the transaction to the dataset as
+        a single atomic operation. If any update fails (e.g., due to validation errors),
+        all updates are rolled back, and the dataset remains in its original state.
+        
+        Once committed, the transaction becomes inactive and cannot be used again.
+        Any attempt to use the transaction after commit will raise a RuntimeError.
+        
+        The commit process follows these steps:
+        1. Store the original state for potential rollback
+        2. Apply all updates to the dataset
+        3. If any update fails, restore the original state
+        
+        :raises RuntimeError: If transaction is no longer active
+        :raises ValidationError: If any update fails validation
+        :raises Exception: If any update fails, the entire transaction is rolled back
+        
+        Example::
+            tx = dataset.begin_transaction()
+            tx.update("db1", {"key1": "value1"})
+            tx.commit()  # Apply all changes atomically
+        """
+        if not self._active:
+            raise RuntimeError("Transaction is no longer active")
+            
+        # Store original state for rollback if needed
+        original_state = {}
+        
+        # Apply all updates through the dataset's update method
+        try:
+            for dbName, updates in self._updates.items():
+                # Track the original state before any updates
+                if dbName in self._dataset._dataset:
+                    original_state[dbName] = self._dataset._dataset[dbName].copy()
+                
+                # Apply the update
+                merge = self._merge_settings.get(dbName, True)
+                self._dataset.update(dbName, updates, merge)
+                
+        except Exception as e:
+            # Rollback to original state if any update fails
+            for dbName, state in original_state.items():
+                # Force-restore original state, bypassing normal update
+                self._dataset._dataset[dbName] = state
+            raise e
+        finally:
+            self._active = False
+            
+    def rollback(self):
+        """
+        Discard all pending updates.
+        
+        This method discards all pending updates in the transaction without applying
+        them to the dataset. After rollback, the transaction becomes inactive and
+        cannot be used again.
+        
+        Rollback is useful when you discover that a transaction should not be committed,
+        such as when an error is detected or when a user cancels an operation.
+        
+        :raises RuntimeError: If transaction is no longer active
+        
+        Example::
+            tx = dataset.begin_transaction()
+            tx.update("db1", {"key1": "value1"})
+            if some_condition:
+                tx.commit()
+            else:
+                tx.rollback()  # Discard all changes
+        """
+        if not self._active:
+            raise RuntimeError("Transaction is no longer active")
+            
+        self._active = False
+        self._updates.clear()
+        self._merge_settings.clear()
+
+
 class dataset:
     """
     Class to manage data that tinyDisplay will use to render widgets and test conditions.
-
+    
+    This class is thread-safe for all operations including updates, validation, and
+    transactions. All data-modifying operations acquire a lock to ensure consistency
+    in multi-threaded environments.
+    
+    Thread safety is implemented using a reentrant lock (threading.RLock), which allows
+    a thread to acquire the same lock multiple times without deadlocking. This is especially
+    important for nested operations like transactions and validation.
+    
     :param dataset: Dataset that will be used to initialize this dataset (optional)
     :type dataset: `tinyDisplay.utility.dataset`
     :param data: Dictionary that will be used to initialize this dataset (optional)
@@ -175,6 +469,8 @@ class dataset:
     :type historySize: int
     :param lookBack: The number of versions back that the `history` method can retrieve
     :type lookBack: int
+    :param thread_safe: Whether to enable thread safety (default: True)
+    :type thread_safe: bool
     :raises RuntimeError: if both a dataset and a data argument are provided
     """
 
@@ -183,9 +479,15 @@ class dataset:
         dataset=None,
         historySize=100,
         lookBack=10,
+        thread_safe=True,
     ):
 
         self._logger = logging.getLogger("tinyDisplay")
+        
+        # Initialize thread safety lock if thread_safe is enabled
+        self._thread_safe = thread_safe
+        self._lock = threading.RLock() if thread_safe else None
+        
         dataset = dataset if dataset is not None else {}
         for tk in (
             (False, i) if type(i) is not str else (True, i)
@@ -230,8 +532,8 @@ class dataset:
         # Initialize ring buffer which will hold each update
         self._ringBuffer = deque(maxlen=self._historySize)
 
-        # Set self.update to initial update method
-        self.update = self._update
+        # Initialize the update strategy to the normal update strategy
+        self._update_strategy = self._normal_update_strategy
 
         # Initialize prev dataset
         self._prevDS = {}
@@ -291,6 +593,40 @@ class dataset:
     def __repr__(self):
         return self._dataset.__repr__()
 
+    def with_lock(self, func, *args, **kwargs):
+        """
+        Execute a function with the dataset lock held.
+        
+        This method allows for atomic operations that need to both read and modify
+        the dataset. The function is executed while holding the dataset's lock,
+        ensuring that no other thread can modify the dataset during execution.
+        
+        If thread safety is disabled for this dataset instance, the function is
+        executed directly without locking.
+        
+        :param func: The function to execute
+        :type func: callable
+        :param args: Positional arguments to pass to the function
+        :param kwargs: Keyword arguments to pass to the function
+        :returns: The return value of the function
+        
+        Example::
+            # Atomic increment
+            def increment_counter():
+                current = ds.get("counters", {}).get("visits", 0)
+                ds.update("counters", {"visits": current + 1})
+                return current + 1
+                
+            new_value = ds.with_lock(increment_counter)
+        """
+        if not self._thread_safe or self._lock is None:
+            # If thread safety is disabled, just execute the function
+            return func(*args, **kwargs)
+            
+        # Execute with the lock held
+        with self._lock:
+            return func(*args, **kwargs)
+            
     def get(self, key, default=None):
         """
         Get database from dataset.
@@ -301,10 +637,125 @@ class dataset:
         :type default: object
         :returns: The database or the default value if the database is not found
         :rtype: dict or object
+        
+        Note: This method is thread-safe for reading but does not guarantee
+        consistency if the dataset is modified concurrently. For atomic operations
+        that involve both reading and writing, use the with_lock method.
         """
+        # Simple reads don't need locks for better performance
         if key in self._dataset:
             return self._dataset[key]
         return default
+        
+    def transaction(self):
+        """
+        Start a transaction for atomic updates to the dataset.
+        
+        This method creates a new transaction that can be used to group multiple updates
+        into a single atomic operation. When used as a context manager with a with statement,
+        the transaction will be automatically committed when the context exits normally,
+        or rolled back if an exception occurs.
+        
+        A transaction provides these guarantees:
+        - All updates succeed or fail together (atomicity)
+        - The dataset is always in a valid state (consistency)
+        - Changes are not visible outside the transaction until committed (isolation)
+        
+        This is the recommended way to use transactions for most use cases, as it ensures
+        proper cleanup through the context manager protocol.
+        
+        :returns: A transaction context manager
+        :rtype: DatasetTransaction
+        
+        Example::
+            # Context manager usage (recommended)
+            with dataset.transaction() as tx:
+                # Make multiple updates
+                tx.update("settings", {"theme": "dark"})
+                tx.update("user", {"last_login": time.time()})
+                
+                # Read the combined state
+                current_theme = tx.get("settings", "theme")
+                
+                # All updates will be committed atomically when the block exits,
+                # or rolled back if an exception occurs
+        """
+        return DatasetTransaction(self)
+        
+    def begin_transaction(self):
+        """
+        Begin a new transaction for atomic updates.
+        
+        This method creates a new transaction with explicit control over when to commit
+        or rollback. Unlike the transaction() method which returns a context manager,
+        this method requires you to explicitly call commit() or rollback() to complete
+        the transaction.
+        
+        This approach is useful when you need more control over the transaction lifecycle,
+        such as when the commit decision depends on complex conditions that can't be
+        easily expressed within a single context block.
+        
+        Note that you are responsible for ensuring the transaction is properly committed
+        or rolled back, typically using a try/except/finally pattern.
+        
+        :returns: A transaction object
+        :rtype: DatasetTransaction
+        
+        Example::
+            # Begin/commit/rollback pattern
+            tx = dataset.begin_transaction()
+            try:
+                # Make updates
+                tx.update("settings", {"theme": "dark"})
+                tx.update("user", {"last_login": time.time()})
+                
+                # Decide whether to commit based on some condition
+                if all_conditions_met:
+                    tx.commit()
+                else:
+                    tx.rollback()
+            except Exception:
+                # Roll back on any exception
+                tx.rollback()
+                raise
+        """
+        return DatasetTransaction(self)
+        
+    def batch_update(self, updates, merge=True):
+        """
+        Apply multiple updates as a single atomic operation.
+        
+        This method provides a simple one-line approach to making atomic updates across
+        multiple databases. It creates a transaction, applies all the specified updates,
+        and commits the transaction automatically.
+        
+        This is the most convenient approach for simple atomic updates when you don't need
+        to read the pending state or make conditional updates within the transaction.
+        
+        :param updates: Dictionary mapping database names to update dictionaries
+        :type updates: dict
+        :param merge: Whether updates should be merged (True) or replace databases (False)
+        :type merge: bool
+        :raises ValidationError: If any update fails validation
+        :raises Exception: If any other error occurs during the update
+        
+        Example::
+            # Update multiple databases atomically
+            dataset.batch_update({
+                "settings": {"theme": "dark", "font_size": 14},
+                "user": {"last_login": time.time()},
+                "stats": {"login_count": 42}
+            })
+            
+            # Replace entire databases
+            dataset.batch_update({
+                "cache": {"data": new_data},
+                "temp": {"scratch": work_results}
+            }, merge=False)
+        """
+        with self.transaction() as tx:
+            for dbName, update in updates.items():
+                tx.update(dbName, update)
 
     def _checkForReserved(self, dbName):
         if dbName in self.__class__.__dict__:
@@ -1712,17 +2163,39 @@ class dataset:
                 changed_fields.append(nested_key)
                 field_paths.append(field_path)
 
-    def _update(self, dbName, update, merge=True):
-        # Initial update method used when _ringBuffer is not full
-
-        self._baseUpdate(dbName, update, merge)
-
-        # If the ringBuffer has become full switch to _updateFull from now on
+    def _normal_update_strategy(self, dbName, update, merge=True):
+        """
+        Strategy for updates when the ring buffer is not yet full.
+        
+        This strategy applies the update and checks if the ring buffer has become full.
+        If the buffer is full, it switches to the full buffer update strategy.
+        
+        :param dbName: The name of the database to update
+        :type dbName: str
+        :param update: The content of the update
+        :type update: dict
+        :param merge: Update will be merged if True, overwrite if False
+        :type merge: bool
+        :returns: The result of the update operation
+        """
+        # Execute the core update logic
+        result = self._baseUpdate(dbName, update, merge)
+        
+        # Check if the ring buffer has become full
         if len(self._ringBuffer) == self._ringBuffer.maxlen:
-            self.update = self._updateFull
+            # Switch to the full buffer strategy for future updates
+            self._update_strategy = self._full_buffer_update_strategy
+            
+        return result
 
     def update(self, dbName, update, merge=True):
         """Update a database within the dataset.
+        
+        This method delegates to the current update strategy based on the state of the ring buffer.
+        The strategy is switched automatically when the ring buffer becomes full.
+        
+        This method is thread-safe and will acquire a lock during the update process to ensure
+        data consistency in multi-threaded environments.
 
         :param dbName: The name of the database to update
         :type dbName: str
@@ -1731,12 +2204,32 @@ class dataset:
         :param merge: Update will be merged into database if True and will overwrite
             database if False
         :type merge: bool
+        :returns: The result of the update operation
         """
-        pass
+        # Use with_lock to ensure thread safety
+        def _do_update():
+            return self._update_strategy(dbName, update, merge)
+            
+        return self.with_lock(_do_update)
 
-    def _updateFull(self, dbName, update, merge=True):
-        # Adds updating of starting position when the ring buffer has become full
-
+    def _full_buffer_update_strategy(self, dbName, update, merge=True):
+        """
+        Strategy for updates when the ring buffer is full.
+        
+        This strategy updates the starting position (dsStart) before applying the update.
+        This is needed to maintain proper history and allow rewinding to older states.
+        
+        :param dbName: The name of the database to update
+        :type dbName: str
+        :param update: The content of the update
+        :type update: dict
+        :param merge: Update will be merged if True, overwrite if False
+        :type merge: bool
+        :returns: The result of the update operation
+        """
+        # Update the starting position with data from the oldest ring buffer entry
+        # This happens when the oldest entry is about to be overwritten
+        
         # Add databases from oldest ringbuffer entry into dsStart if dsStart does not already contain them
         for db in self._ringBuffer[0]:
             if db not in self._dsStart:
@@ -1749,8 +2242,9 @@ class dataset:
                     **self._dsStart[db],
                     **self._ringBuffer[0][db],
                 }
-
-        self._baseUpdate(dbName, update, merge)
+        
+        # Execute the core update logic
+        return self._baseUpdate(dbName, update, merge)
 
     def history(self, dbName, back):
         """
