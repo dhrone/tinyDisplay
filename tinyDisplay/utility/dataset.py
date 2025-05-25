@@ -24,6 +24,138 @@ from tinyDisplay.exceptions import (
 from tinyDisplay.utility.dynamic import dependency_registry
 from tinyDisplay.utility.variable_dependencies import variable_registry
 
+
+class Table:
+    """
+    Represents a table within a dataset, providing a more Pythonic interface.
+    
+    This class allows for dictionary-style access to items within a table,
+    while ensuring all updates go through the dataset's update mechanism
+    to maintain history, validation, and dependency tracking.
+    
+    :param parent_dataset: The dataset containing this table
+    :type parent_dataset: dataset
+    :param name: The name of the table
+    :type name: str
+    """
+    def __init__(self, parent_dataset, name):
+        self._dataset = parent_dataset
+        self._name = name
+        
+    def __getitem__(self, key):
+        """
+        Get a value from the table.
+        
+        :param key: The key to retrieve
+        :type key: str
+        :returns: The value associated with the key
+        :raises KeyError: If the key doesn't exist in the table
+        """
+        return self._dataset[self._name][key]
+        
+    def __setitem__(self, key, value):
+        """
+        Set a value in the table.
+        
+        This method ensures the update goes through the dataset's update mechanism
+        to maintain history, validation, and dependency tracking.
+        
+        :param key: The key to set
+        :type key: str
+        :param value: The value to set
+        :type value: Any
+        """
+        self._dataset.update(self._name, {key: value})
+        
+    def __contains__(self, key):
+        """
+        Check if a key exists in the table.
+        
+        :param key: The key to check
+        :type key: str
+        :returns: True if the key exists, False otherwise
+        :rtype: bool
+        """
+        return key in self._dataset[self._name]
+        
+    def __iter__(self):
+        """
+        Iterate over the keys in the table.
+        
+        :returns: An iterator over the keys
+        """
+        return iter(self._dataset[self._name])
+        
+    def __len__(self):
+        """
+        Get the number of items in the table.
+        
+        :returns: The number of items
+        :rtype: int
+        """
+        return len(self._dataset[self._name])
+        
+    def __repr__(self):
+        """
+        Get a string representation of the table.
+        
+        :returns: A string representation
+        :rtype: str
+        """
+        return self._dataset[self._name].__repr__()
+        
+    def get(self, key, default=None):
+        """
+        Get a value from the table, returning a default if the key doesn't exist.
+        
+        :param key: The key to retrieve
+        :type key: str
+        :param default: The value to return if the key doesn't exist
+        :type default: Any
+        :returns: The value associated with the key, or the default value
+        """
+        try:
+            return self[key]
+        except KeyError:
+            return default
+            
+    def update(self, data):
+        """
+        Update multiple values in the table.
+        
+        :param data: A dictionary of key-value pairs to update
+        :type data: dict
+        """
+        self._dataset.update(self._name, data)
+        
+    def keys(self):
+        """
+        Get the keys in the table.
+        
+        :returns: The keys
+        :rtype: dict_keys
+        """
+        return self._dataset[self._name].keys()
+        
+    def values(self):
+        """
+        Get the values in the table.
+        
+        :returns: The values
+        :rtype: dict_values
+        """
+        return self._dataset[self._name].values()
+        
+    def items(self):
+        """
+        Get the key-value pairs in the table.
+        
+        :returns: The key-value pairs
+        :rtype: dict_items
+        """
+        return self._dataset[self._name].items()
+
+
 class dataset:
     """
     Class to manage data that tinyDisplay will use to render widgets and test conditions.
@@ -131,6 +263,23 @@ class dataset:
         if key == "prev":
             return self.prev
         return self._dataset[key]
+
+    def __getattr__(self, name):
+        """
+        Allow attribute-style access to tables in the dataset.
+        
+        This enables more Pythonic access to tables, e.g.:
+        dataset.table_name["key"] = value
+        
+        :param name: The name of the table to access
+        :type name: str
+        :returns: A Table object representing the table
+        :rtype: Table
+        :raises AttributeError: if the table doesn't exist in the dataset
+        """
+        if name in self._dataset:
+            return Table(self, name)
+        raise AttributeError(f"Dataset has no table named '{name}'")
 
     def __iter__(self):
         self._dataset["prev"] = self.prev
@@ -1453,10 +1602,10 @@ class dataset:
         
         # Update hash values efficiently using Zobrist hashing
         # This provides O(1) performance for incremental updates
-        # Skip timestamp and other internal fields to optimize performance
-        actual_update = {k: v for k, v in update.items() if not k.startswith('_') and k != '_timestamp' and not k.endswith('_timestamp')}
-        actual_old_values = {k: v for k, v in old_values.items() if k in actual_update}
-        if actual_update:  # Only update hash if there are actually non-internal fields changed
+        # Use all fields for hash calculation
+        actual_update = update
+        actual_old_values = old_values
+        if actual_update:  # Only update hash if there are fields changed
             self._update_hash_zobrist(dbName, actual_update, actual_old_values)
         
         print(f"DEBUG: Changed fields: {changed_fields}")
@@ -1841,11 +1990,9 @@ class dataset:
         for i in range(0, len(keys), batch_size):
             batch_keys = keys[i:i+batch_size]
             
-            # XOR with all key-value pairs in this batch (excluding timestamp fields)
+            # XOR with all key-value pairs in this batch
             for key in batch_keys:
-                # Skip timestamp fields and internal fields
-                if key == '_timestamp' or key.endswith('_timestamp') or key.startswith('_'):
-                    continue
+                # All fields are now valid for processing
                     
                 try:
                     # Get or create hash for key
@@ -1902,9 +2049,7 @@ class dataset:
             
             # XOR with all key-value pairs
             for key, value in self._dataset[dbName].items():
-                # Skip timestamp fields and internal fields
-                if key == '_timestamp' or key.endswith('_timestamp') or key.startswith('_'):
-                    continue
+                # All fields are now valid for processing
                     
                 # Get or create hash for key
                 if key not in self._key_table:
@@ -1930,9 +2075,7 @@ class dataset:
             
             # For each changed key, remove old value and add new value
             for key, new_value in update.items():
-                # Skip timestamp fields and internal fields
-                if key == '_timestamp' or key.endswith('_timestamp') or key.startswith('_'):
-                    continue
+                # All fields are now valid for processing
                     
                 # Get hash for key
                 if key not in self._key_table:
