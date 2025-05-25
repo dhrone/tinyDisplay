@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Set, Optional, Tuple, Iterable, Union
 import weakref
 from collections import defaultdict, deque
 import time
+import threading
 
 from .protocols import ChangeEventProtocol, ChangeProcessorProtocol
 from .subscription import SubscriptionHandle
@@ -16,19 +17,22 @@ from .graph import topological_sort, identify_strongly_connected_components, bre
 from .events import ChangeEvent, VisibilityChangeEvent
 
 
-# Global dependency manager instance
+# Global dependency manager instance and lock for thread safety
 _global_manager = None
+_global_manager_lock = threading.RLock()
 
 
 def get_global_manager():
-    """Get the global dependency manager instance.
+    """Get the global dependency manager instance in a thread-safe manner.
     
     Returns:
         The global DependencyManager instance.
     """
     global _global_manager
     if _global_manager is None:
-        _global_manager = DependencyManager()
+        with _global_manager_lock:
+            if _global_manager is None:  # Double-checked locking pattern
+                _global_manager = DependencyManager()
     return _global_manager
 
 
@@ -76,6 +80,9 @@ class DependencyManager:
         Creates a new, empty dependency graph. The manager will track all
         dependencies and handle event propagation between registered objects.
         """
+        # Thread synchronization lock for thread-safe operations
+        self._lock = threading.RLock()
+        
         # Mapping from observable to set of subscription handles
         self._dependencies: Dict[Any, Set[SubscriptionHandle]] = defaultdict(set)
         
@@ -136,12 +143,13 @@ class DependencyManager:
         Returns:
             A SubscriptionHandle or list of SubscriptionHandle objects.
         """
-        # Handle bulk registration
-        if hasattr(target, '__iter__') and not isinstance(target, (str, bytes)):
-            return [self._register_single(dependent, t) for t in target]
-        else:
-            # Single target registration
-            return self._register_single(dependent, target)
+        with self._lock:
+            # Handle bulk registration
+            if hasattr(target, '__iter__') and not isinstance(target, (str, bytes)):
+                return [self._register_single(dependent, t) for t in target]
+            else:
+                # Single target registration
+                return self._register_single(dependent, target)
             
     def _register_single(self, dependent: Any, observable: Any) -> SubscriptionHandle:
         """Register a single dependency relationship.
@@ -173,36 +181,37 @@ class DependencyManager:
             handle_or_dependent: Either a SubscriptionHandle or a dependent object.
             target: If handle_or_dependent is a dependent, the target to unregister.
         """
-        if target is None and isinstance(handle_or_dependent, SubscriptionHandle):
-            # Handle mode: unregister by subscription handle
-            handle = handle_or_dependent
-            observable = handle.observable
-            dependent = handle.dependent
-            
-            if observable is not None and dependent is not None:
-                # Remove from both mappings
-                self._dependencies[observable].discard(handle)
-                self._reverse_dependencies[dependent].discard(handle)
+        with self._lock:
+            if target is None and isinstance(handle_or_dependent, SubscriptionHandle):
+                # Handle mode: unregister by subscription handle
+                handle = handle_or_dependent
+                observable = handle.observable
+                dependent = handle.dependent
                 
-                # Clean up empty sets
-                if not self._dependencies[observable]:
-                    del self._dependencies[observable]
-                if not self._reverse_dependencies[dependent]:
-                    del self._reverse_dependencies[dependent]
-        elif target is not None:
-            # Dependent/target mode: find and unregister the matching handle
-            dependent = handle_or_dependent
-            
-            # Find handles that match the dependent/target pair
-            if dependent in self._reverse_dependencies:
-                handles_to_remove = []
-                for handle in self._reverse_dependencies[dependent]:
-                    if handle.observable == target:
-                        handles_to_remove.append(handle)
+                if observable is not None and dependent is not None:
+                    # Remove from both mappings
+                    self._dependencies[observable].discard(handle)
+                    self._reverse_dependencies[dependent].discard(handle)
+                    
+                    # Clean up empty sets
+                    if not self._dependencies[observable]:
+                        del self._dependencies[observable]
+                    if not self._reverse_dependencies[dependent]:
+                        del self._reverse_dependencies[dependent]
+            elif target is not None:
+                # Dependent/target mode: find and unregister the matching handle
+                dependent = handle_or_dependent
                 
-                # Unregister each matching handle
-                for handle in handles_to_remove:
-                    self.unregister(handle)
+                # Find handles that match the dependent/target pair
+                if dependent in self._reverse_dependencies:
+                    handles_to_remove = []
+                    for handle in self._reverse_dependencies[dependent]:
+                        if handle.observable == target:
+                            handles_to_remove.append(handle)
+                    
+                    # Unregister each matching handle
+                    for handle in handles_to_remove:
+                        self.unregister(handle)
     
     def unregister_all(self, dependent: Any) -> None:
         """Unregister all dependencies for a dependent.
@@ -210,10 +219,16 @@ class DependencyManager:
         Args:
             dependent: The dependent object to unregister all subscriptions for.
         """
-        if dependent in self._reverse_dependencies:
-            handles = list(self._reverse_dependencies[dependent])
-            for handle in handles:
-                self.unregister(handle)
+        # First get all handles while holding the lock
+        with self._lock:
+            if dependent in self._reverse_dependencies:
+                handles = list(self._reverse_dependencies[dependent])
+            else:
+                return
+                
+        # Then unregister each one - unregister will acquire the lock
+        for handle in handles:
+            self.unregister(handle)
     
     def raise_event(self, event: ChangeEventProtocol):
         """Raise a change event to be processed in the next dispatch cycle.
@@ -240,20 +255,21 @@ class DependencyManager:
         See Also:
             dispatch_events: Process all queued events.
         """
-        # Check if the event has a namespace
-        event_namespace = getattr(event, 'namespace', None)
-        
-        # If we're in the middle of dispatching events (in a cascade), add to secondary queue
-        if hasattr(self, '_processing_batch') and self._processing_batch:
-            self._secondary_queue.append(event)
-        else:
-            # Store in appropriate queue based on namespace
-            if event_namespace is None:
-                # Global events go to the primary queue
-                self._primary_queue.append(event)
+        with self._lock:
+            # Check if the event has a namespace
+            event_namespace = getattr(event, 'namespace', None)
+            
+            # If we're in the middle of dispatching events (in a cascade), add to secondary queue
+            if hasattr(self, '_processing_batch') and self._processing_batch:
+                self._secondary_queue.append(event)
             else:
-                # Namespaced events go to their respective namespace queue
-                self._namespace_queues[event_namespace].append(event)
+                # Store in appropriate queue based on namespace
+                if event_namespace is None:
+                    # Global events go to the primary queue
+                    self._primary_queue.append(event)
+                else:
+                    # Namespaced events go to their respective namespace queue
+                    self._namespace_queues[event_namespace].append(event)
     
     def register_namespace(self, namespace_id: str, namespace_manager: Any) -> None:
         """Register a namespaced manager with this global manager.
