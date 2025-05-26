@@ -96,8 +96,9 @@ class RenderOrchestrator:
                          multiprocessing or 2 for threading. Ignored in single-thread mode.
         """
         # Register for dependency events
-        self._event_subscription = self.dependency_manager.register_for_events(
-            self.handle_state_change
+        # The orchestrator itself acts as a dependent that responds to all change events
+        self._event_subscription = self.dependency_manager.register(
+            self.handle_state_change, self.dependency_manager
         )
         
         if not self.use_workers:
@@ -477,7 +478,7 @@ class RenderOrchestrator:
         
         # Unregister from dependency manager
         if self._event_subscription:
-            self._event_subscription.unsubscribe()
+            self.dependency_manager.unregister(self._event_subscription)
             self._event_subscription = None
         
         self.logger.info(f"RenderOrchestrator shutdown complete (mode: {self.mode})")

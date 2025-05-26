@@ -50,8 +50,8 @@ class TestRenderOrchestrator(unittest.TestCase):
         self.dataset = {}
         self.canvas = MockCanvas()
         
-        # Patch multiprocessing to avoid actual process creation in tests
-        self.process_patcher = patch('tinyDisplay.orchestrate.orchestrator.Process')
+        # Patch multiprocessing.Process to avoid actual process creation in tests
+        self.process_patcher = patch('tinyDisplay.orchestrate.orchestrator.multiprocessing.Process')
         self.mock_process = self.process_patcher.start()
         
         # Create instance with reduced worker count for testing
@@ -59,7 +59,8 @@ class TestRenderOrchestrator(unittest.TestCase):
             self.dependency_manager,
             self.dataset,
             self.canvas,
-            max_queue_size=5
+            max_queue_size=5,
+            mode="threading"  # Use threading mode to enable worker creation
         )
     
     def tearDown(self):
@@ -75,56 +76,81 @@ class TestRenderOrchestrator(unittest.TestCase):
         self.orchestrator.initialize(worker_count=2)
         
         # Check that worker processes were started
-        self.assertEqual(len(self.orchestrator.worker_processes), 2)
-        self.assertEqual(len(self.orchestrator.worker_stop_events), 2)
+        self.assertEqual(len(self.orchestrator.workers), 2)
+        self.assertEqual(len(self.orchestrator.worker_command_queues), 2)
         
     def test_render_next_frame_empty_queue(self):
         """Test rendering when queue is empty."""
-        # Mock empty queue
-        self.orchestrator.render_queue = MagicMock()
-        self.orchestrator.render_queue.get_nowait.side_effect = Exception("Empty")
+        # Import the Empty exception that orchestrator is expecting
+        from queue import Empty
         
-        # Call render_next_frame
-        result = self.orchestrator.render_next_frame(1)
+        # Save original queue
+        original_queue = self.orchestrator.render_queue
         
-        # Should fall back to synchronous rendering
-        self.assertEqual(result, self.canvas.test_image)
+        try:
+            # Mock empty queue
+            self.orchestrator.render_queue = MagicMock()
+            self.orchestrator.render_queue.get_nowait.side_effect = Empty()
+            
+            # Call render_next_frame
+            result = self.orchestrator.render_next_frame(1)
+            
+            # Should fall back to synchronous rendering
+            self.assertEqual(result, self.canvas.test_image)
+        finally:
+            # Restore original queue for proper cleanup
+            self.orchestrator.render_queue = original_queue
         self.assertEqual(self.canvas.render_calls, 1)
     
     def test_handle_state_change(self):
         """Test handling of state changes."""
-        # Mock queue with some items
-        self.orchestrator.render_queue = MagicMock()
-        self.orchestrator.render_queue.get_nowait.side_effect = [
-            MagicMock(), MagicMock(), Exception("Empty")
-        ]
+        # Import the Empty exception that orchestrator is expecting
+        from queue import Empty
         
-        # Trigger state change
-        event = MockEvent()
-        self.orchestrator.handle_state_change(event)
+        # Save original queue
+        original_queue = self.orchestrator.render_queue
         
-        # Should have tried to get all items from queue
-        self.assertEqual(self.orchestrator.render_queue.get_nowait.call_count, 3)
+        try:
+            # Mock queue with some items
+            mock_queue = MagicMock()
+            # Provide enough items in side_effect for both the test and the teardown
+            mock_queue.get_nowait.side_effect = [
+                MagicMock(), MagicMock(), Empty(), Empty(), Empty(), Empty()
+            ]
+            self.orchestrator.render_queue = mock_queue
+            
+            # Trigger state change
+            event = MockEvent()
+            self.orchestrator.handle_state_change(event)
+            
+            # Should have tried to get items from queue
+            self.assertEqual(mock_queue.get_nowait.call_count, 3)
+        finally:
+            # Restore original queue for proper cleanup
+            self.orchestrator.render_queue = original_queue
     
     def test_shutdown(self):
         """Test proper shutdown of orchestrator."""
         # Initialize with mock workers
         self.orchestrator.initialize(worker_count=2)
         
-        # Mock worker processes and events
-        for i in range(2):
-            self.orchestrator.worker_stop_events[i] = MagicMock()
-            self.orchestrator.worker_processes[i] = MagicMock()
+        # Mock workers and command queues
+        self.orchestrator.workers = [MagicMock() for _ in range(2)]
+        for worker_id in self.orchestrator.worker_command_queues:
+            self.orchestrator.worker_command_queues[worker_id] = MagicMock()
+        
+        # Mock heartbeat monitor
+        self.orchestrator._heartbeat_monitor = MagicMock()
+        self.orchestrator._heartbeat_monitor.is_alive.return_value = True
         
         # Shutdown
         self.orchestrator.shutdown()
         
-        # Verify all stop events were set
-        for event in self.orchestrator.worker_stop_events:
-            event.set.assert_called_once()
+        # Verify heartbeat stop event was set
+        self.assertTrue(self.orchestrator._heartbeat_stop_event.is_set())
         
         # Verify all workers were joined
-        for worker in self.orchestrator.worker_processes:
+        for worker in self.orchestrator.workers:
             worker.join.assert_called_once()
 
 
