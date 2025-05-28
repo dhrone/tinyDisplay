@@ -1,0 +1,4832 @@
+{
+  "report_id": "dsl_validation_1748461138",
+  "timestamp": "2025-05-28T15:38:58.285780",
+  "framework_version": "1.0.0",
+  "executive_summary": {
+    "overall_recommendation": "DSL Approach Recommended",
+    "confidence_level": "Very High",
+    "key_findings": [
+      "DSL preferred in 0.0% of comparison scenarios",
+      "Average maintainability advantage: 17.4 points",
+      "DSL wins 0.0% of performance comparisons"
+    ],
+    "quantified_benefits": {
+      "readability_advantage": "0.0%",
+      "maintainability_improvement": "17.4 points",
+      "performance_advantage": "0.0% win rate"
+    },
+    "risk_assessment": "Low"
+  },
+  "comparison_analysis": {
+    "methodology": "Side-by-side comparison of equivalent DSL and JSON implementations",
+    "scenarios_tested": 6,
+    "summary_statistics": {
+      "total_comparisons": 6,
+      "dsl_preference_rate": 0.0,
+      "json_preference_rate": 1.0,
+      "average_dsl_readability": 5.0,
+      "average_json_readability": 5.0
+    },
+    "detailed_results": {
+      "widget_composition_simple_text_progress": {
+        "dsl_analysis": {
+          "code": "\n# DSL Approach - Simple Text + Progress Bar\ncanvas = Canvas(width=128, height=64)\ncanvas.add(\n    Text(\"CPU Usage\").position(10, 10).z_order(1),\n    ProgressBar(value=data.cpu_usage).position(10, 30).z_order(2)\n)\n",
+          "code_type": "dsl",
+          "lines_of_code": 8,
+          "logical_lines": 6,
+          "readability_score": 5.0,
+          "complexity_score": 5.0,
+          "maintainability_score": 4.333333333333334,
+          "expressiveness_score": 4.8
+        },
+        "json_analysis": {
+          "code": "\n{\n  \"canvas\": {\n    \"width\": 128,\n    \"height\": 64,\n    \"widgets\": [\n      {\n        \"type\": \"text\",\n        \"content\": \"CPU Usage\",\n        \"position\": {\"x\": 10, \"y\": 10},\n        \"z_order\": 1\n      },\n      {\n        \"type\": \"progress_bar\",\n        \"value\": \"data.cpu_usage\",\n        \"position\": {\"x\": 10, \"y\": 30},\n        \"z_order\": 2\n      }\n    ]\n  }\n}\n",
+          "code_type": "json",
+          "lines_of_code": 22,
+          "logical_lines": 20,
+          "readability_score": 5.0,
+          "complexity_score": 2.5,
+          "maintainability_score": 3.0,
+          "expressiveness_score": 3.0
+        },
+        "comparison": {
+          "dsl_score": 4.72,
+          "json_score": 3.6,
+          "readability_advantage_dsl": 0.0,
+          "maintainability_advantage_dsl": 1.333333333333334,
+          "expressiveness_advantage_dsl": 1.7999999999999998,
+          "lines_of_code_ratio": 0.36363636363636365,
+          "performance_data": {
+            "dsl_parse_time_ms": 0.022416003048419952,
+            "json_parse_time_ms": 0.0022919848561286926,
+            "parse_time_ratio": 9.780170662332385
+          },
+          "readability_scores": {
+            "dsl": 5.0,
+            "json": 5.0
+          },
+          "complexity_analysis": {
+            "dsl": 5.0,
+            "json": 2.5
+          },
+          "success": true,
+          "error_message": null,
+          "winner": "dsl"
+        },
+        "scenario": "simple_text_progress",
+        "comparison_type": "widget_composition"
+      },
+      "widget_composition_complex_dashboard": {
+        "dsl_analysis": {
+          "code": "\n# DSL Approach - Complex Dashboard\ndashboard = Canvas(width=256, height=128)\ndashboard.add(\n    Text(\"System Monitor\").position(10, 5).font_size(14).z_order(1),\n    ProgressBar(value=data.cpu_usage, label=\"CPU\").position(10, 25).z_order(2),\n    ProgressBar(value=data.memory_usage, label=\"RAM\").position(10, 45).z_order(2),\n    Text(f\"Temp: {data.temperature}\u00b0C\").position(10, 70).z_order(1),\n    Image(\"status_icon.png\").position(200, 10).z_order(3)\n)\ndashboard.animate.slide_in().sync('startup_sequence')\n",
+          "code_type": "dsl",
+          "lines_of_code": 12,
+          "logical_lines": 10,
+          "readability_score": 5.0,
+          "complexity_score": 5.0,
+          "maintainability_score": 4.2,
+          "expressiveness_score": 5.0
+        },
+        "json_analysis": {
+          "code": "\n{\n  \"canvas\": {\n    \"width\": 256,\n    \"height\": 128,\n    \"widgets\": [\n      {\n        \"type\": \"text\",\n        \"content\": \"System Monitor\",\n        \"position\": {\"x\": 10, \"y\": 5},\n        \"font_size\": 14,\n        \"z_order\": 1\n      },\n      {\n        \"type\": \"progress_bar\",\n        \"value\": \"data.cpu_usage\",\n        \"label\": \"CPU\",\n        \"position\": {\"x\": 10, \"y\": 25},\n        \"z_order\": 2\n      },\n      {\n        \"type\": \"progress_bar\", \n        \"value\": \"data.memory_usage\",\n        \"label\": \"RAM\",\n        \"position\": {\"x\": 10, \"y\": 45},\n        \"z_order\": 2\n      },\n      {\n        \"type\": \"text\",\n        \"content\": \"Temp: ${data.temperature}\u00b0C\",\n        \"position\": {\"x\": 10, \"y\": 70},\n        \"z_order\": 1\n      },\n      {\n        \"type\": \"image\",\n        \"source\": \"status_icon.png\",\n        \"position\": {\"x\": 200, \"y\": 10},\n        \"z_order\": 3\n      }\n    ],\n    \"animations\": [\n      {\n        \"type\": \"slide_in\",\n        \"sync_group\": \"startup_sequence\"\n      }\n    ]\n  }\n}\n",
+          "code_type": "json",
+          "lines_of_code": 49,
+          "logical_lines": 47,
+          "readability_score": 5.0,
+          "complexity_score": 2.5,
+          "maintainability_score": 3.0,
+          "expressiveness_score": 3.0
+        },
+        "comparison": {
+          "dsl_score": 4.76,
+          "json_score": 3.6,
+          "readability_advantage_dsl": 0.0,
+          "maintainability_advantage_dsl": 1.2000000000000002,
+          "expressiveness_advantage_dsl": 2.0,
+          "lines_of_code_ratio": 0.24489795918367346,
+          "performance_data": {
+            "dsl_parse_time_ms": 0.07816602010279894,
+            "json_parse_time_ms": 0.00595799065195024,
+            "parse_time_ratio": 13.11952714749774
+          },
+          "readability_scores": {
+            "dsl": 5.0,
+            "json": 5.0
+          },
+          "complexity_analysis": {
+            "dsl": 5.0,
+            "json": 2.5
+          },
+          "success": true,
+          "error_message": null,
+          "winner": "dsl"
+        },
+        "scenario": "complex_dashboard",
+        "comparison_type": "widget_composition"
+      },
+      "animation_coordination_sync_coordination": {
+        "dsl_analysis": {
+          "code": "\n# DSL Approach - Sync Coordination\ntext1.animate.scroll().sync('group_a')\ntext2.animate.scroll().sync('group_a')\nprogress1.animate.fill().sync('group_a')\n",
+          "code_type": "dsl",
+          "lines_of_code": 6,
+          "logical_lines": 4,
+          "readability_score": 5.0,
+          "complexity_score": 5.0,
+          "maintainability_score": 4.5,
+          "expressiveness_score": 4.2
+        },
+        "json_analysis": {
+          "code": "\n{\n  \"animations\": [\n    {\n      \"target\": \"text1\",\n      \"type\": \"scroll\",\n      \"sync_group\": \"group_a\"\n    },\n    {\n      \"target\": \"text2\", \n      \"type\": \"scroll\",\n      \"sync_group\": \"group_a\"\n    },\n    {\n      \"target\": \"progress1\",\n      \"type\": \"fill\",\n      \"sync_group\": \"group_a\"\n    }\n  ]\n}\n",
+          "code_type": "json",
+          "lines_of_code": 21,
+          "logical_lines": 19,
+          "readability_score": 5.0,
+          "complexity_score": 3.5,
+          "maintainability_score": 3.0,
+          "expressiveness_score": 3.0
+        },
+        "comparison": {
+          "dsl_score": 4.529999999999999,
+          "json_score": 3.6,
+          "readability_advantage_dsl": 0.0,
+          "maintainability_advantage_dsl": 1.5,
+          "expressiveness_advantage_dsl": 1.2000000000000002,
+          "lines_of_code_ratio": 0.2857142857142857,
+          "performance_data": {
+            "dsl_parse_time_ms": 0.016375008272007108,
+            "json_parse_time_ms": 0.0017080164980143309,
+            "parse_time_ratio": 9.587148772300509
+          },
+          "readability_scores": {
+            "dsl": 5.0,
+            "json": 5.0
+          },
+          "complexity_analysis": {
+            "dsl": 5.0,
+            "json": 3.5
+          },
+          "success": true,
+          "error_message": null,
+          "winner": "dsl"
+        },
+        "scenario": "sync_coordination",
+        "comparison_type": "animation_coordination"
+      },
+      "animation_coordination_sequential_coordination": {
+        "dsl_analysis": {
+          "code": "\n# DSL Approach - Sequential Coordination\nprogress1.animate.fill().then(\n    progress2.animate.fill()\n).then(\n    text1.animate.fade_in()\n).wait_for('data_ready')\n",
+          "code_type": "dsl",
+          "lines_of_code": 8,
+          "logical_lines": 6,
+          "readability_score": 5.0,
+          "complexity_score": 5.0,
+          "maintainability_score": 4.333333333333334,
+          "expressiveness_score": 4.2
+        },
+        "json_analysis": {
+          "code": "\n{\n  \"animation_sequence\": [\n    {\n      \"target\": \"progress1\",\n      \"type\": \"fill\",\n      \"wait_for_completion\": true\n    },\n    {\n      \"target\": \"progress2\",\n      \"type\": \"fill\", \n      \"wait_for_completion\": true\n    },\n    {\n      \"target\": \"text1\",\n      \"type\": \"fade_in\",\n      \"wait_for_event\": \"data_ready\"\n    }\n  ]\n}\n",
+          "code_type": "json",
+          "lines_of_code": 21,
+          "logical_lines": 19,
+          "readability_score": 5.0,
+          "complexity_score": 3.5,
+          "maintainability_score": 3.0,
+          "expressiveness_score": 3.0
+        },
+        "comparison": {
+          "dsl_score": 4.48,
+          "json_score": 3.6,
+          "readability_advantage_dsl": 0.0,
+          "maintainability_advantage_dsl": 1.333333333333334,
+          "expressiveness_advantage_dsl": 1.2000000000000002,
+          "lines_of_code_ratio": 0.38095238095238093,
+          "performance_data": {
+            "dsl_parse_time_ms": 0.011374999303370714,
+            "json_parse_time_ms": 0.001500011421740055,
+            "parse_time_ratio": 7.583275126115638
+          },
+          "readability_scores": {
+            "dsl": 5.0,
+            "json": 5.0
+          },
+          "complexity_analysis": {
+            "dsl": 5.0,
+            "json": 3.5
+          },
+          "success": true,
+          "error_message": null,
+          "winner": "dsl"
+        },
+        "scenario": "sequential_coordination",
+        "comparison_type": "animation_coordination"
+      },
+      "custom_dashboard": {
+        "dsl_analysis": {
+          "code": "\n# DSL Approach - System Dashboard\ndashboard = Canvas(width=256, height=128)\ndashboard.add(\n    Text(\"System Monitor\").position(10, 5).font_size(14),\n    ProgressBar(value=data.cpu_usage, label=\"CPU\").position(10, 25),\n    ProgressBar(value=data.memory_usage, label=\"RAM\").position(10, 45),\n    Text(f\"Temp: {data.temperature}\u00b0C\").position(10, 70),\n    Image(\"status_icon.png\").position(200, 10)\n)\ndashboard.animate.slide_in().sync('startup_sequence')\n",
+          "code_type": "dsl",
+          "lines_of_code": 12,
+          "logical_lines": 10,
+          "readability_score": 5.0,
+          "complexity_score": 5.0,
+          "maintainability_score": 4.2,
+          "expressiveness_score": 5.0
+        },
+        "json_analysis": {
+          "code": "{\n  \"canvas\": {\n    \"width\": 256,\n    \"height\": 128,\n    \"widgets\": [\n      {\n        \"type\": \"text\",\n        \"content\": \"System Monitor\",\n        \"position\": {\"x\": 10, \"y\": 5},\n        \"font_size\": 14\n      },\n      {\n        \"type\": \"progress_bar\",\n        \"value\": {\"binding\": \"data.cpu_usage\"},\n        \"label\": \"CPU\",\n        \"position\": {\"x\": 10, \"y\": 25}\n      },\n      {\n        \"type\": \"progress_bar\",\n        \"value\": {\"binding\": \"data.memory_usage\"},\n        \"label\": \"RAM\",\n        \"position\": {\"x\": 10, \"y\": 45}\n      },\n      {\n        \"type\": \"text\",\n        \"content\": {\"binding\": \"data.temperature\", \"template\": \"Temp: {value}\u00b0C\"},\n        \"position\": {\"x\": 10, \"y\": 70}\n      },\n      {\n        \"type\": \"image\",\n        \"src\": \"status_icon.png\",\n        \"position\": {\"x\": 200, \"y\": 10}\n      }\n    ],\n    \"animations\": [\n      {\n        \"type\": \"slide_in\",\n        \"sync_group\": \"startup_sequence\"\n      }\n    ]\n  }\n}",
+          "code_type": "json",
+          "lines_of_code": 42,
+          "logical_lines": 42,
+          "readability_score": 5.0,
+          "complexity_score": 2.5,
+          "maintainability_score": 3.0,
+          "expressiveness_score": 3.3
+        },
+        "comparison": {
+          "dsl_score": 4.76,
+          "json_score": 3.7199999999999998,
+          "readability_advantage_dsl": 0.0,
+          "maintainability_advantage_dsl": 1.2000000000000002,
+          "expressiveness_advantage_dsl": 1.7000000000000002,
+          "lines_of_code_ratio": 0.2857142857142857,
+          "performance_data": {
+            "dsl_parse_time_ms": 0.04087499110028148,
+            "json_parse_time_ms": 0.003958994057029486,
+            "parse_time_ratio": 10.324590163934426
+          },
+          "readability_scores": {
+            "dsl": 5.0,
+            "json": 5.0
+          },
+          "complexity_analysis": {
+            "dsl": 5.0,
+            "json": 2.5
+          },
+          "success": true,
+          "error_message": null,
+          "winner": "dsl"
+        },
+        "scenario": "custom",
+        "comparison_type": "widget_composition"
+      },
+      "custom_simple_widget": {
+        "dsl_analysis": {
+          "code": "\n# DSL Approach - Simple Widget\ncanvas = Canvas(width=128, height=64)\ncanvas.add(\n    Text(\"CPU Usage\").position(10, 10),\n    ProgressBar(value=data.cpu_usage).position(10, 30)\n)\n",
+          "code_type": "dsl",
+          "lines_of_code": 8,
+          "logical_lines": 6,
+          "readability_score": 5.0,
+          "complexity_score": 5.0,
+          "maintainability_score": 4.333333333333334,
+          "expressiveness_score": 4.8
+        },
+        "json_analysis": {
+          "code": "{\n  \"canvas\": {\n    \"width\": 128,\n    \"height\": 64,\n    \"widgets\": [\n      {\n        \"type\": \"text\",\n        \"content\": \"CPU Usage\",\n        \"position\": {\"x\": 10, \"y\": 10}\n      },\n      {\n        \"type\": \"progress_bar\",\n        \"value\": {\"binding\": \"data.cpu_usage\"},\n        \"position\": {\"x\": 10, \"y\": 30}\n      }\n    ]\n  }\n}",
+          "code_type": "json",
+          "lines_of_code": 18,
+          "logical_lines": 18,
+          "readability_score": 5.0,
+          "complexity_score": 2.5,
+          "maintainability_score": 3.0,
+          "expressiveness_score": 3.3
+        },
+        "comparison": {
+          "dsl_score": 4.72,
+          "json_score": 3.7199999999999998,
+          "readability_advantage_dsl": 0.0,
+          "maintainability_advantage_dsl": 1.333333333333334,
+          "expressiveness_advantage_dsl": 1.5,
+          "lines_of_code_ratio": 0.4444444444444444,
+          "performance_data": {
+            "dsl_parse_time_ms": 0.015208002878353,
+            "json_parse_time_ms": 0.0018329883459955454,
+            "parse_time_ratio": 8.296835553579651
+          },
+          "readability_scores": {
+            "dsl": 5.0,
+            "json": 5.0
+          },
+          "complexity_analysis": {
+            "dsl": 5.0,
+            "json": 2.5
+          },
+          "success": true,
+          "error_message": null,
+          "winner": "dsl"
+        },
+        "scenario": "custom",
+        "comparison_type": "widget_composition"
+      }
+    }
+  },
+  "developer_experience_analysis": {
+    "methodology": "Simulated developer sessions across experience levels",
+    "data_collection": {
+      "total_tasks": 36,
+      "approaches_tested": [
+        "dsl",
+        "json"
+      ],
+      "experience_levels": [
+        "beginner",
+        "intermediate",
+        "expert"
+      ]
+    },
+    "comparative_metrics": {
+      "dsl_metrics": {
+        "time_to_productivity_hours": 3.0,
+        "initial_task_completion_rate": 0.3333333333333333,
+        "learning_curve_slope": 0.14567901234567898,
+        "average_task_completion_time": 863.3333333333334,
+        "lines_of_code_per_hour": 52.12355212355212,
+        "successful_task_rate": 0.8333333333333334,
+        "average_errors_per_task": 0.8888888888888888,
+        "error_resolution_time": 259.0,
+        "debugging_difficulty_rating": 2.31,
+        "overall_satisfaction_rating": 3.884444444444444,
+        "ease_of_use_rating": 2.69,
+        "confidence_rating": 4.194444444444445,
+        "preference_score": 9.402546296296297,
+        "productivity_improvement_vs_baseline": 0.0,
+        "error_rate_improvement_vs_baseline": 0.0,
+        "learning_time_improvement_vs_baseline": 0.0
+      },
+      "json_metrics": {
+        "time_to_productivity_hours": 6.0,
+        "initial_task_completion_rate": 0.0,
+        "learning_curve_slope": 0.15123456790123452,
+        "average_task_completion_time": 1079.1666666666667,
+        "lines_of_code_per_hour": 49.48262548262549,
+        "successful_task_rate": 0.5,
+        "average_errors_per_task": 2.0,
+        "error_resolution_time": 323.75,
+        "debugging_difficulty_rating": 3.3000000000000003,
+        "overall_satisfaction_rating": 2.102777777777778,
+        "ease_of_use_rating": 1.6999999999999997,
+        "confidence_rating": 3.4027777777777777,
+        "preference_score": 2.8923611111111107,
+        "productivity_improvement_vs_baseline": 0.0,
+        "error_rate_improvement_vs_baseline": 0.0,
+        "learning_time_improvement_vs_baseline": 0.0
+      },
+      "comparison": {
+        "productivity_advantage_dsl": 0.05337078651685384,
+        "error_rate_advantage_dsl": 0.5555555555555556,
+        "learning_time_advantage_dsl": 0.5,
+        "confidence_advantage_dsl": 0.791666666666667,
+        "preference_advantage_dsl": 6.510185185185186,
+        "overall_dsl_superiority_score": 2.3891623315993065
+      }
+    },
+    "learning_curve_analysis": {
+      "sim_dsl_beginner_dsl": {
+        "time_improvement_ratio": 0.6666666666666666,
+        "error_reduction_ratio": 2.5,
+        "confidence_improvement": 0.0,
+        "learning_velocity": 0.0
+      },
+      "sim_json_beginner_json": {
+        "time_improvement_ratio": 0.6666666666666666,
+        "error_reduction_ratio": 2.25,
+        "confidence_improvement": 0.0,
+        "learning_velocity": 0.0
+      },
+      "sim_dsl_intermediate_dsl": {
+        "time_improvement_ratio": 0.6666666666666666,
+        "error_reduction_ratio": 5.0,
+        "confidence_improvement": 0.0,
+        "learning_velocity": 0.0
+      },
+      "sim_json_intermediate_json": {
+        "time_improvement_ratio": 0.6666666666666666,
+        "error_reduction_ratio": 2.0,
+        "confidence_improvement": 0.0,
+        "learning_velocity": 0.0
+      },
+      "sim_dsl_expert_dsl": {
+        "time_improvement_ratio": 0.6666666666666666,
+        "error_reduction_ratio": 0.0,
+        "confidence_improvement": 0.0,
+        "learning_velocity": 0.0
+      },
+      "sim_json_expert_json": {
+        "time_improvement_ratio": 0.6666666666666666,
+        "error_reduction_ratio": 5.0,
+        "confidence_improvement": 0.0,
+        "learning_velocity": 0.0
+      }
+    }
+  },
+  "complexity_analysis": {
+    "methodology": "Multi-dimensional complexity analysis including cyclomatic, cognitive, and structural complexity",
+    "scenarios_analyzed": 11,
+    "complexity_comparisons": {
+      "widget_composition_simple_text_progress": {
+        "dsl_metrics": {
+          "lines_of_code": 8,
+          "logical_lines": 6,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.833333333333334,
+          "average_line_length": 33.166666666666664,
+          "identifier_clarity_score": 4.5,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 8,
+          "method_chain_length": 1,
+          "variable_usage_count": 6
+        },
+        "json_metrics": {
+          "lines_of_code": 22,
+          "logical_lines": 20,
+          "comment_lines": 0,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 17,
+          "nesting_depth": 5,
+          "maintainability_index": 93.12139752900684,
+          "technical_debt_ratio": 0.16,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 3.3,
+          "average_line_length": 11.55,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 16,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 6.878602470993158,
+          "readability_advantage_dsl": 1.533333333333334,
+          "complexity_advantage_dsl": 17,
+          "technical_debt_advantage_dsl": 0.16,
+          "lines_of_code_ratio": 0.3,
+          "overall_complexity_score_dsl": 0.9888888888888889,
+          "overall_complexity_score_json": 0.8104046584300227
+        }
+      },
+      "widget_composition_complex_dashboard": {
+        "dsl_metrics": {
+          "lines_of_code": 12,
+          "logical_lines": 10,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.8,
+          "average_line_length": 47.7,
+          "identifier_clarity_score": 4.5,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 20,
+          "method_chain_length": 2,
+          "variable_usage_count": 12
+        },
+        "json_metrics": {
+          "lines_of_code": 49,
+          "logical_lines": 47,
+          "comment_lines": 0,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 43,
+          "nesting_depth": 5,
+          "maintainability_index": 54.508395473503114,
+          "technical_debt_ratio": 1.0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 0.6999999999999997,
+          "average_line_length": 13.680851063829786,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 40,
+          "json_array_count": 2,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 45.491604526496886,
+          "readability_advantage_dsl": 4.1,
+          "complexity_advantage_dsl": 43,
+          "technical_debt_advantage_dsl": 1.0,
+          "lines_of_code_ratio": 0.2127659574468085,
+          "overall_complexity_score_dsl": 0.9866666666666667,
+          "overall_complexity_score_json": 0.22836131824501038
+        }
+      },
+      "animation_coordination_sync_coordination": {
+        "dsl_metrics": {
+          "lines_of_code": 6,
+          "logical_lines": 4,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 5.0,
+          "average_line_length": 37.5,
+          "identifier_clarity_score": 5.0,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 6,
+          "method_chain_length": 2,
+          "variable_usage_count": 3
+        },
+        "json_metrics": {
+          "lines_of_code": 21,
+          "logical_lines": 19,
+          "comment_lines": 0,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 7,
+          "nesting_depth": 3,
+          "maintainability_index": 94.95583711464111,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 5.0,
+          "average_line_length": 10.631578947368421,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 3,
+          "json_key_count": 10,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 5.044162885358887,
+          "readability_advantage_dsl": 0.0,
+          "complexity_advantage_dsl": 7,
+          "technical_debt_advantage_dsl": 0,
+          "lines_of_code_ratio": 0.21052631578947367,
+          "overall_complexity_score_dsl": 1.0,
+          "overall_complexity_score_json": 0.9831861237154703
+        }
+      },
+      "animation_coordination_sequential_coordination": {
+        "dsl_metrics": {
+          "lines_of_code": 8,
+          "logical_lines": 6,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 5.0,
+          "average_line_length": 24.666666666666668,
+          "identifier_clarity_score": 5.0,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 6,
+          "method_chain_length": 2,
+          "variable_usage_count": 3
+        },
+        "json_metrics": {
+          "lines_of_code": 21,
+          "logical_lines": 19,
+          "comment_lines": 0,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 7,
+          "nesting_depth": 3,
+          "maintainability_index": 94.95583711464111,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 5.0,
+          "average_line_length": 12.0,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 3,
+          "json_key_count": 10,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 5.044162885358887,
+          "readability_advantage_dsl": 0.0,
+          "complexity_advantage_dsl": 7,
+          "technical_debt_advantage_dsl": 0,
+          "lines_of_code_ratio": 0.3157894736842105,
+          "overall_complexity_score_dsl": 1.0,
+          "overall_complexity_score_json": 0.9831861237154703
+        }
+      },
+      "animation_coordination_barrier_coordination": {
+        "dsl_metrics": {
+          "lines_of_code": 6,
+          "logical_lines": 4,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 5.0,
+          "average_line_length": 26.0,
+          "identifier_clarity_score": 5.0,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 3,
+          "method_chain_length": 2,
+          "variable_usage_count": 2
+        },
+        "json_metrics": {
+          "lines_of_code": 17,
+          "logical_lines": 15,
+          "comment_lines": 0,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 9,
+          "nesting_depth": 4,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.5,
+          "average_line_length": 13.0,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 4,
+          "json_key_count": 7,
+          "json_array_count": 3,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 0.0,
+          "readability_advantage_dsl": 0.5,
+          "complexity_advantage_dsl": 9,
+          "technical_debt_advantage_dsl": 0,
+          "lines_of_code_ratio": 0.26666666666666666,
+          "overall_complexity_score_dsl": 1.0,
+          "overall_complexity_score_json": 0.9666666666666667
+        }
+      },
+      "data_binding_simple_binding": {
+        "dsl_metrics": {
+          "lines_of_code": 6,
+          "logical_lines": 4,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 5.0,
+          "average_line_length": 42.75,
+          "identifier_clarity_score": 4.777777777777778,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 5,
+          "method_chain_length": 1,
+          "variable_usage_count": 9
+        },
+        "json_metrics": {
+          "lines_of_code": 16,
+          "logical_lines": 16,
+          "comment_lines": 0,
+          "blank_lines": 0,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 25,
+          "nesting_depth": 5,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0.4,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 2.5,
+          "average_line_length": 12.875,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 14,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 0.0,
+          "readability_advantage_dsl": 2.5,
+          "complexity_advantage_dsl": 25,
+          "technical_debt_advantage_dsl": 0.4,
+          "lines_of_code_ratio": 0.25,
+          "overall_complexity_score_dsl": 1.0,
+          "overall_complexity_score_json": 0.7000000000000001
+        }
+      },
+      "data_binding_complex_binding": {
+        "dsl_metrics": {
+          "lines_of_code": 10,
+          "logical_lines": 8,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.835227272727273,
+          "average_line_length": 47.875,
+          "identifier_clarity_score": 4.545454545454546,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 14,
+          "method_chain_length": 1,
+          "variable_usage_count": 11
+        },
+        "json_metrics": {
+          "lines_of_code": 33,
+          "logical_lines": 33,
+          "comment_lines": 0,
+          "blank_lines": 0,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 47,
+          "nesting_depth": 5,
+          "maintainability_index": 72.50808512608396,
+          "technical_debt_ratio": 1.0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 0.2999999999999998,
+          "average_line_length": 17.21212121212121,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 35,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 27.491914873916045,
+          "readability_advantage_dsl": 4.5352272727272736,
+          "complexity_advantage_dsl": 47,
+          "technical_debt_advantage_dsl": 1.0,
+          "lines_of_code_ratio": 0.24242424242424243,
+          "overall_complexity_score_dsl": 0.9890151515151516,
+          "overall_complexity_score_json": 0.2616936170869465
+        }
+      },
+      "error_handling_validation_errors": {
+        "dsl_metrics": {
+          "lines_of_code": 10,
+          "logical_lines": 8,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 3,
+          "cognitive_complexity": 3,
+          "nesting_depth": 2,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.883928571428571,
+          "average_line_length": 31.0,
+          "identifier_clarity_score": 4.642857142857143,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 7,
+          "method_chain_length": 1,
+          "variable_usage_count": 14
+        },
+        "json_metrics": {
+          "lines_of_code": 20,
+          "logical_lines": 20,
+          "comment_lines": 0,
+          "blank_lines": 0,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 18,
+          "nesting_depth": 5,
+          "maintainability_index": 93.12139752900684,
+          "technical_debt_ratio": 0.19,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 3.2,
+          "average_line_length": 11.4,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 13,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 6.878602470993158,
+          "readability_advantage_dsl": 1.683928571428571,
+          "complexity_advantage_dsl": 15,
+          "technical_debt_advantage_dsl": 0.19,
+          "lines_of_code_ratio": 0.4,
+          "overall_complexity_score_dsl": 0.9922619047619047,
+          "overall_complexity_score_json": 0.7937379917633561
+        }
+      },
+      "error_handling_data_errors": {
+        "dsl_metrics": {
+          "lines_of_code": 9,
+          "logical_lines": 7,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.9603174603174605,
+          "average_line_length": 29.714285714285715,
+          "identifier_clarity_score": 4.777777777777778,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 7,
+          "method_chain_length": 1,
+          "variable_usage_count": 9
+        },
+        "json_metrics": {
+          "lines_of_code": 16,
+          "logical_lines": 16,
+          "comment_lines": 0,
+          "blank_lines": 0,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 25,
+          "nesting_depth": 5,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0.4,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 2.5,
+          "average_line_length": 15.25,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 16,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 0.0,
+          "readability_advantage_dsl": 2.4603174603174605,
+          "complexity_advantage_dsl": 25,
+          "technical_debt_advantage_dsl": 0.4,
+          "lines_of_code_ratio": 0.4375,
+          "overall_complexity_score_dsl": 0.9973544973544973,
+          "overall_complexity_score_json": 0.7000000000000001
+        }
+      },
+      "custom_dashboard": {
+        "dsl_metrics": {
+          "lines_of_code": 12,
+          "logical_lines": 10,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.8,
+          "average_line_length": 42.1,
+          "identifier_clarity_score": 4.5,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 15,
+          "method_chain_length": 2,
+          "variable_usage_count": 12
+        },
+        "json_metrics": {
+          "lines_of_code": 42,
+          "logical_lines": 42,
+          "comment_lines": 0,
+          "blank_lines": 0,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 55,
+          "nesting_depth": 5,
+          "maintainability_index": 60.58200068579269,
+          "technical_debt_ratio": 1.0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 0.0,
+          "average_line_length": 15.095238095238095,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 39,
+          "json_array_count": 2,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 39.41799931420731,
+          "readability_advantage_dsl": 4.8,
+          "complexity_advantage_dsl": 55,
+          "technical_debt_advantage_dsl": 1.0,
+          "lines_of_code_ratio": 0.23809523809523808,
+          "overall_complexity_score_dsl": 0.9866666666666667,
+          "overall_complexity_score_json": 0.20194000228597564
+        }
+      },
+      "custom_simple_widget": {
+        "dsl_metrics": {
+          "lines_of_code": 8,
+          "logical_lines": 6,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.833333333333334,
+          "average_line_length": 27.333333333333332,
+          "identifier_clarity_score": 4.5,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 6,
+          "method_chain_length": 1,
+          "variable_usage_count": 6
+        },
+        "json_metrics": {
+          "lines_of_code": 18,
+          "logical_lines": 18,
+          "comment_lines": 0,
+          "blank_lines": 0,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 21,
+          "nesting_depth": 5,
+          "maintainability_index": 96.83922086866761,
+          "technical_debt_ratio": 0.28,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 2.9,
+          "average_line_length": 12.11111111111111,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 15,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 3.16077913133239,
+          "readability_advantage_dsl": 1.933333333333334,
+          "complexity_advantage_dsl": 21,
+          "technical_debt_advantage_dsl": 0.28,
+          "lines_of_code_ratio": 0.3333333333333333,
+          "overall_complexity_score_dsl": 0.9888888888888889,
+          "overall_complexity_score_json": 0.7561307362288922
+        }
+      }
+    }
+  },
+  "performance_analysis": {
+    "methodology": "Parsing speed, memory usage, and scalability testing",
+    "scenarios_tested": 11,
+    "performance_comparisons": {
+      "widget_composition_simple_text_progress": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.09242000203812495,
+            "parse_memory_kb": 39.5078125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.7500716235733,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461138.34669
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.012380849511828274,
+            "parse_memory_kb": 3.2314453125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.89439004596672,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461138.391565
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -6.464754494417349,
+            "memory_usage_advantage_dsl": -11.226050166213357,
+            "performance_score_advantage_dsl": -1.144318422393411,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.13396287858466985,
+            "memory_ratio_dsl_to_json": 0.08179256476171644
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.09079584851861,
+              "memory_kb": 39.5068359375,
+              "success": true,
+              "code_size": 212
+            },
+            "scale_2x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 78.78515625,
+              "success": false,
+              "code_size": 341
+            },
+            "scale_5x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 122.1796875,
+              "success": false,
+              "code_size": 728
+            },
+            "scale_10x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 190.9990234375,
+              "success": false,
+              "code_size": 1383
+            },
+            "scale_20x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 298.5498046875,
+              "success": false,
+              "code_size": 2697
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": Infinity,
+            "memory_scaling_factor": 7.556915090841676,
+            "scalability_rating": "Critical",
+            "linear_scaling": false,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.011887600703630596,
+              "memory_kb": 3.2314453125,
+              "success": true,
+              "code_size": 418
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.01771465176716447,
+              "memory_kb": 4.1484375,
+              "success": true,
+              "code_size": 757
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.033429148606956005,
+              "memory_kb": 7.2666015625,
+              "success": true,
+              "code_size": 1784
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.05966449825791642,
+              "memory_kb": 12.1875,
+              "success": true,
+              "code_size": 3509
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.11212079698452726,
+              "memory_kb": 22.029296875,
+              "success": true,
+              "code_size": 6939
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 9.431743190220413,
+            "memory_scaling_factor": 6.817165306739196,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.144318422393411,
+          "scalability_winner": "json",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "widget_composition_complex_dashboard": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.22478664090158418,
+            "parse_memory_kb": 71.001953125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 97.71259075761888,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461138.588384
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.02327378111658618,
+            "parse_memory_kb": 5.3740234375,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.8224876500934,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461138.6351821
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -8.658363622805958,
+            "memory_usage_advantage_dsl": -12.212066145738689,
+            "performance_score_advantage_dsl": -2.1098968924745094,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.10353720765272648,
+            "memory_ratio_dsl_to_json": 0.07568838885373971
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.22253755014389753,
+              "memory_kb": 71.0009765625,
+              "success": true,
+              "code_size": 506
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.3357435023644939,
+              "memory_kb": 114.5,
+              "success": true,
+              "code_size": 807
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.8149145520292222,
+              "memory_kb": 231.07421875,
+              "success": true,
+              "code_size": 1710
+            },
+            "scale_10x": {
+              "parse_time_ms": 1.4225812468794174,
+              "memory_kb": 441.30078125,
+              "success": true,
+              "code_size": 3235
+            },
+            "scale_20x": {
+              "parse_time_ms": 2.8510311982245184,
+              "memory_kb": 853.51171875,
+              "success": true,
+              "code_size": 6293
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 12.811461240500675,
+            "memory_scaling_factor": 12.021126469981432,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.023401997168548405,
+              "memory_kb": 5.3740234375,
+              "success": true,
+              "code_size": 1144
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.03901470045093447,
+              "memory_kb": 7.8564453125,
+              "success": true,
+              "code_size": 2098
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.08560825226595625,
+              "memory_kb": 15.7880859375,
+              "success": true,
+              "code_size": 4982
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.15377924864878878,
+              "memory_kb": 28.8642578125,
+              "success": true,
+              "code_size": 9822
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.320562299748417,
+              "memory_kb": 54.8681640625,
+              "success": true,
+              "code_size": 19452
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 13.698074460894443,
+            "memory_scaling_factor": 10.209885516990733,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 2.1098968924745094,
+          "scalability_winner": "tie",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "animation_coordination_sync_coordination": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.06569499935721979,
+            "parse_memory_kb": 39.009765625,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.78372053169994,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461138.915668
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.009214970923494548,
+            "parse_memory_kb": 2.9814453125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.90410616097856,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461138.962471
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -6.129159701385862,
+            "memory_usage_advantage_dsl": -12.08417949557812,
+            "performance_score_advantage_dsl": -1.1203856292786156,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.14026898567100504,
+            "memory_ratio_dsl_to_json": 0.07642817804035448
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.0652957518468611,
+              "memory_kb": 39.0087890625,
+              "success": true,
+              "code_size": 153
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.06772509805159643,
+              "memory_kb": 39.0087890625,
+              "success": true,
+              "code_size": 153
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.06443549937102944,
+              "memory_kb": 39.0087890625,
+              "success": true,
+              "code_size": 153
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.0664751511067152,
+              "memory_kb": 39.0087890625,
+              "success": true,
+              "code_size": 153
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.06442289741244167,
+              "memory_kb": 39.0087890625,
+              "success": true,
+              "code_size": 153
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 0.9866322936832623,
+            "memory_scaling_factor": 1.0,
+            "scalability_rating": "Excellent",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.00899579463293776,
+              "memory_kb": 2.9814453125,
+              "success": true,
+              "code_size": 302
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.01289375068154186,
+              "memory_kb": 3.966796875,
+              "success": true,
+              "code_size": 580
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.025431349058635533,
+              "memory_kb": 6.8916015625,
+              "success": true,
+              "code_size": 1414
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.04539369838312268,
+              "memory_kb": 11.787109375,
+              "success": true,
+              "code_size": 2804
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.08496249793097377,
+              "memory_kb": 21.578125,
+              "success": true,
+              "code_size": 5584
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 9.444690702462996,
+            "memory_scaling_factor": 7.237471339665903,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.1203856292786156,
+          "scalability_winner": "dsl",
+          "recommendation": "DSL recommended for scalable applications"
+        }
+      },
+      "animation_coordination_sequential_coordination": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.057334559969604015,
+            "parse_memory_kb": 30.6904296875,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.03915291739628,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.114172
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.008556689426768571,
+            "parse_memory_kb": 2.9638671875,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.90509430177626,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.159622
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -5.7005540472510035,
+            "memory_usage_advantage_dsl": -9.354859967051071,
+            "performance_score_advantage_dsl": -0.8659413843799797,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.1492413900325547,
+            "memory_ratio_dsl_to_json": 0.09657301046870526
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.056831301480997354,
+              "memory_kb": 30.689453125,
+              "success": true,
+              "code_size": 161
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.056527103879489005,
+              "memory_kb": 30.689453125,
+              "success": true,
+              "code_size": 161
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.056683397269807756,
+              "memory_kb": 30.689453125,
+              "success": true,
+              "code_size": 161
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.055883347522467375,
+              "memory_kb": 30.689453125,
+              "success": true,
+              "code_size": 161
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.05644370539812371,
+              "memory_kb": 30.689453125,
+              "success": true,
+              "code_size": 161
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 0.9931798837476343,
+            "memory_scaling_factor": 1.0,
+            "scalability_rating": "Excellent",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.00911670213099569,
+              "memory_kb": 2.9638671875,
+              "success": true,
+              "code_size": 328
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.012041701120324433,
+              "memory_kb": 3.861328125,
+              "success": true,
+              "code_size": 624
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.02497704845154658,
+              "memory_kb": 6.5224609375,
+              "success": true,
+              "code_size": 1512
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.04139589727856219,
+              "memory_kb": 10.978515625,
+              "success": true,
+              "code_size": 2992
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.07831659750081599,
+              "memory_kb": 19.890625,
+              "success": true,
+              "code_size": 5952
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 8.590452597387051,
+            "memory_scaling_factor": 6.711037891268534,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 0.8659413843799797,
+          "scalability_winner": "dsl",
+          "recommendation": "DSL recommended for scalable applications"
+        }
+      },
+      "animation_coordination_barrier_coordination": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.034489999525249004,
+            "parse_memory_kb": 28.142578125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.13157965658232,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.307643
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.008927897724788636,
+            "parse_memory_kb": 3.0595703125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.90196336221764,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.354799
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -2.863171441747843,
+            "memory_usage_advantage_dsl": -8.198212575805936,
+            "performance_score_advantage_dsl": -0.7703837056353251,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.25885467810032337,
+            "memory_ratio_dsl_to_json": 0.10871677423832327
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.034429048537276685,
+              "memory_kb": 28.1416015625,
+              "success": true,
+              "code_size": 111
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.03389580379007384,
+              "memory_kb": 28.1416015625,
+              "success": true,
+              "code_size": 111
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.034814699029084295,
+              "memory_kb": 28.1416015625,
+              "success": true,
+              "code_size": 111
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.0332770447130315,
+              "memory_kb": 28.1416015625,
+              "success": true,
+              "code_size": 111
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.034902000334113836,
+              "memory_kb": 28.1416015625,
+              "success": true,
+              "code_size": 111
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 1.013736998753395,
+            "memory_scaling_factor": 1.0,
+            "scalability_rating": "Excellent",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.009041698649525642,
+              "memory_kb": 3.0595703125,
+              "success": true,
+              "code_size": 295
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.012081202294211835,
+              "memory_kb": 3.7275390625,
+              "success": true,
+              "code_size": 536
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.021233203005976975,
+              "memory_kb": 6.1455078125,
+              "success": true,
+              "code_size": 1259
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.03666884440463036,
+              "memory_kb": 10.1962890625,
+              "success": true,
+              "code_size": 2464
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.06592089921468869,
+              "memory_kb": 18.1728515625,
+              "success": true,
+              "code_size": 4874
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 7.290764907116996,
+            "memory_scaling_factor": 5.939674433450367,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 0.7703837056353251,
+          "scalability_winner": "dsl",
+          "recommendation": "DSL recommended for scalable applications"
+        }
+      },
+      "data_binding_simple_binding": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.08098580845398828,
+            "parse_memory_kb": 39.33984375,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.7631146215822,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.505331
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.011202910682186484,
+            "parse_memory_kb": 3.5009765625,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.88712866564747,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.552448
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -6.228997066160862,
+            "memory_usage_advantage_dsl": -10.236820083682009,
+            "performance_score_advantage_dsl": -1.1240140440652624,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.13833177560425747,
+            "memory_ratio_dsl_to_json": 0.08899314864462318
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.08193329849746078,
+              "memory_kb": 39.3388671875,
+              "success": true,
+              "code_size": 174
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.15942079771775752,
+              "memory_kb": 53.1220703125,
+              "success": true,
+              "code_size": 312
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.36191239778418094,
+              "memory_kb": 121.263671875,
+              "success": true,
+              "code_size": 726
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.7364166012848727,
+              "memory_kb": 234.654296875,
+              "success": true,
+              "code_size": 1426
+            },
+            "scale_20x": {
+              "parse_time_ms": 1.4943019981728867,
+              "memory_kb": 459.908203125,
+              "success": true,
+              "code_size": 2830
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 18.238030514775346,
+            "memory_scaling_factor": 11.690936623389518,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.011349903070367873,
+              "memory_kb": 3.5009765625,
+              "success": true,
+              "code_size": 405
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.015600150800310075,
+              "memory_kb": 4.7783203125,
+              "success": true,
+              "code_size": 767
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.03305829886812717,
+              "memory_kb": 8.9775390625,
+              "success": true,
+              "code_size": 1863
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.057116601965390146,
+              "memory_kb": 15.7001953125,
+              "success": true,
+              "code_size": 3703
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.10571439925115556,
+              "memory_kb": 29.1455078125,
+              "success": true,
+              "code_size": 7363
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 9.31412353001964,
+            "memory_scaling_factor": 8.324965132496514,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.1240140440652624,
+          "scalability_winner": "json",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "data_binding_complex_binding": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.16882915078895167,
+            "parse_memory_kb": 61.89453125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.02498365694774,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.7755861
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.020285738282836974,
+            "parse_memory_kb": 5.361328125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.82496013945202,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.8236349
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -7.3225539260649875,
+            "memory_usage_advantage_dsl": -10.544626593806921,
+            "performance_score_advantage_dsl": -1.7999764825042774,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.1201554245107563,
+            "memory_ratio_dsl_to_json": 0.0866203849794888
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.16802284953882918,
+              "memory_kb": 61.8935546875,
+              "success": true,
+              "code_size": 406
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.28658335213549435,
+              "memory_kb": 87.7119140625,
+              "success": true,
+              "code_size": 659
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.6259375484660268,
+              "memory_kb": 192.7314453125,
+              "success": true,
+              "code_size": 1418
+            },
+            "scale_10x": {
+              "parse_time_ms": 1.2443146464647725,
+              "memory_kb": 367.6328125,
+              "success": true,
+              "code_size": 2698
+            },
+            "scale_20x": {
+              "parse_time_ms": 2.442870900267735,
+              "memory_kb": 712.03515625,
+              "success": true,
+              "code_size": 5264
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 14.53892078947989,
+            "memory_scaling_factor": 11.504189084712602,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.020683348702732474,
+              "memory_kb": 5.361328125,
+              "success": true,
+              "code_size": 1024
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.033262498618569225,
+              "memory_kb": 8.263671875,
+              "success": true,
+              "code_size": 1970
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.07194990466814488,
+              "memory_kb": 17.412109375,
+              "success": true,
+              "code_size": 4825
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.14133134682197124,
+              "memory_kb": 32.576171875,
+              "success": true,
+              "code_size": 9610
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.2906893991166726,
+              "memory_kb": 62.787109375,
+              "success": true,
+              "code_size": 19140
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 14.054271544446266,
+            "memory_scaling_factor": 11.71111111111111,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.7999764825042774,
+          "scalability_winner": "tie",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "error_handling_validation_errors": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.12944007146870717,
+            "parse_memory_kb": 52.3701171875,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.33828843434691,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.089244
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.010679991100914776,
+            "parse_memory_kb": 3.4736328125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.88831502185437,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.135217
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -11.119866977943476,
+            "memory_usage_advantage_dsl": -14.076468934495361,
+            "performance_score_advantage_dsl": -1.5500265875074604,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.0825091563974972,
+            "memory_ratio_dsl_to_json": 0.06632852853972812
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.1281874458072707,
+              "memory_kb": 52.369140625,
+              "success": true,
+              "code_size": 279
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.18755010387394577,
+              "memory_kb": 61.982421875,
+              "success": true,
+              "code_size": 402
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.3791812472627498,
+              "memory_kb": 123.8359375,
+              "success": true,
+              "code_size": 771
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.7013750000623986,
+              "memory_kb": 213.9423828125,
+              "success": true,
+              "code_size": 1386
+            },
+            "scale_20x": {
+              "parse_time_ms": 1.4071562021854334,
+              "memory_kb": 409.4365234375,
+              "success": true,
+              "code_size": 2616
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 10.97733240040594,
+            "memory_scaling_factor": 7.818278447021967,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.010914746962953359,
+              "memory_kb": 3.4736328125,
+              "success": true,
+              "code_size": 399
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.01536245399620384,
+              "memory_kb": 4.4892578125,
+              "success": true,
+              "code_size": 755
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.030193800921551883,
+              "memory_kb": 7.5673828125,
+              "success": true,
+              "code_size": 1823
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.05482290143845603,
+              "memory_kb": 12.7080078125,
+              "success": true,
+              "code_size": 3603
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.09902070014504716,
+              "memory_kb": 22.9267578125,
+              "success": true,
+              "code_size": 7163
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 9.072193838404267,
+            "memory_scaling_factor": 6.600224908630869,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.5500265875074604,
+          "scalability_winner": "tie",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "error_handling_data_errors": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.09752879937877879,
+            "parse_memory_kb": 39.8447265625,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.73638804355986,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.348767
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.011714190477505326,
+            "parse_memory_kb": 3.595703125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.88392897291575,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.3952441
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -7.325696902919806,
+            "memory_usage_advantage_dsl": -10.081205866376969,
+            "performance_score_advantage_dsl": -1.1475409293558982,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.12011006545882084,
+            "memory_ratio_dsl_to_json": 0.09024288620376951
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.09847704786807299,
+              "memory_kb": 39.84375,
+              "success": true,
+              "code_size": 222
+            },
+            "scale_2x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 87.03125,
+              "success": false,
+              "code_size": 341
+            },
+            "scale_5x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 148.3330078125,
+              "success": false,
+              "code_size": 698
+            },
+            "scale_10x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 261.064453125,
+              "success": false,
+              "code_size": 1298
+            },
+            "scale_20x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 494.28125,
+              "success": false,
+              "code_size": 2500
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": Infinity,
+            "memory_scaling_factor": 12.405490196078432,
+            "scalability_rating": "Critical",
+            "linear_scaling": false,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.012333302584011108,
+              "memory_kb": 3.595703125,
+              "success": true,
+              "code_size": 463
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.01808964880183339,
+              "memory_kb": 4.919921875,
+              "success": true,
+              "code_size": 883
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.03588945255614817,
+              "memory_kb": 9.259765625,
+              "success": true,
+              "code_size": 2153
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.06506459903903306,
+              "memory_kb": 16.216796875,
+              "success": true,
+              "code_size": 4283
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.12964999623363838,
+              "memory_kb": 30.130859375,
+              "success": true,
+              "code_size": 8523
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 10.512188065645663,
+            "memory_scaling_factor": 8.379684953829441,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.1475409293558982,
+          "scalability_winner": "json",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "custom_dashboard": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.1788183202734217,
+            "parse_memory_kb": 62.439453125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.0016435820586,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.60967
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.022791671799495816,
+            "parse_memory_kb": 6.001953125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.80398723599035,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.658584
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -6.845774625333865,
+            "memory_usage_advantage_dsl": -9.403189066059225,
+            "performance_score_advantage_dsl": -1.802343653931743,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.1274571406590011,
+            "memory_ratio_dsl_to_json": 0.09612437048390629
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.17817285261116922,
+              "memory_kb": 62.4384765625,
+              "success": true,
+              "code_size": 450
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.2965749488794245,
+              "memory_kb": 95.4765625,
+              "success": true,
+              "code_size": 707
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.6218332491698675,
+              "memory_kb": 189.67578125,
+              "success": true,
+              "code_size": 1478
+            },
+            "scale_10x": {
+              "parse_time_ms": 1.2328041993896477,
+              "memory_kb": 359.99609375,
+              "success": true,
+              "code_size": 2783
+            },
+            "scale_20x": {
+              "parse_time_ms": 2.371762547409162,
+              "memory_kb": 695.55078125,
+              "success": true,
+              "code_size": 5401
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 13.31158205445088,
+            "memory_scaling_factor": 11.13977821918451,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.023272949329111725,
+              "memory_kb": 6.001953125,
+              "success": true,
+              "code_size": 1160
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.037683299160562456,
+              "memory_kb": 9.0673828125,
+              "success": true,
+              "code_size": 2130
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.08001869573490694,
+              "memory_kb": 18.748046875,
+              "success": true,
+              "code_size": 5062
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.1460688014049083,
+              "memory_kb": 34.7392578125,
+              "success": true,
+              "code_size": 9982
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.3051436535315588,
+              "memory_kb": 66.5732421875,
+              "success": true,
+              "code_size": 19772
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 13.111516259344919,
+            "memory_scaling_factor": 11.091929710380736,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.802343653931743,
+          "scalability_winner": "tie",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "custom_simple_widget": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.08093582961009815,
+            "parse_memory_kb": 39.2392578125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.76616718489792,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.919415
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.01177704834844917,
+            "parse_memory_kb": 3.4111328125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.88942208178108,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.9662411
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -5.872335683393537,
+            "memory_usage_advantage_dsl": -10.503292298883482,
+            "performance_score_advantage_dsl": -1.1232548968831537,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.1455109363205907,
+            "memory_ratio_dsl_to_json": 0.08693163435454568
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.07812509866198525,
+              "memory_kb": 39.23828125,
+              "success": true,
+              "code_size": 177
+            },
+            "scale_2x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 70.21875,
+              "success": false,
+              "code_size": 284
+            },
+            "scale_5x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 96.775390625,
+              "success": false,
+              "code_size": 605
+            },
+            "scale_10x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 149.5107421875,
+              "success": false,
+              "code_size": 1150
+            },
+            "scale_20x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 254.7060546875,
+              "success": false,
+              "code_size": 2244
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": Infinity,
+            "memory_scaling_factor": 6.49126431060229,
+            "scalability_rating": "Critical",
+            "linear_scaling": false,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.0115083486889489,
+              "memory_kb": 3.4111328125,
+              "success": true,
+              "code_size": 407
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.016281299758702517,
+              "memory_kb": 4.5078125,
+              "success": true,
+              "code_size": 735
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.03109579556621611,
+              "memory_kb": 8.1650390625,
+              "success": true,
+              "code_size": 1729
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.05279159813653678,
+              "memory_kb": 13.984375,
+              "success": true,
+              "code_size": 3399
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.1004062476567924,
+              "memory_kb": 25.623046875,
+              "success": true,
+              "code_size": 6719
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 8.724644201405656,
+            "memory_scaling_factor": 7.5115946178070425,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.1232548968831537,
+          "scalability_winner": "json",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      }
+    }
+  },
+  "success_metrics": {
+    "target_achievements": {},
+    "performance_indicators": {
+      "test_success_rate": 1.0,
+      "total_scenarios_tested": 28,
+      "framework_reliability": "High"
+    },
+    "business_impact": {}
+  },
+  "recommendations": [
+    "Adopt DSL approach for tinyDisplay widget composition and animation coordination",
+    "Establish DSL coding standards to maximize maintainability benefits",
+    "Develop comprehensive DSL documentation and examples",
+    "Create migration tools for existing JSON configurations",
+    "Implement IDE support for DSL syntax highlighting and validation",
+    "Establish DSL best practices and coding guidelines"
+  ],
+  "raw_data": {
+    "comparison_results": {
+      "widget_composition_simple_text_progress": {
+        "dsl_analysis": {
+          "code": "\n# DSL Approach - Simple Text + Progress Bar\ncanvas = Canvas(width=128, height=64)\ncanvas.add(\n    Text(\"CPU Usage\").position(10, 10).z_order(1),\n    ProgressBar(value=data.cpu_usage).position(10, 30).z_order(2)\n)\n",
+          "code_type": "dsl",
+          "lines_of_code": 8,
+          "logical_lines": 6,
+          "readability_score": 5.0,
+          "complexity_score": 5.0,
+          "maintainability_score": 4.333333333333334,
+          "expressiveness_score": 4.8
+        },
+        "json_analysis": {
+          "code": "\n{\n  \"canvas\": {\n    \"width\": 128,\n    \"height\": 64,\n    \"widgets\": [\n      {\n        \"type\": \"text\",\n        \"content\": \"CPU Usage\",\n        \"position\": {\"x\": 10, \"y\": 10},\n        \"z_order\": 1\n      },\n      {\n        \"type\": \"progress_bar\",\n        \"value\": \"data.cpu_usage\",\n        \"position\": {\"x\": 10, \"y\": 30},\n        \"z_order\": 2\n      }\n    ]\n  }\n}\n",
+          "code_type": "json",
+          "lines_of_code": 22,
+          "logical_lines": 20,
+          "readability_score": 5.0,
+          "complexity_score": 2.5,
+          "maintainability_score": 3.0,
+          "expressiveness_score": 3.0
+        },
+        "comparison": {
+          "dsl_score": 4.72,
+          "json_score": 3.6,
+          "readability_advantage_dsl": 0.0,
+          "maintainability_advantage_dsl": 1.333333333333334,
+          "expressiveness_advantage_dsl": 1.7999999999999998,
+          "lines_of_code_ratio": 0.36363636363636365,
+          "performance_data": {
+            "dsl_parse_time_ms": 0.022416003048419952,
+            "json_parse_time_ms": 0.0022919848561286926,
+            "parse_time_ratio": 9.780170662332385
+          },
+          "readability_scores": {
+            "dsl": 5.0,
+            "json": 5.0
+          },
+          "complexity_analysis": {
+            "dsl": 5.0,
+            "json": 2.5
+          },
+          "success": true,
+          "error_message": null,
+          "winner": "dsl"
+        },
+        "scenario": "simple_text_progress",
+        "comparison_type": "widget_composition"
+      },
+      "widget_composition_complex_dashboard": {
+        "dsl_analysis": {
+          "code": "\n# DSL Approach - Complex Dashboard\ndashboard = Canvas(width=256, height=128)\ndashboard.add(\n    Text(\"System Monitor\").position(10, 5).font_size(14).z_order(1),\n    ProgressBar(value=data.cpu_usage, label=\"CPU\").position(10, 25).z_order(2),\n    ProgressBar(value=data.memory_usage, label=\"RAM\").position(10, 45).z_order(2),\n    Text(f\"Temp: {data.temperature}\u00b0C\").position(10, 70).z_order(1),\n    Image(\"status_icon.png\").position(200, 10).z_order(3)\n)\ndashboard.animate.slide_in().sync('startup_sequence')\n",
+          "code_type": "dsl",
+          "lines_of_code": 12,
+          "logical_lines": 10,
+          "readability_score": 5.0,
+          "complexity_score": 5.0,
+          "maintainability_score": 4.2,
+          "expressiveness_score": 5.0
+        },
+        "json_analysis": {
+          "code": "\n{\n  \"canvas\": {\n    \"width\": 256,\n    \"height\": 128,\n    \"widgets\": [\n      {\n        \"type\": \"text\",\n        \"content\": \"System Monitor\",\n        \"position\": {\"x\": 10, \"y\": 5},\n        \"font_size\": 14,\n        \"z_order\": 1\n      },\n      {\n        \"type\": \"progress_bar\",\n        \"value\": \"data.cpu_usage\",\n        \"label\": \"CPU\",\n        \"position\": {\"x\": 10, \"y\": 25},\n        \"z_order\": 2\n      },\n      {\n        \"type\": \"progress_bar\", \n        \"value\": \"data.memory_usage\",\n        \"label\": \"RAM\",\n        \"position\": {\"x\": 10, \"y\": 45},\n        \"z_order\": 2\n      },\n      {\n        \"type\": \"text\",\n        \"content\": \"Temp: ${data.temperature}\u00b0C\",\n        \"position\": {\"x\": 10, \"y\": 70},\n        \"z_order\": 1\n      },\n      {\n        \"type\": \"image\",\n        \"source\": \"status_icon.png\",\n        \"position\": {\"x\": 200, \"y\": 10},\n        \"z_order\": 3\n      }\n    ],\n    \"animations\": [\n      {\n        \"type\": \"slide_in\",\n        \"sync_group\": \"startup_sequence\"\n      }\n    ]\n  }\n}\n",
+          "code_type": "json",
+          "lines_of_code": 49,
+          "logical_lines": 47,
+          "readability_score": 5.0,
+          "complexity_score": 2.5,
+          "maintainability_score": 3.0,
+          "expressiveness_score": 3.0
+        },
+        "comparison": {
+          "dsl_score": 4.76,
+          "json_score": 3.6,
+          "readability_advantage_dsl": 0.0,
+          "maintainability_advantage_dsl": 1.2000000000000002,
+          "expressiveness_advantage_dsl": 2.0,
+          "lines_of_code_ratio": 0.24489795918367346,
+          "performance_data": {
+            "dsl_parse_time_ms": 0.07816602010279894,
+            "json_parse_time_ms": 0.00595799065195024,
+            "parse_time_ratio": 13.11952714749774
+          },
+          "readability_scores": {
+            "dsl": 5.0,
+            "json": 5.0
+          },
+          "complexity_analysis": {
+            "dsl": 5.0,
+            "json": 2.5
+          },
+          "success": true,
+          "error_message": null,
+          "winner": "dsl"
+        },
+        "scenario": "complex_dashboard",
+        "comparison_type": "widget_composition"
+      },
+      "animation_coordination_sync_coordination": {
+        "dsl_analysis": {
+          "code": "\n# DSL Approach - Sync Coordination\ntext1.animate.scroll().sync('group_a')\ntext2.animate.scroll().sync('group_a')\nprogress1.animate.fill().sync('group_a')\n",
+          "code_type": "dsl",
+          "lines_of_code": 6,
+          "logical_lines": 4,
+          "readability_score": 5.0,
+          "complexity_score": 5.0,
+          "maintainability_score": 4.5,
+          "expressiveness_score": 4.2
+        },
+        "json_analysis": {
+          "code": "\n{\n  \"animations\": [\n    {\n      \"target\": \"text1\",\n      \"type\": \"scroll\",\n      \"sync_group\": \"group_a\"\n    },\n    {\n      \"target\": \"text2\", \n      \"type\": \"scroll\",\n      \"sync_group\": \"group_a\"\n    },\n    {\n      \"target\": \"progress1\",\n      \"type\": \"fill\",\n      \"sync_group\": \"group_a\"\n    }\n  ]\n}\n",
+          "code_type": "json",
+          "lines_of_code": 21,
+          "logical_lines": 19,
+          "readability_score": 5.0,
+          "complexity_score": 3.5,
+          "maintainability_score": 3.0,
+          "expressiveness_score": 3.0
+        },
+        "comparison": {
+          "dsl_score": 4.529999999999999,
+          "json_score": 3.6,
+          "readability_advantage_dsl": 0.0,
+          "maintainability_advantage_dsl": 1.5,
+          "expressiveness_advantage_dsl": 1.2000000000000002,
+          "lines_of_code_ratio": 0.2857142857142857,
+          "performance_data": {
+            "dsl_parse_time_ms": 0.016375008272007108,
+            "json_parse_time_ms": 0.0017080164980143309,
+            "parse_time_ratio": 9.587148772300509
+          },
+          "readability_scores": {
+            "dsl": 5.0,
+            "json": 5.0
+          },
+          "complexity_analysis": {
+            "dsl": 5.0,
+            "json": 3.5
+          },
+          "success": true,
+          "error_message": null,
+          "winner": "dsl"
+        },
+        "scenario": "sync_coordination",
+        "comparison_type": "animation_coordination"
+      },
+      "animation_coordination_sequential_coordination": {
+        "dsl_analysis": {
+          "code": "\n# DSL Approach - Sequential Coordination\nprogress1.animate.fill().then(\n    progress2.animate.fill()\n).then(\n    text1.animate.fade_in()\n).wait_for('data_ready')\n",
+          "code_type": "dsl",
+          "lines_of_code": 8,
+          "logical_lines": 6,
+          "readability_score": 5.0,
+          "complexity_score": 5.0,
+          "maintainability_score": 4.333333333333334,
+          "expressiveness_score": 4.2
+        },
+        "json_analysis": {
+          "code": "\n{\n  \"animation_sequence\": [\n    {\n      \"target\": \"progress1\",\n      \"type\": \"fill\",\n      \"wait_for_completion\": true\n    },\n    {\n      \"target\": \"progress2\",\n      \"type\": \"fill\", \n      \"wait_for_completion\": true\n    },\n    {\n      \"target\": \"text1\",\n      \"type\": \"fade_in\",\n      \"wait_for_event\": \"data_ready\"\n    }\n  ]\n}\n",
+          "code_type": "json",
+          "lines_of_code": 21,
+          "logical_lines": 19,
+          "readability_score": 5.0,
+          "complexity_score": 3.5,
+          "maintainability_score": 3.0,
+          "expressiveness_score": 3.0
+        },
+        "comparison": {
+          "dsl_score": 4.48,
+          "json_score": 3.6,
+          "readability_advantage_dsl": 0.0,
+          "maintainability_advantage_dsl": 1.333333333333334,
+          "expressiveness_advantage_dsl": 1.2000000000000002,
+          "lines_of_code_ratio": 0.38095238095238093,
+          "performance_data": {
+            "dsl_parse_time_ms": 0.011374999303370714,
+            "json_parse_time_ms": 0.001500011421740055,
+            "parse_time_ratio": 7.583275126115638
+          },
+          "readability_scores": {
+            "dsl": 5.0,
+            "json": 5.0
+          },
+          "complexity_analysis": {
+            "dsl": 5.0,
+            "json": 3.5
+          },
+          "success": true,
+          "error_message": null,
+          "winner": "dsl"
+        },
+        "scenario": "sequential_coordination",
+        "comparison_type": "animation_coordination"
+      },
+      "custom_dashboard": {
+        "dsl_analysis": {
+          "code": "\n# DSL Approach - System Dashboard\ndashboard = Canvas(width=256, height=128)\ndashboard.add(\n    Text(\"System Monitor\").position(10, 5).font_size(14),\n    ProgressBar(value=data.cpu_usage, label=\"CPU\").position(10, 25),\n    ProgressBar(value=data.memory_usage, label=\"RAM\").position(10, 45),\n    Text(f\"Temp: {data.temperature}\u00b0C\").position(10, 70),\n    Image(\"status_icon.png\").position(200, 10)\n)\ndashboard.animate.slide_in().sync('startup_sequence')\n",
+          "code_type": "dsl",
+          "lines_of_code": 12,
+          "logical_lines": 10,
+          "readability_score": 5.0,
+          "complexity_score": 5.0,
+          "maintainability_score": 4.2,
+          "expressiveness_score": 5.0
+        },
+        "json_analysis": {
+          "code": "{\n  \"canvas\": {\n    \"width\": 256,\n    \"height\": 128,\n    \"widgets\": [\n      {\n        \"type\": \"text\",\n        \"content\": \"System Monitor\",\n        \"position\": {\"x\": 10, \"y\": 5},\n        \"font_size\": 14\n      },\n      {\n        \"type\": \"progress_bar\",\n        \"value\": {\"binding\": \"data.cpu_usage\"},\n        \"label\": \"CPU\",\n        \"position\": {\"x\": 10, \"y\": 25}\n      },\n      {\n        \"type\": \"progress_bar\",\n        \"value\": {\"binding\": \"data.memory_usage\"},\n        \"label\": \"RAM\",\n        \"position\": {\"x\": 10, \"y\": 45}\n      },\n      {\n        \"type\": \"text\",\n        \"content\": {\"binding\": \"data.temperature\", \"template\": \"Temp: {value}\u00b0C\"},\n        \"position\": {\"x\": 10, \"y\": 70}\n      },\n      {\n        \"type\": \"image\",\n        \"src\": \"status_icon.png\",\n        \"position\": {\"x\": 200, \"y\": 10}\n      }\n    ],\n    \"animations\": [\n      {\n        \"type\": \"slide_in\",\n        \"sync_group\": \"startup_sequence\"\n      }\n    ]\n  }\n}",
+          "code_type": "json",
+          "lines_of_code": 42,
+          "logical_lines": 42,
+          "readability_score": 5.0,
+          "complexity_score": 2.5,
+          "maintainability_score": 3.0,
+          "expressiveness_score": 3.3
+        },
+        "comparison": {
+          "dsl_score": 4.76,
+          "json_score": 3.7199999999999998,
+          "readability_advantage_dsl": 0.0,
+          "maintainability_advantage_dsl": 1.2000000000000002,
+          "expressiveness_advantage_dsl": 1.7000000000000002,
+          "lines_of_code_ratio": 0.2857142857142857,
+          "performance_data": {
+            "dsl_parse_time_ms": 0.04087499110028148,
+            "json_parse_time_ms": 0.003958994057029486,
+            "parse_time_ratio": 10.324590163934426
+          },
+          "readability_scores": {
+            "dsl": 5.0,
+            "json": 5.0
+          },
+          "complexity_analysis": {
+            "dsl": 5.0,
+            "json": 2.5
+          },
+          "success": true,
+          "error_message": null,
+          "winner": "dsl"
+        },
+        "scenario": "custom",
+        "comparison_type": "widget_composition"
+      },
+      "custom_simple_widget": {
+        "dsl_analysis": {
+          "code": "\n# DSL Approach - Simple Widget\ncanvas = Canvas(width=128, height=64)\ncanvas.add(\n    Text(\"CPU Usage\").position(10, 10),\n    ProgressBar(value=data.cpu_usage).position(10, 30)\n)\n",
+          "code_type": "dsl",
+          "lines_of_code": 8,
+          "logical_lines": 6,
+          "readability_score": 5.0,
+          "complexity_score": 5.0,
+          "maintainability_score": 4.333333333333334,
+          "expressiveness_score": 4.8
+        },
+        "json_analysis": {
+          "code": "{\n  \"canvas\": {\n    \"width\": 128,\n    \"height\": 64,\n    \"widgets\": [\n      {\n        \"type\": \"text\",\n        \"content\": \"CPU Usage\",\n        \"position\": {\"x\": 10, \"y\": 10}\n      },\n      {\n        \"type\": \"progress_bar\",\n        \"value\": {\"binding\": \"data.cpu_usage\"},\n        \"position\": {\"x\": 10, \"y\": 30}\n      }\n    ]\n  }\n}",
+          "code_type": "json",
+          "lines_of_code": 18,
+          "logical_lines": 18,
+          "readability_score": 5.0,
+          "complexity_score": 2.5,
+          "maintainability_score": 3.0,
+          "expressiveness_score": 3.3
+        },
+        "comparison": {
+          "dsl_score": 4.72,
+          "json_score": 3.7199999999999998,
+          "readability_advantage_dsl": 0.0,
+          "maintainability_advantage_dsl": 1.333333333333334,
+          "expressiveness_advantage_dsl": 1.5,
+          "lines_of_code_ratio": 0.4444444444444444,
+          "performance_data": {
+            "dsl_parse_time_ms": 0.015208002878353,
+            "json_parse_time_ms": 0.0018329883459955454,
+            "parse_time_ratio": 8.296835553579651
+          },
+          "readability_scores": {
+            "dsl": 5.0,
+            "json": 5.0
+          },
+          "complexity_analysis": {
+            "dsl": 5.0,
+            "json": 2.5
+          },
+          "success": true,
+          "error_message": null,
+          "winner": "dsl"
+        },
+        "scenario": "custom",
+        "comparison_type": "widget_composition"
+      },
+      "summary": {
+        "total_comparisons": 6,
+        "dsl_preference_rate": 0.0,
+        "json_preference_rate": 1.0,
+        "average_dsl_readability": 5.0,
+        "average_json_readability": 5.0
+      }
+    },
+    "developer_experience": {
+      "simulated_sessions": {
+        "total_tasks": 36,
+        "approaches_tested": [
+          "dsl",
+          "json"
+        ],
+        "experience_levels": [
+          "beginner",
+          "intermediate",
+          "expert"
+        ]
+      },
+      "comparison": {
+        "dsl_metrics": {
+          "time_to_productivity_hours": 3.0,
+          "initial_task_completion_rate": 0.3333333333333333,
+          "learning_curve_slope": 0.14567901234567898,
+          "average_task_completion_time": 863.3333333333334,
+          "lines_of_code_per_hour": 52.12355212355212,
+          "successful_task_rate": 0.8333333333333334,
+          "average_errors_per_task": 0.8888888888888888,
+          "error_resolution_time": 259.0,
+          "debugging_difficulty_rating": 2.31,
+          "overall_satisfaction_rating": 3.884444444444444,
+          "ease_of_use_rating": 2.69,
+          "confidence_rating": 4.194444444444445,
+          "preference_score": 9.402546296296297,
+          "productivity_improvement_vs_baseline": 0.0,
+          "error_rate_improvement_vs_baseline": 0.0,
+          "learning_time_improvement_vs_baseline": 0.0
+        },
+        "json_metrics": {
+          "time_to_productivity_hours": 6.0,
+          "initial_task_completion_rate": 0.0,
+          "learning_curve_slope": 0.15123456790123452,
+          "average_task_completion_time": 1079.1666666666667,
+          "lines_of_code_per_hour": 49.48262548262549,
+          "successful_task_rate": 0.5,
+          "average_errors_per_task": 2.0,
+          "error_resolution_time": 323.75,
+          "debugging_difficulty_rating": 3.3000000000000003,
+          "overall_satisfaction_rating": 2.102777777777778,
+          "ease_of_use_rating": 1.6999999999999997,
+          "confidence_rating": 3.4027777777777777,
+          "preference_score": 2.8923611111111107,
+          "productivity_improvement_vs_baseline": 0.0,
+          "error_rate_improvement_vs_baseline": 0.0,
+          "learning_time_improvement_vs_baseline": 0.0
+        },
+        "comparison": {
+          "productivity_advantage_dsl": 0.05337078651685384,
+          "error_rate_advantage_dsl": 0.5555555555555556,
+          "learning_time_advantage_dsl": 0.5,
+          "confidence_advantage_dsl": 0.791666666666667,
+          "preference_advantage_dsl": 6.510185185185186,
+          "overall_dsl_superiority_score": 2.3891623315993065
+        }
+      },
+      "learning_curves": {
+        "sim_dsl_beginner_dsl": {
+          "time_improvement_ratio": 0.6666666666666666,
+          "error_reduction_ratio": 2.5,
+          "confidence_improvement": 0.0,
+          "learning_velocity": 0.0
+        },
+        "sim_json_beginner_json": {
+          "time_improvement_ratio": 0.6666666666666666,
+          "error_reduction_ratio": 2.25,
+          "confidence_improvement": 0.0,
+          "learning_velocity": 0.0
+        },
+        "sim_dsl_intermediate_dsl": {
+          "time_improvement_ratio": 0.6666666666666666,
+          "error_reduction_ratio": 5.0,
+          "confidence_improvement": 0.0,
+          "learning_velocity": 0.0
+        },
+        "sim_json_intermediate_json": {
+          "time_improvement_ratio": 0.6666666666666666,
+          "error_reduction_ratio": 2.0,
+          "confidence_improvement": 0.0,
+          "learning_velocity": 0.0
+        },
+        "sim_dsl_expert_dsl": {
+          "time_improvement_ratio": 0.6666666666666666,
+          "error_reduction_ratio": 0.0,
+          "confidence_improvement": 0.0,
+          "learning_velocity": 0.0
+        },
+        "sim_json_expert_json": {
+          "time_improvement_ratio": 0.6666666666666666,
+          "error_reduction_ratio": 5.0,
+          "confidence_improvement": 0.0,
+          "learning_velocity": 0.0
+        }
+      }
+    },
+    "complexity_results": {
+      "widget_composition_simple_text_progress": {
+        "dsl_metrics": {
+          "lines_of_code": 8,
+          "logical_lines": 6,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.833333333333334,
+          "average_line_length": 33.166666666666664,
+          "identifier_clarity_score": 4.5,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 8,
+          "method_chain_length": 1,
+          "variable_usage_count": 6
+        },
+        "json_metrics": {
+          "lines_of_code": 22,
+          "logical_lines": 20,
+          "comment_lines": 0,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 17,
+          "nesting_depth": 5,
+          "maintainability_index": 93.12139752900684,
+          "technical_debt_ratio": 0.16,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 3.3,
+          "average_line_length": 11.55,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 16,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 6.878602470993158,
+          "readability_advantage_dsl": 1.533333333333334,
+          "complexity_advantage_dsl": 17,
+          "technical_debt_advantage_dsl": 0.16,
+          "lines_of_code_ratio": 0.3,
+          "overall_complexity_score_dsl": 0.9888888888888889,
+          "overall_complexity_score_json": 0.8104046584300227
+        }
+      },
+      "widget_composition_complex_dashboard": {
+        "dsl_metrics": {
+          "lines_of_code": 12,
+          "logical_lines": 10,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.8,
+          "average_line_length": 47.7,
+          "identifier_clarity_score": 4.5,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 20,
+          "method_chain_length": 2,
+          "variable_usage_count": 12
+        },
+        "json_metrics": {
+          "lines_of_code": 49,
+          "logical_lines": 47,
+          "comment_lines": 0,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 43,
+          "nesting_depth": 5,
+          "maintainability_index": 54.508395473503114,
+          "technical_debt_ratio": 1.0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 0.6999999999999997,
+          "average_line_length": 13.680851063829786,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 40,
+          "json_array_count": 2,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 45.491604526496886,
+          "readability_advantage_dsl": 4.1,
+          "complexity_advantage_dsl": 43,
+          "technical_debt_advantage_dsl": 1.0,
+          "lines_of_code_ratio": 0.2127659574468085,
+          "overall_complexity_score_dsl": 0.9866666666666667,
+          "overall_complexity_score_json": 0.22836131824501038
+        }
+      },
+      "animation_coordination_sync_coordination": {
+        "dsl_metrics": {
+          "lines_of_code": 6,
+          "logical_lines": 4,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 5.0,
+          "average_line_length": 37.5,
+          "identifier_clarity_score": 5.0,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 6,
+          "method_chain_length": 2,
+          "variable_usage_count": 3
+        },
+        "json_metrics": {
+          "lines_of_code": 21,
+          "logical_lines": 19,
+          "comment_lines": 0,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 7,
+          "nesting_depth": 3,
+          "maintainability_index": 94.95583711464111,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 5.0,
+          "average_line_length": 10.631578947368421,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 3,
+          "json_key_count": 10,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 5.044162885358887,
+          "readability_advantage_dsl": 0.0,
+          "complexity_advantage_dsl": 7,
+          "technical_debt_advantage_dsl": 0,
+          "lines_of_code_ratio": 0.21052631578947367,
+          "overall_complexity_score_dsl": 1.0,
+          "overall_complexity_score_json": 0.9831861237154703
+        }
+      },
+      "animation_coordination_sequential_coordination": {
+        "dsl_metrics": {
+          "lines_of_code": 8,
+          "logical_lines": 6,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 5.0,
+          "average_line_length": 24.666666666666668,
+          "identifier_clarity_score": 5.0,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 6,
+          "method_chain_length": 2,
+          "variable_usage_count": 3
+        },
+        "json_metrics": {
+          "lines_of_code": 21,
+          "logical_lines": 19,
+          "comment_lines": 0,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 7,
+          "nesting_depth": 3,
+          "maintainability_index": 94.95583711464111,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 5.0,
+          "average_line_length": 12.0,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 3,
+          "json_key_count": 10,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 5.044162885358887,
+          "readability_advantage_dsl": 0.0,
+          "complexity_advantage_dsl": 7,
+          "technical_debt_advantage_dsl": 0,
+          "lines_of_code_ratio": 0.3157894736842105,
+          "overall_complexity_score_dsl": 1.0,
+          "overall_complexity_score_json": 0.9831861237154703
+        }
+      },
+      "animation_coordination_barrier_coordination": {
+        "dsl_metrics": {
+          "lines_of_code": 6,
+          "logical_lines": 4,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 5.0,
+          "average_line_length": 26.0,
+          "identifier_clarity_score": 5.0,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 3,
+          "method_chain_length": 2,
+          "variable_usage_count": 2
+        },
+        "json_metrics": {
+          "lines_of_code": 17,
+          "logical_lines": 15,
+          "comment_lines": 0,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 9,
+          "nesting_depth": 4,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.5,
+          "average_line_length": 13.0,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 4,
+          "json_key_count": 7,
+          "json_array_count": 3,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 0.0,
+          "readability_advantage_dsl": 0.5,
+          "complexity_advantage_dsl": 9,
+          "technical_debt_advantage_dsl": 0,
+          "lines_of_code_ratio": 0.26666666666666666,
+          "overall_complexity_score_dsl": 1.0,
+          "overall_complexity_score_json": 0.9666666666666667
+        }
+      },
+      "data_binding_simple_binding": {
+        "dsl_metrics": {
+          "lines_of_code": 6,
+          "logical_lines": 4,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 5.0,
+          "average_line_length": 42.75,
+          "identifier_clarity_score": 4.777777777777778,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 5,
+          "method_chain_length": 1,
+          "variable_usage_count": 9
+        },
+        "json_metrics": {
+          "lines_of_code": 16,
+          "logical_lines": 16,
+          "comment_lines": 0,
+          "blank_lines": 0,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 25,
+          "nesting_depth": 5,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0.4,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 2.5,
+          "average_line_length": 12.875,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 14,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 0.0,
+          "readability_advantage_dsl": 2.5,
+          "complexity_advantage_dsl": 25,
+          "technical_debt_advantage_dsl": 0.4,
+          "lines_of_code_ratio": 0.25,
+          "overall_complexity_score_dsl": 1.0,
+          "overall_complexity_score_json": 0.7000000000000001
+        }
+      },
+      "data_binding_complex_binding": {
+        "dsl_metrics": {
+          "lines_of_code": 10,
+          "logical_lines": 8,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.835227272727273,
+          "average_line_length": 47.875,
+          "identifier_clarity_score": 4.545454545454546,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 14,
+          "method_chain_length": 1,
+          "variable_usage_count": 11
+        },
+        "json_metrics": {
+          "lines_of_code": 33,
+          "logical_lines": 33,
+          "comment_lines": 0,
+          "blank_lines": 0,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 47,
+          "nesting_depth": 5,
+          "maintainability_index": 72.50808512608396,
+          "technical_debt_ratio": 1.0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 0.2999999999999998,
+          "average_line_length": 17.21212121212121,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 35,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 27.491914873916045,
+          "readability_advantage_dsl": 4.5352272727272736,
+          "complexity_advantage_dsl": 47,
+          "technical_debt_advantage_dsl": 1.0,
+          "lines_of_code_ratio": 0.24242424242424243,
+          "overall_complexity_score_dsl": 0.9890151515151516,
+          "overall_complexity_score_json": 0.2616936170869465
+        }
+      },
+      "error_handling_validation_errors": {
+        "dsl_metrics": {
+          "lines_of_code": 10,
+          "logical_lines": 8,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 3,
+          "cognitive_complexity": 3,
+          "nesting_depth": 2,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.883928571428571,
+          "average_line_length": 31.0,
+          "identifier_clarity_score": 4.642857142857143,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 7,
+          "method_chain_length": 1,
+          "variable_usage_count": 14
+        },
+        "json_metrics": {
+          "lines_of_code": 20,
+          "logical_lines": 20,
+          "comment_lines": 0,
+          "blank_lines": 0,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 18,
+          "nesting_depth": 5,
+          "maintainability_index": 93.12139752900684,
+          "technical_debt_ratio": 0.19,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 3.2,
+          "average_line_length": 11.4,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 13,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 6.878602470993158,
+          "readability_advantage_dsl": 1.683928571428571,
+          "complexity_advantage_dsl": 15,
+          "technical_debt_advantage_dsl": 0.19,
+          "lines_of_code_ratio": 0.4,
+          "overall_complexity_score_dsl": 0.9922619047619047,
+          "overall_complexity_score_json": 0.7937379917633561
+        }
+      },
+      "error_handling_data_errors": {
+        "dsl_metrics": {
+          "lines_of_code": 9,
+          "logical_lines": 7,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.9603174603174605,
+          "average_line_length": 29.714285714285715,
+          "identifier_clarity_score": 4.777777777777778,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 7,
+          "method_chain_length": 1,
+          "variable_usage_count": 9
+        },
+        "json_metrics": {
+          "lines_of_code": 16,
+          "logical_lines": 16,
+          "comment_lines": 0,
+          "blank_lines": 0,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 25,
+          "nesting_depth": 5,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0.4,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 2.5,
+          "average_line_length": 15.25,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 16,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 0.0,
+          "readability_advantage_dsl": 2.4603174603174605,
+          "complexity_advantage_dsl": 25,
+          "technical_debt_advantage_dsl": 0.4,
+          "lines_of_code_ratio": 0.4375,
+          "overall_complexity_score_dsl": 0.9973544973544973,
+          "overall_complexity_score_json": 0.7000000000000001
+        }
+      },
+      "custom_dashboard": {
+        "dsl_metrics": {
+          "lines_of_code": 12,
+          "logical_lines": 10,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.8,
+          "average_line_length": 42.1,
+          "identifier_clarity_score": 4.5,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 15,
+          "method_chain_length": 2,
+          "variable_usage_count": 12
+        },
+        "json_metrics": {
+          "lines_of_code": 42,
+          "logical_lines": 42,
+          "comment_lines": 0,
+          "blank_lines": 0,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 55,
+          "nesting_depth": 5,
+          "maintainability_index": 60.58200068579269,
+          "technical_debt_ratio": 1.0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 0.0,
+          "average_line_length": 15.095238095238095,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 39,
+          "json_array_count": 2,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 39.41799931420731,
+          "readability_advantage_dsl": 4.8,
+          "complexity_advantage_dsl": 55,
+          "technical_debt_advantage_dsl": 1.0,
+          "lines_of_code_ratio": 0.23809523809523808,
+          "overall_complexity_score_dsl": 0.9866666666666667,
+          "overall_complexity_score_json": 0.20194000228597564
+        }
+      },
+      "custom_simple_widget": {
+        "dsl_metrics": {
+          "lines_of_code": 8,
+          "logical_lines": 6,
+          "comment_lines": 1,
+          "blank_lines": 2,
+          "cyclomatic_complexity": 1,
+          "cognitive_complexity": 0,
+          "nesting_depth": 0,
+          "maintainability_index": 100.0,
+          "technical_debt_ratio": 0,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 4.833333333333334,
+          "average_line_length": 27.333333333333332,
+          "identifier_clarity_score": 4.5,
+          "json_depth": null,
+          "json_key_count": null,
+          "json_array_count": null,
+          "function_call_count": 6,
+          "method_chain_length": 1,
+          "variable_usage_count": 6
+        },
+        "json_metrics": {
+          "lines_of_code": 18,
+          "logical_lines": 18,
+          "comment_lines": 0,
+          "blank_lines": 0,
+          "cyclomatic_complexity": 0,
+          "cognitive_complexity": 21,
+          "nesting_depth": 5,
+          "maintainability_index": 96.83922086866761,
+          "technical_debt_ratio": 0.28,
+          "code_duplication_ratio": 0.0,
+          "readability_score": 2.9,
+          "average_line_length": 12.11111111111111,
+          "identifier_clarity_score": 0.0,
+          "json_depth": 5,
+          "json_key_count": 15,
+          "json_array_count": 1,
+          "function_call_count": null,
+          "method_chain_length": null,
+          "variable_usage_count": null
+        },
+        "comparison": {
+          "maintainability_advantage_dsl": 3.16077913133239,
+          "readability_advantage_dsl": 1.933333333333334,
+          "complexity_advantage_dsl": 21,
+          "technical_debt_advantage_dsl": 0.28,
+          "lines_of_code_ratio": 0.3333333333333333,
+          "overall_complexity_score_dsl": 0.9888888888888889,
+          "overall_complexity_score_json": 0.7561307362288922
+        }
+      }
+    },
+    "performance_results": {
+      "widget_composition_simple_text_progress": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.09242000203812495,
+            "parse_memory_kb": 39.5078125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.7500716235733,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461138.34669
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.012380849511828274,
+            "parse_memory_kb": 3.2314453125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.89439004596672,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461138.391565
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -6.464754494417349,
+            "memory_usage_advantage_dsl": -11.226050166213357,
+            "performance_score_advantage_dsl": -1.144318422393411,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.13396287858466985,
+            "memory_ratio_dsl_to_json": 0.08179256476171644
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.09079584851861,
+              "memory_kb": 39.5068359375,
+              "success": true,
+              "code_size": 212
+            },
+            "scale_2x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 78.78515625,
+              "success": false,
+              "code_size": 341
+            },
+            "scale_5x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 122.1796875,
+              "success": false,
+              "code_size": 728
+            },
+            "scale_10x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 190.9990234375,
+              "success": false,
+              "code_size": 1383
+            },
+            "scale_20x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 298.5498046875,
+              "success": false,
+              "code_size": 2697
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": Infinity,
+            "memory_scaling_factor": 7.556915090841676,
+            "scalability_rating": "Critical",
+            "linear_scaling": false,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.011887600703630596,
+              "memory_kb": 3.2314453125,
+              "success": true,
+              "code_size": 418
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.01771465176716447,
+              "memory_kb": 4.1484375,
+              "success": true,
+              "code_size": 757
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.033429148606956005,
+              "memory_kb": 7.2666015625,
+              "success": true,
+              "code_size": 1784
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.05966449825791642,
+              "memory_kb": 12.1875,
+              "success": true,
+              "code_size": 3509
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.11212079698452726,
+              "memory_kb": 22.029296875,
+              "success": true,
+              "code_size": 6939
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 9.431743190220413,
+            "memory_scaling_factor": 6.817165306739196,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.144318422393411,
+          "scalability_winner": "json",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "widget_composition_complex_dashboard": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.22478664090158418,
+            "parse_memory_kb": 71.001953125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 97.71259075761888,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461138.588384
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.02327378111658618,
+            "parse_memory_kb": 5.3740234375,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.8224876500934,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461138.6351821
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -8.658363622805958,
+            "memory_usage_advantage_dsl": -12.212066145738689,
+            "performance_score_advantage_dsl": -2.1098968924745094,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.10353720765272648,
+            "memory_ratio_dsl_to_json": 0.07568838885373971
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.22253755014389753,
+              "memory_kb": 71.0009765625,
+              "success": true,
+              "code_size": 506
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.3357435023644939,
+              "memory_kb": 114.5,
+              "success": true,
+              "code_size": 807
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.8149145520292222,
+              "memory_kb": 231.07421875,
+              "success": true,
+              "code_size": 1710
+            },
+            "scale_10x": {
+              "parse_time_ms": 1.4225812468794174,
+              "memory_kb": 441.30078125,
+              "success": true,
+              "code_size": 3235
+            },
+            "scale_20x": {
+              "parse_time_ms": 2.8510311982245184,
+              "memory_kb": 853.51171875,
+              "success": true,
+              "code_size": 6293
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 12.811461240500675,
+            "memory_scaling_factor": 12.021126469981432,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.023401997168548405,
+              "memory_kb": 5.3740234375,
+              "success": true,
+              "code_size": 1144
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.03901470045093447,
+              "memory_kb": 7.8564453125,
+              "success": true,
+              "code_size": 2098
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.08560825226595625,
+              "memory_kb": 15.7880859375,
+              "success": true,
+              "code_size": 4982
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.15377924864878878,
+              "memory_kb": 28.8642578125,
+              "success": true,
+              "code_size": 9822
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.320562299748417,
+              "memory_kb": 54.8681640625,
+              "success": true,
+              "code_size": 19452
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 13.698074460894443,
+            "memory_scaling_factor": 10.209885516990733,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 2.1098968924745094,
+          "scalability_winner": "tie",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "animation_coordination_sync_coordination": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.06569499935721979,
+            "parse_memory_kb": 39.009765625,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.78372053169994,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461138.915668
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.009214970923494548,
+            "parse_memory_kb": 2.9814453125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.90410616097856,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461138.962471
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -6.129159701385862,
+            "memory_usage_advantage_dsl": -12.08417949557812,
+            "performance_score_advantage_dsl": -1.1203856292786156,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.14026898567100504,
+            "memory_ratio_dsl_to_json": 0.07642817804035448
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.0652957518468611,
+              "memory_kb": 39.0087890625,
+              "success": true,
+              "code_size": 153
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.06772509805159643,
+              "memory_kb": 39.0087890625,
+              "success": true,
+              "code_size": 153
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.06443549937102944,
+              "memory_kb": 39.0087890625,
+              "success": true,
+              "code_size": 153
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.0664751511067152,
+              "memory_kb": 39.0087890625,
+              "success": true,
+              "code_size": 153
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.06442289741244167,
+              "memory_kb": 39.0087890625,
+              "success": true,
+              "code_size": 153
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 0.9866322936832623,
+            "memory_scaling_factor": 1.0,
+            "scalability_rating": "Excellent",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.00899579463293776,
+              "memory_kb": 2.9814453125,
+              "success": true,
+              "code_size": 302
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.01289375068154186,
+              "memory_kb": 3.966796875,
+              "success": true,
+              "code_size": 580
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.025431349058635533,
+              "memory_kb": 6.8916015625,
+              "success": true,
+              "code_size": 1414
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.04539369838312268,
+              "memory_kb": 11.787109375,
+              "success": true,
+              "code_size": 2804
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.08496249793097377,
+              "memory_kb": 21.578125,
+              "success": true,
+              "code_size": 5584
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 9.444690702462996,
+            "memory_scaling_factor": 7.237471339665903,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.1203856292786156,
+          "scalability_winner": "dsl",
+          "recommendation": "DSL recommended for scalable applications"
+        }
+      },
+      "animation_coordination_sequential_coordination": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.057334559969604015,
+            "parse_memory_kb": 30.6904296875,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.03915291739628,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.114172
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.008556689426768571,
+            "parse_memory_kb": 2.9638671875,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.90509430177626,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.159622
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -5.7005540472510035,
+            "memory_usage_advantage_dsl": -9.354859967051071,
+            "performance_score_advantage_dsl": -0.8659413843799797,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.1492413900325547,
+            "memory_ratio_dsl_to_json": 0.09657301046870526
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.056831301480997354,
+              "memory_kb": 30.689453125,
+              "success": true,
+              "code_size": 161
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.056527103879489005,
+              "memory_kb": 30.689453125,
+              "success": true,
+              "code_size": 161
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.056683397269807756,
+              "memory_kb": 30.689453125,
+              "success": true,
+              "code_size": 161
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.055883347522467375,
+              "memory_kb": 30.689453125,
+              "success": true,
+              "code_size": 161
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.05644370539812371,
+              "memory_kb": 30.689453125,
+              "success": true,
+              "code_size": 161
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 0.9931798837476343,
+            "memory_scaling_factor": 1.0,
+            "scalability_rating": "Excellent",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.00911670213099569,
+              "memory_kb": 2.9638671875,
+              "success": true,
+              "code_size": 328
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.012041701120324433,
+              "memory_kb": 3.861328125,
+              "success": true,
+              "code_size": 624
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.02497704845154658,
+              "memory_kb": 6.5224609375,
+              "success": true,
+              "code_size": 1512
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.04139589727856219,
+              "memory_kb": 10.978515625,
+              "success": true,
+              "code_size": 2992
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.07831659750081599,
+              "memory_kb": 19.890625,
+              "success": true,
+              "code_size": 5952
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 8.590452597387051,
+            "memory_scaling_factor": 6.711037891268534,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 0.8659413843799797,
+          "scalability_winner": "dsl",
+          "recommendation": "DSL recommended for scalable applications"
+        }
+      },
+      "animation_coordination_barrier_coordination": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.034489999525249004,
+            "parse_memory_kb": 28.142578125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.13157965658232,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.307643
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.008927897724788636,
+            "parse_memory_kb": 3.0595703125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.90196336221764,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.354799
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -2.863171441747843,
+            "memory_usage_advantage_dsl": -8.198212575805936,
+            "performance_score_advantage_dsl": -0.7703837056353251,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.25885467810032337,
+            "memory_ratio_dsl_to_json": 0.10871677423832327
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.034429048537276685,
+              "memory_kb": 28.1416015625,
+              "success": true,
+              "code_size": 111
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.03389580379007384,
+              "memory_kb": 28.1416015625,
+              "success": true,
+              "code_size": 111
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.034814699029084295,
+              "memory_kb": 28.1416015625,
+              "success": true,
+              "code_size": 111
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.0332770447130315,
+              "memory_kb": 28.1416015625,
+              "success": true,
+              "code_size": 111
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.034902000334113836,
+              "memory_kb": 28.1416015625,
+              "success": true,
+              "code_size": 111
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 1.013736998753395,
+            "memory_scaling_factor": 1.0,
+            "scalability_rating": "Excellent",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.009041698649525642,
+              "memory_kb": 3.0595703125,
+              "success": true,
+              "code_size": 295
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.012081202294211835,
+              "memory_kb": 3.7275390625,
+              "success": true,
+              "code_size": 536
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.021233203005976975,
+              "memory_kb": 6.1455078125,
+              "success": true,
+              "code_size": 1259
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.03666884440463036,
+              "memory_kb": 10.1962890625,
+              "success": true,
+              "code_size": 2464
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.06592089921468869,
+              "memory_kb": 18.1728515625,
+              "success": true,
+              "code_size": 4874
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 7.290764907116996,
+            "memory_scaling_factor": 5.939674433450367,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 0.7703837056353251,
+          "scalability_winner": "dsl",
+          "recommendation": "DSL recommended for scalable applications"
+        }
+      },
+      "data_binding_simple_binding": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.08098580845398828,
+            "parse_memory_kb": 39.33984375,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.7631146215822,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.505331
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.011202910682186484,
+            "parse_memory_kb": 3.5009765625,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.88712866564747,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.552448
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -6.228997066160862,
+            "memory_usage_advantage_dsl": -10.236820083682009,
+            "performance_score_advantage_dsl": -1.1240140440652624,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.13833177560425747,
+            "memory_ratio_dsl_to_json": 0.08899314864462318
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.08193329849746078,
+              "memory_kb": 39.3388671875,
+              "success": true,
+              "code_size": 174
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.15942079771775752,
+              "memory_kb": 53.1220703125,
+              "success": true,
+              "code_size": 312
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.36191239778418094,
+              "memory_kb": 121.263671875,
+              "success": true,
+              "code_size": 726
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.7364166012848727,
+              "memory_kb": 234.654296875,
+              "success": true,
+              "code_size": 1426
+            },
+            "scale_20x": {
+              "parse_time_ms": 1.4943019981728867,
+              "memory_kb": 459.908203125,
+              "success": true,
+              "code_size": 2830
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 18.238030514775346,
+            "memory_scaling_factor": 11.690936623389518,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.011349903070367873,
+              "memory_kb": 3.5009765625,
+              "success": true,
+              "code_size": 405
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.015600150800310075,
+              "memory_kb": 4.7783203125,
+              "success": true,
+              "code_size": 767
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.03305829886812717,
+              "memory_kb": 8.9775390625,
+              "success": true,
+              "code_size": 1863
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.057116601965390146,
+              "memory_kb": 15.7001953125,
+              "success": true,
+              "code_size": 3703
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.10571439925115556,
+              "memory_kb": 29.1455078125,
+              "success": true,
+              "code_size": 7363
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 9.31412353001964,
+            "memory_scaling_factor": 8.324965132496514,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.1240140440652624,
+          "scalability_winner": "json",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "data_binding_complex_binding": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.16882915078895167,
+            "parse_memory_kb": 61.89453125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.02498365694774,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.7755861
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.020285738282836974,
+            "parse_memory_kb": 5.361328125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.82496013945202,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461139.8236349
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -7.3225539260649875,
+            "memory_usage_advantage_dsl": -10.544626593806921,
+            "performance_score_advantage_dsl": -1.7999764825042774,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.1201554245107563,
+            "memory_ratio_dsl_to_json": 0.0866203849794888
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.16802284953882918,
+              "memory_kb": 61.8935546875,
+              "success": true,
+              "code_size": 406
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.28658335213549435,
+              "memory_kb": 87.7119140625,
+              "success": true,
+              "code_size": 659
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.6259375484660268,
+              "memory_kb": 192.7314453125,
+              "success": true,
+              "code_size": 1418
+            },
+            "scale_10x": {
+              "parse_time_ms": 1.2443146464647725,
+              "memory_kb": 367.6328125,
+              "success": true,
+              "code_size": 2698
+            },
+            "scale_20x": {
+              "parse_time_ms": 2.442870900267735,
+              "memory_kb": 712.03515625,
+              "success": true,
+              "code_size": 5264
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 14.53892078947989,
+            "memory_scaling_factor": 11.504189084712602,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.020683348702732474,
+              "memory_kb": 5.361328125,
+              "success": true,
+              "code_size": 1024
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.033262498618569225,
+              "memory_kb": 8.263671875,
+              "success": true,
+              "code_size": 1970
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.07194990466814488,
+              "memory_kb": 17.412109375,
+              "success": true,
+              "code_size": 4825
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.14133134682197124,
+              "memory_kb": 32.576171875,
+              "success": true,
+              "code_size": 9610
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.2906893991166726,
+              "memory_kb": 62.787109375,
+              "success": true,
+              "code_size": 19140
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 14.054271544446266,
+            "memory_scaling_factor": 11.71111111111111,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.7999764825042774,
+          "scalability_winner": "tie",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "error_handling_validation_errors": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.12944007146870717,
+            "parse_memory_kb": 52.3701171875,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.33828843434691,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.089244
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.010679991100914776,
+            "parse_memory_kb": 3.4736328125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.88831502185437,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.135217
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -11.119866977943476,
+            "memory_usage_advantage_dsl": -14.076468934495361,
+            "performance_score_advantage_dsl": -1.5500265875074604,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.0825091563974972,
+            "memory_ratio_dsl_to_json": 0.06632852853972812
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.1281874458072707,
+              "memory_kb": 52.369140625,
+              "success": true,
+              "code_size": 279
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.18755010387394577,
+              "memory_kb": 61.982421875,
+              "success": true,
+              "code_size": 402
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.3791812472627498,
+              "memory_kb": 123.8359375,
+              "success": true,
+              "code_size": 771
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.7013750000623986,
+              "memory_kb": 213.9423828125,
+              "success": true,
+              "code_size": 1386
+            },
+            "scale_20x": {
+              "parse_time_ms": 1.4071562021854334,
+              "memory_kb": 409.4365234375,
+              "success": true,
+              "code_size": 2616
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 10.97733240040594,
+            "memory_scaling_factor": 7.818278447021967,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.010914746962953359,
+              "memory_kb": 3.4736328125,
+              "success": true,
+              "code_size": 399
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.01536245399620384,
+              "memory_kb": 4.4892578125,
+              "success": true,
+              "code_size": 755
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.030193800921551883,
+              "memory_kb": 7.5673828125,
+              "success": true,
+              "code_size": 1823
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.05482290143845603,
+              "memory_kb": 12.7080078125,
+              "success": true,
+              "code_size": 3603
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.09902070014504716,
+              "memory_kb": 22.9267578125,
+              "success": true,
+              "code_size": 7163
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 9.072193838404267,
+            "memory_scaling_factor": 6.600224908630869,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.5500265875074604,
+          "scalability_winner": "tie",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "error_handling_data_errors": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.09752879937877879,
+            "parse_memory_kb": 39.8447265625,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.73638804355986,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.348767
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.011714190477505326,
+            "parse_memory_kb": 3.595703125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.88392897291575,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.3952441
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -7.325696902919806,
+            "memory_usage_advantage_dsl": -10.081205866376969,
+            "performance_score_advantage_dsl": -1.1475409293558982,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.12011006545882084,
+            "memory_ratio_dsl_to_json": 0.09024288620376951
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.09847704786807299,
+              "memory_kb": 39.84375,
+              "success": true,
+              "code_size": 222
+            },
+            "scale_2x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 87.03125,
+              "success": false,
+              "code_size": 341
+            },
+            "scale_5x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 148.3330078125,
+              "success": false,
+              "code_size": 698
+            },
+            "scale_10x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 261.064453125,
+              "success": false,
+              "code_size": 1298
+            },
+            "scale_20x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 494.28125,
+              "success": false,
+              "code_size": 2500
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": Infinity,
+            "memory_scaling_factor": 12.405490196078432,
+            "scalability_rating": "Critical",
+            "linear_scaling": false,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.012333302584011108,
+              "memory_kb": 3.595703125,
+              "success": true,
+              "code_size": 463
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.01808964880183339,
+              "memory_kb": 4.919921875,
+              "success": true,
+              "code_size": 883
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.03588945255614817,
+              "memory_kb": 9.259765625,
+              "success": true,
+              "code_size": 2153
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.06506459903903306,
+              "memory_kb": 16.216796875,
+              "success": true,
+              "code_size": 4283
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.12964999623363838,
+              "memory_kb": 30.130859375,
+              "success": true,
+              "code_size": 8523
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 10.512188065645663,
+            "memory_scaling_factor": 8.379684953829441,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.1475409293558982,
+          "scalability_winner": "json",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "custom_dashboard": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.1788183202734217,
+            "parse_memory_kb": 62.439453125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.0016435820586,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.60967
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.022791671799495816,
+            "parse_memory_kb": 6.001953125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.80398723599035,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.658584
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -6.845774625333865,
+            "memory_usage_advantage_dsl": -9.403189066059225,
+            "performance_score_advantage_dsl": -1.802343653931743,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.1274571406590011,
+            "memory_ratio_dsl_to_json": 0.09612437048390629
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.17817285261116922,
+              "memory_kb": 62.4384765625,
+              "success": true,
+              "code_size": 450
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.2965749488794245,
+              "memory_kb": 95.4765625,
+              "success": true,
+              "code_size": 707
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.6218332491698675,
+              "memory_kb": 189.67578125,
+              "success": true,
+              "code_size": 1478
+            },
+            "scale_10x": {
+              "parse_time_ms": 1.2328041993896477,
+              "memory_kb": 359.99609375,
+              "success": true,
+              "code_size": 2783
+            },
+            "scale_20x": {
+              "parse_time_ms": 2.371762547409162,
+              "memory_kb": 695.55078125,
+              "success": true,
+              "code_size": 5401
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 13.31158205445088,
+            "memory_scaling_factor": 11.13977821918451,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.023272949329111725,
+              "memory_kb": 6.001953125,
+              "success": true,
+              "code_size": 1160
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.037683299160562456,
+              "memory_kb": 9.0673828125,
+              "success": true,
+              "code_size": 2130
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.08001869573490694,
+              "memory_kb": 18.748046875,
+              "success": true,
+              "code_size": 5062
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.1460688014049083,
+              "memory_kb": 34.7392578125,
+              "success": true,
+              "code_size": 9982
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.3051436535315588,
+              "memory_kb": 66.5732421875,
+              "success": true,
+              "code_size": 19772
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 13.111516259344919,
+            "memory_scaling_factor": 11.091929710380736,
+            "scalability_rating": "Critical",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.802343653931743,
+          "scalability_winner": "tie",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      },
+      "custom_simple_widget": {
+        "parsing_performance": {
+          "dsl_metrics": {
+            "parse_time_ms": 0.08093582961009815,
+            "parse_memory_kb": 39.2392578125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 98.76616718489792,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.919415
+          },
+          "json_metrics": {
+            "parse_time_ms": 0.01177704834844917,
+            "parse_memory_kb": 3.4111328125,
+            "parse_success": true,
+            "execution_time_ms": 0.0,
+            "execution_memory_kb": 0.0,
+            "execution_success": true,
+            "complexity_scaling_factor": 1.0,
+            "memory_scaling_factor": 1.0,
+            "performance_score": 99.88942208178108,
+            "efficiency_rating": "Excellent",
+            "error_message": null,
+            "timestamp": 1748461140.9662411
+          },
+          "comparison": {
+            "parsing_time_advantage_dsl": -5.872335683393537,
+            "memory_usage_advantage_dsl": -10.503292298883482,
+            "performance_score_advantage_dsl": -1.1232548968831537,
+            "overall_performance_winner": "json",
+            "speed_ratio_dsl_to_json": 0.1455109363205907,
+            "memory_ratio_dsl_to_json": 0.08693163435454568
+          }
+        },
+        "dsl_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.07812509866198525,
+              "memory_kb": 39.23828125,
+              "success": true,
+              "code_size": 177
+            },
+            "scale_2x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 70.21875,
+              "success": false,
+              "code_size": 284
+            },
+            "scale_5x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 96.775390625,
+              "success": false,
+              "code_size": 605
+            },
+            "scale_10x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 149.5107421875,
+              "success": false,
+              "code_size": 1150
+            },
+            "scale_20x": {
+              "parse_time_ms": Infinity,
+              "memory_kb": 254.7060546875,
+              "success": false,
+              "code_size": 2244
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": Infinity,
+            "memory_scaling_factor": 6.49126431060229,
+            "scalability_rating": "Critical",
+            "linear_scaling": false,
+            "memory_efficient": true
+          }
+        },
+        "json_scalability": {
+          "results": {
+            "scale_1x": {
+              "parse_time_ms": 0.0115083486889489,
+              "memory_kb": 3.4111328125,
+              "success": true,
+              "code_size": 407
+            },
+            "scale_2x": {
+              "parse_time_ms": 0.016281299758702517,
+              "memory_kb": 4.5078125,
+              "success": true,
+              "code_size": 735
+            },
+            "scale_5x": {
+              "parse_time_ms": 0.03109579556621611,
+              "memory_kb": 8.1650390625,
+              "success": true,
+              "code_size": 1729
+            },
+            "scale_10x": {
+              "parse_time_ms": 0.05279159813653678,
+              "memory_kb": 13.984375,
+              "success": true,
+              "code_size": 3399
+            },
+            "scale_20x": {
+              "parse_time_ms": 0.1004062476567924,
+              "memory_kb": 25.623046875,
+              "success": true,
+              "code_size": 6719
+            }
+          },
+          "analysis": {
+            "time_scaling_factor": 8.724644201405656,
+            "memory_scaling_factor": 7.5115946178070425,
+            "scalability_rating": "Poor",
+            "linear_scaling": true,
+            "memory_efficient": true
+          }
+        },
+        "summary": {
+          "overall_performance_winner": "json",
+          "performance_advantage": 1.1232548968831537,
+          "scalability_winner": "json",
+          "recommendation": "Performance characteristics are comparable"
+        }
+      }
+    }
+  }
+}

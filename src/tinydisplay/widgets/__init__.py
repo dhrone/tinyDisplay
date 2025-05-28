@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""
+Widget System
+
+Provides the complete widget framework for tinyDisplay including:
+- Abstract base classes for all widgets
+- Reactive data binding capabilities
+- Widget lifecycle management
+- Container widgets for composition
+- Widget pools for performance optimization
+- Lifecycle event management and hooks
+"""
+
+from .base import (
+    Widget,
+    ContainerWidget,
+    ReactiveValue,
+    WidgetState,
+    WidgetBounds,
+    VisibilityState,
+    VisibilityAnimation,
+    TransparencyConfig
+)
+
+from .lifecycle import (
+    LifecycleEvent,
+    LifecycleEventInfo,
+    WidgetPool,
+    WidgetPoolConfig,
+    LifecycleManager,
+    get_lifecycle_manager,
+    create_widget_pool,
+    get_widget_pool,
+    emit_lifecycle_event,
+    register_global_lifecycle_hook,
+    unregister_global_lifecycle_hook
+)
+
+from .lifecycle_integration import (
+    LifecycleIntegratedWidget,
+    LifecycleIntegratedContainerWidget,
+    WidgetFactory,
+    get_widget_factory,
+    create_widget,
+    release_widget,
+    lifecycle_managed,
+    with_lifecycle_hooks
+)
+
+__all__ = [
+    # Base widget classes
+    'Widget',
+    'ContainerWidget', 
+    'ReactiveValue',
+    'WidgetState',
+    'WidgetBounds',
+    'VisibilityState',
+    'VisibilityAnimation',
+    'TransparencyConfig',
+    
+    # Lifecycle management
+    'LifecycleEvent',
+    'LifecycleEventInfo',
+    'WidgetPool',
+    'WidgetPoolConfig',
+    'LifecycleManager',
+    'get_lifecycle_manager',
+    'create_widget_pool',
+    'get_widget_pool',
+    'emit_lifecycle_event',
+    'register_global_lifecycle_hook',
+    'unregister_global_lifecycle_hook',
+    
+    # Lifecycle integration
+    'LifecycleIntegratedWidget',
+    'LifecycleIntegratedContainerWidget',
+    'WidgetFactory',
+    'get_widget_factory',
+    'create_widget',
+    'release_widget',
+    'lifecycle_managed',
+    'with_lifecycle_hooks'
+]

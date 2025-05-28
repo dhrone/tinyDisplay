@@ -1,37 +1,80 @@
+"""pytest configuration and fixtures for tinyDisplay tests."""
+
 import pytest
-import logging
-from tinyDisplay.render.coordination import timeline_manager
-from tinyDisplay.render.new_marquee import new_marquee
+import sys
+import tempfile
+import sqlite3
+from pathlib import Path
+from unittest.mock import Mock
 
-# Configure logging for tests
-logging.basicConfig(level=logging.INFO)
+# Add src to path for testing
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-@pytest.fixture(autouse=True, scope="function")
-def reset_timeline_state():
+
+@pytest.fixture
+def temp_db():
+    """Provide a temporary SQLite database for testing."""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+
+    # Create database with basic schema
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS widget_states (
+            id INTEGER PRIMARY KEY,
+            widget_id TEXT NOT NULL,
+            state_data BLOB NOT NULL,
+            timestamp REAL NOT NULL,
+            version INTEGER NOT NULL
+        )
     """
-    Reset all timeline and coordination manager state before and after each test.
-    
-    This fixture runs automatically for each test function to ensure
-    that tests don't affect each other due to shared state.
-    
-    The timeline_manager is a singleton that maintains state across test runs.
-    Without proper cleanup, tests that rely on this state (like test_selective_recalculation.py)
-    can fail when run as part of the full test suite because:
-    
-    1. Earlier tests leave their widgets registered in the timeline_manager
-    2. The state of resolved timelines persists between tests
-    3. The new_marquee._timelines_initialized flag stays set to True
-    
-    By resetting all these values before and after each test, we ensure tests
-    remain isolated and don't affect each other.
-    """
-    # Before test: Clear the timeline state
-    timeline_manager.clear()
-    new_marquee._timelines_initialized = False
-    
-    # Run the test
-    yield
-    
-    # After test: Clear the timeline state again
-    timeline_manager.clear()
-    new_marquee._timelines_initialized = False 
+    )
+    conn.close()
+
+    yield db_path
+
+    # Cleanup
+    Path(db_path).unlink(missing_ok=True)
+
+
+@pytest.fixture
+def mock_display():
+    """Provide a mock display for testing rendering without hardware."""
+    display = Mock()
+    display.width = 128
+    display.height = 64
+    display.mode = "RGB"
+    return display
+
+
+@pytest.fixture
+def sample_ring_buffer_data():
+    """Provide sample data for ring buffer testing."""
+    return [
+        {"timestamp": 1.0, "value": 10, "type": "numeric"},
+        {"timestamp": 2.0, "value": "hello", "type": "string"},
+        {"timestamp": 3.0, "value": b"binary", "type": "binary"},
+        {"timestamp": 4.0, "value": 25, "type": "numeric"},
+        {"timestamp": 5.0, "value": "world", "type": "string"},
+    ]
+
+
+@pytest.fixture
+def performance_test_config():
+    """Configuration for performance tests."""
+    return {
+        "target_fps": 60,
+        "max_memory_mb": 100,
+        "test_duration_seconds": 5,
+        "widget_count": 20,
+    }
+
+
+# Performance test markers
+def pytest_configure(config):
+    """Configure custom pytest markers."""
+    config.addinivalue_line("markers", "performance: mark test as a performance test")
+    config.addinivalue_line("markers", "slow: mark test as slow running")
+    config.addinivalue_line("markers", "integration: mark test as integration test")
+    config.addinivalue_line("markers", "security: mark test as security-related test")

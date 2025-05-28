@@ -1,0 +1,1 @@
+# Speculative renderer implementation\n# Workers: 3\n# TODO: Implement background rendering

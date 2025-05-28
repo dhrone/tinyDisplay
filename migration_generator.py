@@ -178,6 +178,10 @@ class CodeGenerator:
     def _generate_application_dsl(self, target_path: Path):
         """Generate application DSL configuration"""
         
+        # Create directory structure first
+        dsl_dir = target_path / "dsl"
+        dsl_dir.mkdir(parents=True, exist_ok=True)
+        
         # Create DSL configuration based on analysis
         dsl_config = {
             "dynamic_values": {},
@@ -202,7 +206,7 @@ class CodeGenerator:
             }
         
         dsl_code = self.templates.generate_dsl_config(dsl_config)
-        (target_path / "dsl" / "application.py").write_text(dsl_code)
+        (dsl_dir / "application.py").write_text(dsl_code)
         
         print("   ✓ Generated application DSL")
     
@@ -249,6 +253,75 @@ class CodeGenerator:
             (target_path / "tests" / filename).write_text(content)
         
         print("   ✓ Generated test suite")
+
+    def _generate_widget_with_bindings(self, widget: WidgetInfo, dynamic_values: List[DynamicValueInfo]) -> str:
+        """Generate widget DSL with reactive bindings"""
+        # Find dynamic values that apply to this widget
+        widget_bindings = [
+            dv for dv in dynamic_values 
+            if widget.name in dv.usage_locations or any(widget.name in loc for loc in dv.usage_locations)
+        ]
+        
+        # Generate basic widget DSL
+        widget_dsl = self._generate_enhanced_widget_dsl(widget)
+        
+        # Add reactive bindings if any found
+        if widget_bindings:
+            for binding in widget_bindings:
+                # Add reactive binding to widget
+                reactive_expr = f"reactive(lambda: {binding.expression})"
+                widget_dsl += f".bind_content({reactive_expr})"
+        
+        return widget_dsl
+
+    def _generate_enhanced_widget_dsl(self, widget: WidgetInfo) -> str:
+        """Generate enhanced widget DSL with proper positioning and properties"""
+        widget_type = widget.widget_type.lower()
+        widget_var = f"{widget.name}_widget"
+        
+        # Map widget types to DSL classes
+        widget_class_map = {
+            'text': 'Text',
+            'label': 'Label', 
+            'progress': 'ProgressBar',
+            'progressbar': 'ProgressBar',
+            'button': 'Button',
+            'image': 'Image',
+            'gauge': 'Gauge',
+            'chart': 'Chart',
+            'customgauge': 'CustomGauge',
+            'complexchart': 'ComplexChart',
+            'container': 'Container'
+        }
+        
+        widget_class = widget_class_map.get(widget_type, 'Text')
+        
+        # Generate widget with properties
+        if widget_class == 'Text':
+            content = widget.properties.get('content', f'"{widget.name}"')
+            dsl_code = f'{widget_var} = {widget_class}({content})'
+        elif widget_class == 'ProgressBar':
+            value = widget.properties.get('value', '0.5')
+            dsl_code = f'{widget_var} = {widget_class}(value={value})'
+        elif widget_class in ['CustomGauge', 'ComplexChart', 'Container']:
+            # Custom widgets with default initialization
+            dsl_code = f'{widget_var} = {widget_class}()'
+        else:
+            dsl_code = f'{widget_var} = {widget_class}()'
+        
+        # Add positioning
+        if widget.x != 0 or widget.y != 0:
+            dsl_code += f'.position({widget.x}, {widget.y})'
+        
+        # Add z-order if specified
+        if widget.z_order is not None:
+            dsl_code += f'.z_order({widget.z_order})'
+        
+        # Add size if specified
+        if widget.width and widget.height:
+            dsl_code += f'.size({widget.width}, {widget.height})'
+        
+        return dsl_code
 
 class CodeTemplates:
     """Templates for generating code"""
@@ -957,7 +1030,85 @@ if __name__ == "__main__":
         return "# Dependency tracker implementation\\n# TODO: Implement RxPY integration"
     
     def generate_dsl_config(self, config: Dict[str, Any]) -> str:
-        return f"# Application DSL configuration\\n# Config: {config}\\n# TODO: Implement DSL parser"
+        """Generate proper DSL application code"""
+        lines = []
+        
+        # Add imports
+        lines.append('#!/usr/bin/env python3')
+        lines.append('"""')
+        lines.append('Generated tinyDisplay DSL Application')
+        lines.append('Migrated from legacy codebase using enhanced migration tool')
+        lines.append('"""')
+        lines.append('')
+        lines.append('from tinydisplay.reactive import reactive, computed, pipe')
+        lines.append('from tinydisplay.data import DataSource')
+        lines.append('from tinydisplay.dsl import Canvas, Text, ProgressBar, Image, Button, Label')
+        lines.append('')
+        
+        # Add data source setup
+        lines.append('# Data source configuration')
+        lines.append('data_source = DataSource()')
+        lines.append('')
+        
+        # Add reactive data bindings
+        lines.append('# Reactive Data Bindings')
+        dynamic_values = config.get('dynamic_values', {})
+        for dv_name, dv_config in dynamic_values.items():
+            expression = dv_config.get('expression', '')
+            if expression:
+                lines.append(f'# {dv_name}: {expression}')
+                for dep in dv_config.get('dependencies', []):
+                    lines.append(f"data_source.connect('{dep}')")
+        lines.append('')
+        
+        # Add canvas setup
+        display_config = config.get('display', {})
+        width = display_config.get('width', 128)
+        height = display_config.get('height', 64)
+        lines.append(f'# Canvas configuration')
+        lines.append(f'canvas = Canvas(width={width}, height={height})')
+        lines.append('')
+        
+        # Add widgets
+        widgets = config.get('widgets', {})
+        if widgets:
+            lines.append('# Widget definitions')
+            for widget_name, widget_config in widgets.items():
+                widget_type = widget_config.get('type', 'Text')
+                position = widget_config.get('position', [0, 0])
+                size = widget_config.get('size', [100, 20])
+                
+                # Generate widget creation
+                lines.append(f'{widget_name} = {widget_type.title()}()')
+                lines.append(f'{widget_name}.position({position[0]}, {position[1]})')
+                if len(size) >= 2:
+                    lines.append(f'{widget_name}.size({size[0]}, {size[1]})')
+            lines.append('')
+            
+            # Add widgets to canvas
+            lines.append('# Add widgets to canvas')
+            widget_names = list(widgets.keys())
+            if len(widget_names) == 1:
+                lines.append(f'canvas.add({widget_names[0]})')
+            else:
+                lines.append('canvas.add(')
+                for i, widget_name in enumerate(widget_names):
+                    comma = ',' if i < len(widget_names) - 1 else ''
+                    lines.append(f'    {widget_name}{comma}')
+                lines.append(')')
+            lines.append('')
+        
+        # Add main function
+        lines.append('def main():')
+        lines.append('    """Main application entry point"""')
+        lines.append('    data_source.start()')
+        lines.append('    return canvas')
+        lines.append('')
+        lines.append('if __name__ == "__main__":')
+        lines.append('    app = main()')
+        lines.append('    print("tinyDisplay DSL application started")')
+        
+        return '\n'.join(lines)
     
     def generate_data_config(self, config: Dict[str, Any]) -> str:
         return f"# Data configuration\\n# Config: {config}\\n# TODO: Implement data stream setup"

@@ -1,0 +1,1 @@
+# Partial screen updater implementation\n# TODO: Implement dirty region tracking

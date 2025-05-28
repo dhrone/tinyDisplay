@@ -1,0 +1,8 @@
+asteval>=0.9.28
+rxpy>=4.0.4
+numpy>=1.21.0
+scipy>=1.7.0
+luma.oled>=3.8.1
+luma.lcd>=2.10.0
+pytest>=7.0.0
+pytest-asyncio>=0.21.0

@@ -1,0 +1,267 @@
+{
+  "widgets": [
+    {
+      "name": "customgauge",
+      "file_path": "test_complex_migration_demo/complex_legacy_app.py",
+      "class_name": "CustomGaugeWidget",
+      "methods": [
+        "__init__",
+        "update_value",
+        "set_range",
+        "render_needle",
+        "render"
+      ],
+      "attributes": {},
+      "dynamic_values": [],
+      "position": null,
+      "size": null,
+      "animations": [],
+      "bindings": [],
+      "z_order": null,
+      "visibility": null,
+      "widget_type": "customgauge",
+      "x": 0,
+      "y": 0,
+      "width": null,
+      "height": null,
+      "properties": {}
+    },
+    {
+      "name": "complexchart",
+      "file_path": "test_complex_migration_demo/complex_legacy_app.py",
+      "class_name": "ComplexChartWidget",
+      "methods": [
+        "__init__",
+        "add_data",
+        "update_chart",
+        "render_axes",
+        "render_legend",
+        "animate_bars"
+      ],
+      "attributes": {},
+      "dynamic_values": [],
+      "position": null,
+      "size": null,
+      "animations": [
+        "animate_bars"
+      ],
+      "bindings": [],
+      "z_order": null,
+      "visibility": null,
+      "widget_type": "complexchart",
+      "x": 0,
+      "y": 0,
+      "width": null,
+      "height": null,
+      "properties": {}
+    },
+    {
+      "name": "container",
+      "file_path": "test_complex_migration_demo/complex_legacy_app.py",
+      "class_name": "ContainerWidget",
+      "methods": [
+        "__init__",
+        "add_child",
+        "layout_children"
+      ],
+      "attributes": {},
+      "dynamic_values": [],
+      "position": null,
+      "size": null,
+      "animations": [],
+      "bindings": [],
+      "z_order": null,
+      "visibility": null,
+      "widget_type": "container",
+      "x": 0,
+      "y": 0,
+      "width": null,
+      "height": null,
+      "properties": {}
+    }
+  ],
+  "data_streams": [],
+  "dynamic_values": [],
+  "display_config": {},
+  "project_structure": {
+    ".": [
+      "complex_legacy_app.py"
+    ]
+  },
+  "animations": [
+    {
+      "name": "marquee_0",
+      "animation_type": "marquee",
+      "duration": null,
+      "direction": "left",
+      "timing": "linear",
+      "sync_group": null,
+      "dependencies": []
+    },
+    {
+      "name": "fade_1",
+      "animation_type": "fade",
+      "duration": 1000,
+      "direction": null,
+      "timing": "ease-in",
+      "sync_group": null,
+      "dependencies": []
+    },
+    {
+      "name": "fade_2",
+      "animation_type": "fade",
+      "duration": 1000,
+      "direction": null,
+      "timing": "ease-in",
+      "sync_group": null,
+      "dependencies": []
+    }
+  ],
+  "dsl_patterns": [
+    {
+      "pattern_type": "animation_coordination",
+      "legacy_pattern": "marquee animation",
+      "dsl_pattern": "widget.animate.marquee()",
+      "complexity_score": 5,
+      "conversion_confidence": 0.8
+    },
+    {
+      "pattern_type": "animation_coordination",
+      "legacy_pattern": "fade animation",
+      "dsl_pattern": "widget.animate.fade()",
+      "complexity_score": 5,
+      "conversion_confidence": 0.8
+    },
+    {
+      "pattern_type": "animation_coordination",
+      "legacy_pattern": "fade animation",
+      "dsl_pattern": "widget.animate.fade()",
+      "complexity_score": 5,
+      "conversion_confidence": 0.8
+    }
+  ],
+  "canvases": [
+    {
+      "name": "main_canvas",
+      "width": 128,
+      "height": 64,
+      "widgets": [
+        "text_widget_1",
+        "text_widget_2",
+        "progress_widget_1",
+        "cpu_gauge",
+        "memory_chart"
+      ],
+      "z_layers": {},
+      "file_path": "test_complex_migration_demo/complex_legacy_app.py",
+      "is_primary": true
+    },
+    {
+      "name": "secondary_canvas",
+      "width": 64,
+      "height": 32,
+      "widgets": [],
+      "z_layers": {},
+      "file_path": "test_complex_migration_demo/complex_legacy_app.py",
+      "is_primary": false
+    },
+    {
+      "name": "status_canvas",
+      "width": 128,
+      "height": 32,
+      "widgets": [
+        "status_container"
+      ],
+      "z_layers": {},
+      "file_path": "test_complex_migration_demo/complex_legacy_app.py",
+      "is_primary": false
+    }
+  ],
+  "widget_hierarchies": [
+    {
+      "parent": "status_container",
+      "children": [
+        "status_text",
+        "network_gauge"
+      ],
+      "hierarchy_type": "container",
+      "layout_properties": {}
+    },
+    {
+      "parent": "main_canvas",
+      "children": [
+        "text_widget_1",
+        "text_widget_2",
+        "progress_widget_1",
+        "cpu_gauge",
+        "memory_chart"
+      ],
+      "hierarchy_type": "container",
+      "layout_properties": {}
+    },
+    {
+      "parent": "secondary_canvas",
+      "children": [],
+      "hierarchy_type": "container",
+      "layout_properties": {}
+    },
+    {
+      "parent": "status_canvas",
+      "children": [
+        "status_container"
+      ],
+      "hierarchy_type": "container",
+      "layout_properties": {}
+    }
+  ],
+  "custom_widgets": [
+    {
+      "name": "CustomGaugeWidget",
+      "base_class": "Widget",
+      "custom_methods": [
+        "update_value",
+        "set_range",
+        "render_needle",
+        "render"
+      ],
+      "custom_properties": {},
+      "rendering_complexity": 4,
+      "migration_strategy": "direct"
+    },
+    {
+      "name": "ComplexChartWidget",
+      "base_class": "Widget",
+      "custom_methods": [
+        "add_data",
+        "update_chart",
+        "render_axes",
+        "render_legend",
+        "animate_bars"
+      ],
+      "custom_properties": {},
+      "rendering_complexity": 5,
+      "migration_strategy": "direct"
+    },
+    {
+      "name": "ContainerWidget",
+      "base_class": "Widget",
+      "custom_methods": [
+        "add_child",
+        "layout_children"
+      ],
+      "custom_properties": {},
+      "rendering_complexity": 2,
+      "migration_strategy": "direct"
+    }
+  ],
+  "application_complexity": {
+    "widget_count": 3,
+    "canvas_count": 3,
+    "hierarchy_depth": 5,
+    "custom_widget_count": 3,
+    "data_binding_count": 0,
+    "animation_count": 3,
+    "complexity_score": 2,
+    "migration_strategy": "simple"
+  }
+}

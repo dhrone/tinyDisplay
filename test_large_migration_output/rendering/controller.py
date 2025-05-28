@@ -1,0 +1,1 @@
+# Render controller implementation\n# Target FPS: 60\n# TODO: Implement frame scheduling
