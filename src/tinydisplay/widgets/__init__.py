@@ -72,7 +72,22 @@ from .progress import (
     ProgressAnimation,
     ProgressOrientation,
     ProgressTextPosition,
-    EasingFunction
+    EasingFunction,
+    ProgressPrediction,
+    ProgressDataPoint
+)
+
+from .shapes import (
+    ShapeWidget,
+    RectangleWidget,
+    CircleWidget,
+    LineWidget,
+    ShapeStyle,
+    GradientStop,
+    FillPattern,
+    StrokeStyle,
+    LineCapStyle,
+    LineJoinStyle
 )
 
 __all__ = [
@@ -132,5 +147,19 @@ __all__ = [
     'ProgressAnimation',
     'ProgressOrientation',
     'ProgressTextPosition',
-    'EasingFunction'
+    'EasingFunction',
+    'ProgressPrediction',
+    'ProgressDataPoint',
+
+    # Shape widgets
+    'ShapeWidget',
+    'RectangleWidget',
+    'CircleWidget',
+    'LineWidget',
+    'ShapeStyle',
+    'GradientStop',
+    'FillPattern',
+    'StrokeStyle',
+    'LineCapStyle',
+    'LineJoinStyle'
 ]

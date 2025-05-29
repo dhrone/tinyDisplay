@@ -3,10 +3,11 @@
 ProgressBar Widget Implementation
 
 Provides progress bar rendering with reactive data binding, smooth animations,
-customizable styling, and multiple orientations for the tinyDisplay framework.
+customizable styling, multiple orientations, and predictive progress estimation
+for the tinyDisplay framework.
 """
 
-from typing import Union, Optional, Tuple, Dict, Any, Callable
+from typing import Union, Optional, Tuple, Dict, Any, Callable, List
 from dataclasses import dataclass
 from enum import Enum
 import threading
@@ -44,6 +45,54 @@ class EasingFunction(Enum):
 
 
 @dataclass
+class ProgressDataPoint:
+    """Historical progress data point for predictive analysis."""
+    value: float
+    timestamp: float
+    
+    def __post_init__(self):
+        """Validate data point parameters."""
+        if not isinstance(self.value, (int, float)):
+            raise TypeError("Progress value must be numeric")
+        if not isinstance(self.timestamp, (int, float)):
+            raise TypeError("Timestamp must be numeric")
+        if self.timestamp < 0:
+            raise ValueError("Timestamp must be non-negative")
+
+
+@dataclass
+class ProgressPrediction:
+    """Predictive progress configuration and state."""
+    enabled: bool = False
+    min_samples: int = 3  # Minimum data points for reliable prediction
+    max_samples: int = 10  # Maximum samples to keep for rate calculation
+    max_prediction_time: float = 5.0  # Maximum seconds to predict ahead
+    confidence_decay_rate: float = 0.8  # Confidence decay per second
+    min_confidence: float = 0.1  # Minimum confidence to show prediction
+    rate_smoothing: float = 0.7  # Smoothing factor for rate calculation (0.0-1.0)
+    
+    # Internal prediction state
+    current_rate: Optional[float] = None
+    confidence: float = 1.0
+    last_prediction_time: Optional[float] = None
+    
+    def __post_init__(self):
+        """Validate prediction parameters."""
+        if self.min_samples < 2:
+            raise ValueError("min_samples must be at least 2")
+        if self.max_samples < self.min_samples:
+            raise ValueError("max_samples must be >= min_samples")
+        if self.max_prediction_time <= 0.0:
+            raise ValueError("max_prediction_time must be positive")
+        if not 0.0 <= self.confidence_decay_rate <= 1.0:
+            raise ValueError("confidence_decay_rate must be between 0.0 and 1.0")
+        if not 0.0 <= self.min_confidence <= 1.0:
+            raise ValueError("min_confidence must be between 0.0 and 1.0")
+        if not 0.0 <= self.rate_smoothing <= 1.0:
+            raise ValueError("rate_smoothing must be between 0.0 and 1.0")
+
+
+@dataclass
 class ProgressStyle:
     """Progress bar styling configuration."""
     # Bar colors
@@ -76,6 +125,11 @@ class ProgressStyle:
     pulse_speed: float = 1.0  # Pulses per second
     pulse_intensity: float = 0.2  # Brightness variation (0.0-1.0)
     
+    # Predictive progress styling
+    prediction_color: Tuple[int, int, int] = (100, 200, 255)  # Lighter blue for predictions
+    prediction_alpha: float = 0.6  # Transparency for predicted portion
+    show_prediction_indicator: bool = True  # Show visual indicator for predicted vs actual
+    
     def __post_init__(self):
         """Validate progress style parameters."""
         if not all(0 <= c <= 255 for c in self.background_color):
@@ -86,6 +140,8 @@ class ProgressStyle:
             raise ValueError("Border color values must be between 0 and 255")
         if not all(0 <= c <= 255 for c in self.text_color):
             raise ValueError("Text color values must be between 0 and 255")
+        if not all(0 <= c <= 255 for c in self.prediction_color):
+            raise ValueError("Prediction color values must be between 0 and 255")
         if self.border_width < 0:
             raise ValueError("Border width must be non-negative")
         if self.border_radius < 0:
@@ -96,6 +152,8 @@ class ProgressStyle:
             raise ValueError("Pulse intensity must be between 0.0 and 1.0")
         if self.pulse_speed <= 0.0:
             raise ValueError("Pulse speed must be positive")
+        if not 0.0 <= self.prediction_alpha <= 1.0:
+            raise ValueError("Prediction alpha must be between 0.0 and 1.0")
 
 
 @dataclass
@@ -118,10 +176,11 @@ class ProgressAnimation:
 
 
 class ProgressBarWidget(Widget):
-    """Progress bar widget with reactive data binding and smooth animations.
+    """Progress bar widget with reactive data binding, smooth animations, and predictive progress.
     
     Supports horizontal and vertical orientations, customizable styling,
-    text overlays, and smooth animations with various easing functions.
+    text overlays, smooth animations with various easing functions, and
+    predictive progress estimation that forecasts progress between data updates.
     Integrates with the reactive system for dynamic progress updates.
     
     Args:
@@ -130,19 +189,24 @@ class ProgressBarWidget(Widget):
         style: Progress bar styling configuration
         text_position: Position of progress text overlay
         animation: Animation configuration
+        prediction: Predictive progress configuration
         **kwargs: Additional widget arguments
         
     Example:
-        >>> widget = ProgressBarWidget(0.75, 
-        ...                           orientation=ProgressOrientation.HORIZONTAL,
-        ...                           style=ProgressStyle(fill_color=(0, 255, 0)))
-        >>> widget.bind_data("progress", reactive_data_source)
+        >>> # Basic progress bar
+        >>> widget = ProgressBarWidget(0.75)
+        
+        >>> # With predictive progress for file downloads
+        >>> prediction = ProgressPrediction(enabled=True, max_prediction_time=10.0)
+        >>> widget = ProgressBarWidget(0.0, prediction=prediction)
+        >>> widget.bind_data("progress", download_progress_source)
     """
     
     __slots__ = (
-        '_progress', '_orientation', '_style', '_text_position', '_animation',
+        '_progress', '_orientation', '_style', '_text_position', '_animation', '_prediction',
         '_cached_progress', '_last_render_time', '_animation_lock',
-        '_text_overlay', '_custom_text', '_min_value', '_max_value'
+        '_text_overlay', '_custom_text', '_min_value', '_max_value',
+        '_progress_history', '_last_update_time', '_last_known_progress'
     )
     
     def __init__(
@@ -152,6 +216,7 @@ class ProgressBarWidget(Widget):
         style: Optional[ProgressStyle] = None,
         text_position: ProgressTextPosition = ProgressTextPosition.CENTER,
         animation: Optional[ProgressAnimation] = None,
+        prediction: Optional[ProgressPrediction] = None,
         min_value: float = 0.0,
         max_value: float = 1.0,
         **kwargs
@@ -165,6 +230,7 @@ class ProgressBarWidget(Widget):
         self._style = style or ProgressStyle()
         self._text_position = text_position
         self._animation = animation or ProgressAnimation()
+        self._prediction = prediction or ProgressPrediction()
         
         # Value range
         self._min_value = min_value
@@ -180,6 +246,11 @@ class ProgressBarWidget(Widget):
         # Text overlay
         self._text_overlay: Optional[str] = None
         self._custom_text: Optional[ReactiveValue] = None
+        
+        # Predictive progress state
+        self._progress_history: List[ProgressDataPoint] = []
+        self._last_update_time = time.time()
+        self._last_known_progress = self._cached_progress
         
         # Validate initial progress
         self._validate_progress(self._progress.value)
@@ -254,8 +325,31 @@ class ProgressBarWidget(Widget):
             animation.current_value = self._cached_progress
     
     @property
+    def prediction(self) -> ProgressPrediction:
+        """Get prediction configuration."""
+        return self._prediction
+    
+    @prediction.setter
+    def prediction(self, prediction: ProgressPrediction) -> None:
+        """Set prediction configuration."""
+        self._prediction = prediction
+        if not prediction.enabled:
+            # Clear prediction state when disabled
+            self._progress_history.clear()
+            prediction.current_rate = None
+            prediction.confidence = 1.0
+    
+    @property
     def animated_progress(self) -> float:
-        """Get current animated progress value."""
+        """Get current animated progress value (includes predictions)."""
+        current_time = time.time()
+        
+        # Use predictive progress if enabled and conditions are met
+        if (self._prediction.enabled and 
+            self._should_use_prediction(current_time)):
+            return self._get_predictive_progress(current_time)
+        
+        # Fall back to standard animation
         if not self._animation.enabled:
             return self._cached_progress
         
@@ -268,6 +362,26 @@ class ProgressBarWidget(Widget):
     def progress_percentage(self) -> float:
         """Get progress as percentage (0-100)."""
         return self.animated_progress * 100.0
+    
+    @property
+    def prediction_confidence(self) -> float:
+        """Get current prediction confidence (0.0-1.0)."""
+        if not self._prediction.enabled:
+            return 0.0
+        return self._prediction.confidence
+    
+    @property
+    def is_predicting(self) -> bool:
+        """Check if widget is currently showing predicted progress."""
+        if not self._prediction.enabled:
+            return False
+        current_time = time.time()
+        return self._should_use_prediction(current_time)
+    
+    @property
+    def progress_rate(self) -> Optional[float]:
+        """Get current progress rate (progress units per second)."""
+        return self._prediction.current_rate
     
     def set_custom_text(self, text: Union[str, ReactiveValue, None]) -> None:
         """Set custom text overlay instead of percentage."""
@@ -377,8 +491,21 @@ class ProgressBarWidget(Widget):
         return (value - self._min_value) / (self._max_value - self._min_value)
     
     def _on_progress_changed(self, old_value: Any, new_value: Any) -> None:
-        """Handle reactive progress updates."""
+        """Handle reactive progress updates with prediction tracking."""
         self._validate_progress(new_value)
+        
+        # Update prediction tracking
+        current_time = time.time()
+        normalized_progress = self._normalize_progress(new_value)
+        
+        if self._prediction.enabled:
+            # Add data point to prediction history
+            self._add_progress_data_point(normalized_progress, current_time)
+            
+            # Update tracking variables
+            self._last_update_time = current_time
+            self._last_known_progress = normalized_progress
+        
         self._start_animation()
         self._mark_dirty()
     
@@ -557,4 +684,154 @@ class ProgressBarWidget(Widget):
     
     def __repr__(self) -> str:
         return (f"ProgressBarWidget(id={self.widget_id}, progress={self.progress:.2f}, "
-                f"orientation={self._orientation.value}, animated={self._animation.enabled}, visible={self.visible})") 
+                f"orientation={self._orientation.value}, animated={self._animation.enabled}, visible={self.visible})")
+    
+    def enable_prediction(self, enabled: bool = True, max_prediction_time: float = 5.0, 
+                         min_samples: int = 3) -> None:
+        """Enable or disable predictive progress."""
+        self._prediction.enabled = enabled
+        if enabled:
+            self._prediction.max_prediction_time = max_prediction_time
+            self._prediction.min_samples = min_samples
+        else:
+            # Clear prediction state
+            self._progress_history.clear()
+            self._prediction.current_rate = None
+            self._prediction.confidence = 1.0
+        self._mark_dirty()
+    
+    def get_prediction_info(self) -> Dict[str, Any]:
+        """Get detailed prediction information for debugging/monitoring."""
+        return {
+            'enabled': self._prediction.enabled,
+            'is_predicting': self.is_predicting,
+            'confidence': self.prediction_confidence,
+            'rate': self.progress_rate,
+            'samples_count': len(self._progress_history),
+            'time_since_last_update': time.time() - self._last_update_time,
+            'predicted_progress': self.animated_progress if self.is_predicting else None
+        }
+    
+    def clear_prediction_history(self) -> None:
+        """Clear prediction history and reset prediction state."""
+        self._progress_history.clear()
+        self._prediction.current_rate = None
+        self._prediction.confidence = 1.0
+        self._prediction.last_prediction_time = None
+    
+    def _should_use_prediction(self, current_time: float) -> bool:
+        """Determine if predictive progress should be used."""
+        if not self._prediction.enabled:
+            return False
+        
+        # Need minimum samples for prediction
+        if len(self._progress_history) < self._prediction.min_samples:
+            return False
+        
+        # Check if we're within prediction time window
+        time_since_update = current_time - self._last_update_time
+        if time_since_update > self._prediction.max_prediction_time:
+            return False
+        
+        # Check if confidence is above minimum threshold
+        if self._prediction.confidence < self._prediction.min_confidence:
+            return False
+        
+        # Only predict if we have a positive rate (progress is advancing)
+        if self._prediction.current_rate is None or self._prediction.current_rate <= 0:
+            return False
+        
+        return True
+    
+    def _get_predictive_progress(self, current_time: float) -> float:
+        """Calculate predicted progress based on historical data."""
+        if not self._should_use_prediction(current_time):
+            return self._cached_progress
+        
+        # Update confidence based on time elapsed
+        self._update_prediction_confidence(current_time)
+        
+        # Calculate predicted progress
+        time_since_update = current_time - self._last_update_time
+        predicted_progress = self._last_known_progress + (self._prediction.current_rate * time_since_update)
+        
+        # Apply confidence factor to blend between known and predicted
+        confidence_factor = self._prediction.confidence
+        blended_progress = (self._last_known_progress * (1 - confidence_factor) + 
+                           predicted_progress * confidence_factor)
+        
+        # Clamp to valid range
+        return max(0.0, min(1.0, blended_progress))
+    
+    def _update_prediction_confidence(self, current_time: float) -> None:
+        """Update prediction confidence based on time elapsed."""
+        if self._prediction.last_prediction_time is None:
+            self._prediction.last_prediction_time = current_time
+            return
+        
+        # Decay confidence over time
+        time_delta = current_time - self._prediction.last_prediction_time
+        decay_factor = math.pow(self._prediction.confidence_decay_rate, time_delta)
+        self._prediction.confidence = max(
+            self._prediction.min_confidence,
+            self._prediction.confidence * decay_factor
+        )
+        
+        self._prediction.last_prediction_time = current_time
+    
+    def _calculate_progress_rate(self) -> Optional[float]:
+        """Calculate progress rate from historical data points."""
+        if len(self._progress_history) < 2:
+            return None
+        
+        # Use recent samples for rate calculation
+        recent_samples = self._progress_history[-self._prediction.min_samples:]
+        
+        if len(recent_samples) < 2:
+            return None
+        
+        # Calculate rates between consecutive points
+        rates = []
+        for i in range(1, len(recent_samples)):
+            prev_point = recent_samples[i - 1]
+            curr_point = recent_samples[i]
+            
+            time_delta = curr_point.timestamp - prev_point.timestamp
+            if time_delta > 0:
+                rate = (curr_point.value - prev_point.value) / time_delta
+                rates.append(rate)
+        
+        if not rates:
+            return None
+        
+        # Calculate smoothed average rate
+        if self._prediction.current_rate is None:
+            # First rate calculation
+            new_rate = sum(rates) / len(rates)
+        else:
+            # Smooth with previous rate
+            current_avg = sum(rates) / len(rates)
+            smoothing = self._prediction.rate_smoothing
+            new_rate = (self._prediction.current_rate * smoothing + 
+                       current_avg * (1 - smoothing))
+        
+        return new_rate
+    
+    def _add_progress_data_point(self, progress: float, timestamp: float) -> None:
+        """Add a new progress data point to history."""
+        # Create new data point
+        data_point = ProgressDataPoint(progress, timestamp)
+        
+        # Add to history
+        self._progress_history.append(data_point)
+        
+        # Limit history size
+        if len(self._progress_history) > self._prediction.max_samples:
+            self._progress_history.pop(0)
+        
+        # Recalculate rate
+        self._prediction.current_rate = self._calculate_progress_rate()
+        
+        # Reset confidence for new data
+        self._prediction.confidence = 1.0
+        self._prediction.last_prediction_time = timestamp 

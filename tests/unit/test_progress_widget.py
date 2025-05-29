@@ -13,7 +13,8 @@ from unittest.mock import Mock, patch, MagicMock
 
 from src.tinydisplay.widgets.progress import (
     ProgressBarWidget, ProgressStyle, ProgressAnimation,
-    ProgressOrientation, ProgressTextPosition, EasingFunction
+    ProgressOrientation, ProgressTextPosition, EasingFunction,
+    ProgressPrediction, ProgressDataPoint
 )
 from src.tinydisplay.widgets.base import ReactiveValue, WidgetBounds
 
@@ -858,6 +859,457 @@ class TestProgressBarWidgetIntegration:
         assert "vertical" in repr_str
         assert "animated=True" in repr_str
         assert "visible=True" in repr_str
+
+
+class TestProgressDataPoint:
+    """Test ProgressDataPoint functionality."""
+    
+    def test_progress_data_point__valid_values__correct_initialization(self):
+        """Test ProgressDataPoint with valid values."""
+        point = ProgressDataPoint(0.5, 1000.0)
+        assert point.value == 0.5
+        assert point.timestamp == 1000.0
+    
+    def test_progress_data_point__invalid_value_type__raises_error(self):
+        """Test ProgressDataPoint with invalid value type raises TypeError."""
+        with pytest.raises(TypeError, match="Progress value must be numeric"):
+            ProgressDataPoint("invalid", 1000.0)
+    
+    def test_progress_data_point__invalid_timestamp_type__raises_error(self):
+        """Test ProgressDataPoint with invalid timestamp type raises TypeError."""
+        with pytest.raises(TypeError, match="Timestamp must be numeric"):
+            ProgressDataPoint(0.5, "invalid")
+    
+    def test_progress_data_point__negative_timestamp__raises_error(self):
+        """Test ProgressDataPoint with negative timestamp raises ValueError."""
+        with pytest.raises(ValueError, match="Timestamp must be non-negative"):
+            ProgressDataPoint(0.5, -1.0)
+
+
+class TestProgressPrediction:
+    """Test ProgressPrediction configuration and validation."""
+    
+    def test_progress_prediction__default_values__correct_initialization(self):
+        """Test ProgressPrediction with default values."""
+        prediction = ProgressPrediction()
+        assert prediction.enabled is False
+        assert prediction.min_samples == 3
+        assert prediction.max_samples == 10
+        assert prediction.max_prediction_time == 5.0
+        assert prediction.confidence_decay_rate == 0.8
+        assert prediction.min_confidence == 0.1
+        assert prediction.rate_smoothing == 0.7
+        assert prediction.current_rate is None
+        assert prediction.confidence == 1.0
+        assert prediction.last_prediction_time is None
+    
+    def test_progress_prediction__custom_values__correct_initialization(self):
+        """Test ProgressPrediction with custom values."""
+        prediction = ProgressPrediction(
+            enabled=True,
+            min_samples=5,
+            max_samples=20,
+            max_prediction_time=10.0,
+            confidence_decay_rate=0.9,
+            min_confidence=0.2,
+            rate_smoothing=0.8
+        )
+        assert prediction.enabled is True
+        assert prediction.min_samples == 5
+        assert prediction.max_samples == 20
+        assert prediction.max_prediction_time == 10.0
+        assert prediction.confidence_decay_rate == 0.9
+        assert prediction.min_confidence == 0.2
+        assert prediction.rate_smoothing == 0.8
+    
+    def test_progress_prediction__invalid_min_samples__raises_error(self):
+        """Test ProgressPrediction with invalid min_samples raises ValueError."""
+        with pytest.raises(ValueError, match="min_samples must be at least 2"):
+            ProgressPrediction(min_samples=1)
+    
+    def test_progress_prediction__invalid_max_samples__raises_error(self):
+        """Test ProgressPrediction with invalid max_samples raises ValueError."""
+        with pytest.raises(ValueError, match="max_samples must be >= min_samples"):
+            ProgressPrediction(min_samples=5, max_samples=3)
+    
+    def test_progress_prediction__invalid_max_prediction_time__raises_error(self):
+        """Test ProgressPrediction with invalid max_prediction_time raises ValueError."""
+        with pytest.raises(ValueError, match="max_prediction_time must be positive"):
+            ProgressPrediction(max_prediction_time=0.0)
+    
+    def test_progress_prediction__invalid_confidence_decay_rate__raises_error(self):
+        """Test ProgressPrediction with invalid confidence_decay_rate raises ValueError."""
+        with pytest.raises(ValueError, match="confidence_decay_rate must be between 0.0 and 1.0"):
+            ProgressPrediction(confidence_decay_rate=1.5)
+    
+    def test_progress_prediction__invalid_min_confidence__raises_error(self):
+        """Test ProgressPrediction with invalid min_confidence raises ValueError."""
+        with pytest.raises(ValueError, match="min_confidence must be between 0.0 and 1.0"):
+            ProgressPrediction(min_confidence=1.5)
+    
+    def test_progress_prediction__invalid_rate_smoothing__raises_error(self):
+        """Test ProgressPrediction with invalid rate_smoothing raises ValueError."""
+        with pytest.raises(ValueError, match="rate_smoothing must be between 0.0 and 1.0"):
+            ProgressPrediction(rate_smoothing=1.5)
+
+
+class TestProgressBarWidgetPredictive:
+    """Test ProgressBarWidget predictive progress functionality."""
+    
+    def test_progress_bar_widget__with_prediction__initializes_correctly(self):
+        """Test ProgressBarWidget initialization with prediction configuration."""
+        prediction = ProgressPrediction(enabled=True, max_prediction_time=10.0)
+        widget = ProgressBarWidget(0.2, prediction=prediction)
+        
+        assert widget.prediction.enabled is True
+        assert widget.prediction.max_prediction_time == 10.0
+        assert len(widget._progress_history) == 0
+        assert widget.is_predicting is False  # No history yet
+        assert widget.prediction_confidence == 1.0
+        assert widget.progress_rate is None
+    
+    def test_progress_bar_widget__prediction_property__get_set(self):
+        """Test prediction property getter and setter."""
+        widget = ProgressBarWidget()
+        new_prediction = ProgressPrediction(enabled=True, min_samples=5)
+        
+        widget.prediction = new_prediction
+        
+        assert widget.prediction is new_prediction
+        assert widget.prediction.enabled is True
+        assert widget.prediction.min_samples == 5
+    
+    def test_progress_bar_widget__disable_prediction__clears_state(self):
+        """Test disabling prediction clears prediction state."""
+        prediction = ProgressPrediction(enabled=True)
+        widget = ProgressBarWidget(0.2, prediction=prediction)
+        
+        # Add some history
+        widget._add_progress_data_point(0.3, 1000.0)
+        widget._add_progress_data_point(0.4, 1001.0)
+        
+        # Disable prediction
+        widget.prediction = ProgressPrediction(enabled=False)
+        
+        assert len(widget._progress_history) == 0
+        assert widget.prediction.current_rate is None
+        assert widget.prediction.confidence == 1.0
+    
+    def test_enable_prediction__enables_with_parameters(self):
+        """Test enable_prediction method."""
+        widget = ProgressBarWidget()
+        
+        widget.enable_prediction(True, max_prediction_time=15.0, min_samples=4)
+        
+        assert widget.prediction.enabled is True
+        assert widget.prediction.max_prediction_time == 15.0
+        assert widget.prediction.min_samples == 4
+    
+    def test_enable_prediction__disable__clears_state(self):
+        """Test enable_prediction with False clears state."""
+        widget = ProgressBarWidget()
+        widget._add_progress_data_point(0.3, 1000.0)
+        
+        widget.enable_prediction(False)
+        
+        assert widget.prediction.enabled is False
+        assert len(widget._progress_history) == 0
+        assert widget.prediction.current_rate is None
+    
+    def test_get_prediction_info__returns_complete_info(self):
+        """Test get_prediction_info returns comprehensive information."""
+        prediction = ProgressPrediction(enabled=True)
+        widget = ProgressBarWidget(0.2, prediction=prediction)
+        
+        info = widget.get_prediction_info()
+        
+        assert 'enabled' in info
+        assert 'is_predicting' in info
+        assert 'confidence' in info
+        assert 'rate' in info
+        assert 'samples_count' in info
+        assert 'time_since_last_update' in info
+        assert 'predicted_progress' in info
+        assert info['enabled'] is True
+        assert info['samples_count'] == 0
+    
+    def test_clear_prediction_history__clears_all_state(self):
+        """Test clear_prediction_history clears all prediction state."""
+        widget = ProgressBarWidget()
+        widget._add_progress_data_point(0.3, 1000.0)
+        widget._add_progress_data_point(0.4, 1001.0)
+        widget._prediction.current_rate = 0.1
+        
+        widget.clear_prediction_history()
+        
+        assert len(widget._progress_history) == 0
+        assert widget._prediction.current_rate is None
+        assert widget._prediction.confidence == 1.0
+        assert widget._prediction.last_prediction_time is None
+    
+    def test_add_progress_data_point__adds_to_history(self):
+        """Test _add_progress_data_point adds data to history."""
+        widget = ProgressBarWidget()
+        
+        widget._add_progress_data_point(0.3, 1000.0)
+        widget._add_progress_data_point(0.4, 1001.0)
+        
+        assert len(widget._progress_history) == 2
+        assert widget._progress_history[0].value == 0.3
+        assert widget._progress_history[0].timestamp == 1000.0
+        assert widget._progress_history[1].value == 0.4
+        assert widget._progress_history[1].timestamp == 1001.0
+    
+    def test_add_progress_data_point__limits_history_size(self):
+        """Test _add_progress_data_point limits history to max_samples."""
+        prediction = ProgressPrediction(max_samples=3)
+        widget = ProgressBarWidget(prediction=prediction)
+        
+        # Add more than max_samples
+        for i in range(5):
+            widget._add_progress_data_point(i * 0.1, 1000.0 + i)
+        
+        assert len(widget._progress_history) == 3
+        # Should keep the most recent samples
+        assert abs(widget._progress_history[0].value - 0.2) < 0.01
+        assert abs(widget._progress_history[1].value - 0.3) < 0.01
+        assert abs(widget._progress_history[2].value - 0.4) < 0.01
+    
+    def test_calculate_progress_rate__insufficient_data__returns_none(self):
+        """Test _calculate_progress_rate with insufficient data returns None."""
+        widget = ProgressBarWidget()
+        
+        # No data
+        assert widget._calculate_progress_rate() is None
+        
+        # Only one data point
+        widget._add_progress_data_point(0.3, 1000.0)
+        assert widget._calculate_progress_rate() is None
+    
+    def test_calculate_progress_rate__calculates_rate_correctly(self):
+        """Test _calculate_progress_rate calculates rate correctly."""
+        widget = ProgressBarWidget()
+        
+        # Add data points with known rate: 0.1 progress per second
+        widget._add_progress_data_point(0.2, 1000.0)
+        widget._add_progress_data_point(0.3, 1001.0)  # +0.1 in 1 second
+        widget._add_progress_data_point(0.4, 1002.0)  # +0.1 in 1 second
+        
+        rate = widget._calculate_progress_rate()
+        
+        assert rate is not None
+        assert abs(rate - 0.1) < 0.01  # Should be approximately 0.1
+    
+    def test_calculate_progress_rate__smooths_with_previous_rate(self):
+        """Test _calculate_progress_rate smooths with previous rate."""
+        widget = ProgressBarWidget()
+        widget._prediction.rate_smoothing = 0.5  # 50% smoothing
+        
+        # First, establish an initial rate by adding some data points
+        widget._add_progress_data_point(0.1, 1000.0)
+        widget._add_progress_data_point(0.15, 1001.0)  # Rate of 0.05
+        
+        # Verify initial rate
+        initial_rate = widget._prediction.current_rate
+        assert initial_rate is not None
+        assert abs(initial_rate - 0.05) < 0.01
+        
+        # Now add a new data point with a different rate
+        widget._add_progress_data_point(0.35, 1002.0)  # Rate of 0.2 from previous point
+        
+        # The calculation uses all recent samples:
+        # Rates: 0.1->0.15 = 0.05, 0.15->0.35 = 0.2
+        # Average: (0.05 + 0.2) / 2 = 0.125
+        # Smoothed: 0.05 * 0.5 + 0.125 * 0.5 = 0.0875
+        smoothed_rate = widget._prediction.current_rate
+        assert smoothed_rate is not None
+        assert abs(smoothed_rate - 0.0875) < 0.01
+    
+    def test_should_use_prediction__disabled__returns_false(self):
+        """Test _should_use_prediction returns False when disabled."""
+        widget = ProgressBarWidget()
+        widget._prediction.enabled = False
+        
+        assert widget._should_use_prediction(time.time()) is False
+    
+    def test_should_use_prediction__insufficient_samples__returns_false(self):
+        """Test _should_use_prediction returns False with insufficient samples."""
+        prediction = ProgressPrediction(enabled=True, min_samples=3)
+        widget = ProgressBarWidget(prediction=prediction)
+        
+        # Add only 2 samples (less than min_samples)
+        widget._add_progress_data_point(0.2, 1000.0)
+        widget._add_progress_data_point(0.3, 1001.0)
+        
+        assert widget._should_use_prediction(time.time()) is False
+    
+    def test_should_use_prediction__too_old__returns_false(self):
+        """Test _should_use_prediction returns False when prediction is too old."""
+        prediction = ProgressPrediction(enabled=True, max_prediction_time=2.0)
+        widget = ProgressBarWidget(prediction=prediction)
+        
+        # Add sufficient samples
+        widget._add_progress_data_point(0.2, 1000.0)
+        widget._add_progress_data_point(0.3, 1001.0)
+        widget._add_progress_data_point(0.4, 1002.0)
+        
+        # Set last update time to be too old
+        widget._last_update_time = time.time() - 5.0  # 5 seconds ago
+        
+        assert widget._should_use_prediction(time.time()) is False
+    
+    def test_should_use_prediction__low_confidence__returns_false(self):
+        """Test _should_use_prediction returns False with low confidence."""
+        prediction = ProgressPrediction(enabled=True, min_confidence=0.5)
+        widget = ProgressBarWidget(prediction=prediction)
+        
+        # Add sufficient samples
+        widget._add_progress_data_point(0.2, 1000.0)
+        widget._add_progress_data_point(0.3, 1001.0)
+        widget._add_progress_data_point(0.4, 1002.0)
+        
+        # Set low confidence
+        widget._prediction.confidence = 0.3
+        
+        assert widget._should_use_prediction(time.time()) is False
+    
+    def test_should_use_prediction__negative_rate__returns_false(self):
+        """Test _should_use_prediction returns False with negative rate."""
+        prediction = ProgressPrediction(enabled=True)
+        widget = ProgressBarWidget(prediction=prediction)
+        
+        # Add samples with negative rate
+        widget._add_progress_data_point(0.4, 1000.0)
+        widget._add_progress_data_point(0.3, 1001.0)  # Decreasing progress
+        widget._add_progress_data_point(0.2, 1002.0)
+        
+        assert widget._should_use_prediction(time.time()) is False
+    
+    def test_should_use_prediction__valid_conditions__returns_true(self):
+        """Test _should_use_prediction returns True with valid conditions."""
+        prediction = ProgressPrediction(enabled=True)
+        widget = ProgressBarWidget(prediction=prediction)
+        
+        # Add sufficient samples with positive rate
+        current_time = time.time()
+        widget._add_progress_data_point(0.2, current_time - 2)
+        widget._add_progress_data_point(0.3, current_time - 1)
+        widget._add_progress_data_point(0.4, current_time)
+        widget._last_update_time = current_time
+        
+        assert widget._should_use_prediction(current_time + 1) is True
+    
+    def test_get_predictive_progress__calculates_prediction(self):
+        """Test _get_predictive_progress calculates predicted progress."""
+        prediction = ProgressPrediction(enabled=True)
+        widget = ProgressBarWidget(prediction=prediction)
+        
+        # Set up prediction state
+        current_time = time.time()
+        widget._last_known_progress = 0.5
+        widget._last_update_time = current_time - 2.0  # 2 seconds ago
+        widget._prediction.current_rate = 0.1  # 0.1 progress per second
+        widget._prediction.confidence = 1.0
+        
+        # Mock should_use_prediction to return True
+        widget._should_use_prediction = Mock(return_value=True)
+        
+        predicted = widget._get_predictive_progress(current_time)
+        
+        # Should predict: 0.5 + (0.1 * 2) = 0.7
+        assert abs(predicted - 0.7) < 0.01
+    
+    def test_get_predictive_progress__blends_with_confidence(self):
+        """Test _get_predictive_progress blends prediction with confidence."""
+        prediction = ProgressPrediction(enabled=True)
+        widget = ProgressBarWidget(prediction=prediction)
+        
+        # Set up prediction state
+        current_time = time.time()
+        widget._last_known_progress = 0.5
+        widget._last_update_time = current_time - 1.0  # 1 second ago
+        widget._prediction.current_rate = 0.2  # 0.2 progress per second
+        widget._prediction.confidence = 0.5  # 50% confidence
+        
+        # Mock should_use_prediction to return True
+        widget._should_use_prediction = Mock(return_value=True)
+        
+        predicted = widget._get_predictive_progress(current_time)
+        
+        # Predicted would be: 0.5 + (0.2 * 1) = 0.7
+        # Blended: 0.5 * (1 - 0.5) + 0.7 * 0.5 = 0.25 + 0.35 = 0.6
+        assert abs(predicted - 0.6) < 0.01
+    
+    def test_update_prediction_confidence__decays_over_time(self):
+        """Test _update_prediction_confidence decays confidence over time."""
+        prediction = ProgressPrediction(enabled=True, confidence_decay_rate=0.8)
+        widget = ProgressBarWidget(prediction=prediction)
+        
+        # Set initial state
+        initial_time = 1000.0
+        widget._prediction.confidence = 1.0
+        widget._prediction.last_prediction_time = initial_time
+        
+        # Update after 1 second
+        widget._update_prediction_confidence(initial_time + 1.0)
+        
+        # Confidence should decay: 1.0 * (0.8^1) = 0.8
+        assert abs(widget._prediction.confidence - 0.8) < 0.01
+    
+    def test_update_prediction_confidence__respects_minimum(self):
+        """Test _update_prediction_confidence respects minimum confidence."""
+        prediction = ProgressPrediction(enabled=True, confidence_decay_rate=0.1, min_confidence=0.2)
+        widget = ProgressBarWidget(prediction=prediction)
+        
+        # Set initial state
+        initial_time = 1000.0
+        widget._prediction.confidence = 0.3
+        widget._prediction.last_prediction_time = initial_time
+        
+        # Update after long time to force decay below minimum
+        widget._update_prediction_confidence(initial_time + 10.0)
+        
+        # Should not go below min_confidence
+        assert widget._prediction.confidence >= 0.2
+    
+    def test_animated_progress__uses_prediction_when_enabled(self):
+        """Test animated_progress uses prediction when conditions are met."""
+        prediction = ProgressPrediction(enabled=True)
+        widget = ProgressBarWidget(0.3, prediction=prediction)
+        
+        # Mock prediction methods
+        widget._should_use_prediction = Mock(return_value=True)
+        widget._get_predictive_progress = Mock(return_value=0.6)
+        
+        result = widget.animated_progress
+        
+        assert result == 0.6
+        widget._should_use_prediction.assert_called_once()
+        widget._get_predictive_progress.assert_called_once()
+    
+    def test_animated_progress__falls_back_to_animation(self):
+        """Test animated_progress falls back to standard animation when prediction disabled."""
+        widget = ProgressBarWidget(0.4)
+        widget._animation.enabled = True
+        widget._animation.current_value = 0.5
+        
+        result = widget.animated_progress
+        
+        assert result == 0.5
+    
+    def test_reactive_progress_change__updates_prediction_history(self):
+        """Test reactive progress changes update prediction history."""
+        prediction = ProgressPrediction(enabled=True)
+        reactive_progress = ReactiveValue(0.2)
+        widget = ProgressBarWidget(reactive_progress, prediction=prediction)
+        
+        # Change reactive value
+        reactive_progress.value = 0.4
+        
+        # Should have added data point to history
+        assert len(widget._progress_history) > 0
+        assert widget._progress_history[-1].value == 0.4
+        assert widget._last_known_progress == 0.4
 
 
 if __name__ == "__main__":
