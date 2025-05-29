@@ -47,6 +47,34 @@ from .lifecycle_integration import (
     with_lifecycle_hooks
 )
 
+from .text import (
+    TextWidget,
+    FontStyle,
+    TextLayout,
+    TextAlignment,
+    TextWrap,
+    FontCache
+)
+
+from .image import (
+    ImageWidget,
+    ImageStyle,
+    ImageCache,
+    ImageLoadResult,
+    ScaleMode,
+    ImageFormat,
+    ImageFilter
+)
+
+from .progress import (
+    ProgressBarWidget,
+    ProgressStyle,
+    ProgressAnimation,
+    ProgressOrientation,
+    ProgressTextPosition,
+    EasingFunction
+)
+
 __all__ = [
     # Base widget classes
     'Widget',
@@ -79,5 +107,30 @@ __all__ = [
     'create_widget',
     'release_widget',
     'lifecycle_managed',
-    'with_lifecycle_hooks'
+    'with_lifecycle_hooks',
+    
+    # Core widgets
+    'TextWidget',
+    'FontStyle',
+    'TextLayout',
+    'TextAlignment',
+    'TextWrap',
+    'FontCache',
+    
+    # Image widgets
+    'ImageWidget',
+    'ImageStyle',
+    'ImageCache',
+    'ImageLoadResult',
+    'ScaleMode',
+    'ImageFormat',
+    'ImageFilter',
+    
+    # Progress widgets
+    'ProgressBarWidget',
+    'ProgressStyle',
+    'ProgressAnimation',
+    'ProgressOrientation',
+    'ProgressTextPosition',
+    'EasingFunction'
 ]
