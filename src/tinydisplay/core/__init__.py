@@ -18,17 +18,10 @@ from .ring_buffer import (
 )
 
 from .reactive import (
-    ReactiveDataManager,
-    ReactiveBinding,
-    DirectBinding,
-    ComputedBinding,
-    ExpressionBinding,
-    StreamBinding,
-    BindingType,
-    BindingConfig,
-    get_reactive_manager,
-    start_reactive_system,
-    stop_reactive_system
+    ReactiveValue, ReactiveValueType, ReactiveChange, ReactiveCollection,
+    ReactiveList, ReactiveDict, ReactiveBinding, DirectBinding, ComputedBinding,
+    ExpressionBinding, StreamBinding, ReactiveDataManager, BindingType, BindingConfig,
+    get_reactive_manager, start_reactive_system, stop_reactive_system
 )
 
 from .database import (
@@ -45,6 +38,24 @@ from .expressions import (
     ExpressionEvaluator,
     ExpressionError,
     SecurityError
+)
+
+from .dependencies import (
+    DependencyGraph, DependencyEdge, DependencyType, DependencyStats,
+    DependencyTracker, get_dependency_graph, get_dependency_tracker,
+    reset_dependency_system
+)
+
+from .streams import (
+    ReactiveDataStream, StreamManager, StreamType, StreamProcessingMode,
+    StreamConfig, StreamStats, get_stream_manager, create_ring_buffer_stream,
+    create_sqlite_stream, create_hybrid_stream
+)
+
+from .debug import (
+    ReactiveDebugger, ReactiveTracer, ReactiveProfiler, ReactiveInspector,
+    DebugLevel, ReactiveEvent, PerformanceMetrics, get_reactive_debugger,
+    trace_reactive_change, profile_reactive_operation, debug_reactive_system
 )
 
 __all__ = [
@@ -79,5 +90,59 @@ __all__ = [
     # Expressions
     'ExpressionEvaluator',
     'ExpressionError',
-    'SecurityError'
+    'SecurityError',
+
+    # Reactive Data Binding System (Story 2.3)
+    'ReactiveValue',
+    'ReactiveValueType',
+    'ReactiveChange',
+    'ReactiveCollection',
+    'ReactiveList',
+    'ReactiveDict',
+    'ReactiveBinding',
+    'DirectBinding',
+    'ComputedBinding',
+    'ExpressionBinding',
+    'StreamBinding',
+    'ReactiveDataManager',
+    'BindingType',
+    'BindingConfig',
+    'get_reactive_manager',
+    'start_reactive_system',
+    'stop_reactive_system',
+
+    # Dependencies
+    'DependencyGraph',
+    'DependencyEdge',
+    'DependencyType',
+    'DependencyStats',
+    'DependencyTracker',
+    'get_dependency_graph',
+    'get_dependency_tracker',
+    'reset_dependency_system',
+
+    # Streams
+    'ReactiveDataStream',
+    'StreamManager',
+    'StreamType',
+    'StreamProcessingMode',
+    'StreamConfig',
+    'StreamStats',
+    'get_stream_manager',
+    'create_ring_buffer_stream',
+    'create_sqlite_stream',
+    'create_hybrid_stream',
+
+    # Debug
+    'ReactiveDebugger',
+    'ReactiveTracer',
+    'ReactiveProfiler',
+    'ReactiveInspector',
+    'DebugLevel',
+    'ReactiveEvent',
+    'PerformanceMetrics',
+    'get_reactive_debugger',
+    'trace_reactive_change',
+    'profile_reactive_operation',
+    'debug_reactive_system'
 ]

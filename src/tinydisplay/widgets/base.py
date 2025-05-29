@@ -85,12 +85,41 @@ class WidgetBounds:
         return (self.x <= x < self.right and 
                 self.y <= y < self.bottom)
     
+    def contains_bounds(self, other: 'WidgetBounds') -> bool:
+        """Check if other bounds are completely within this bounds."""
+        return (self.x <= other.x and 
+                self.y <= other.y and
+                self.right >= other.right and
+                self.bottom >= other.bottom)
+    
     def intersects(self, other: 'WidgetBounds') -> bool:
         """Check if this widget intersects with another."""
         return not (self.right <= other.x or 
                    other.right <= self.x or
                    self.bottom <= other.y or 
                    other.bottom <= self.y)
+    
+    def intersect(self, other: 'WidgetBounds') -> 'WidgetBounds':
+        """Get the intersection of this bounds with another bounds."""
+        left = max(self.x, other.x)
+        top = max(self.y, other.y)
+        right = min(self.right, other.right)
+        bottom = min(self.bottom, other.bottom)
+        
+        # If no intersection, return empty bounds
+        if left >= right or top >= bottom:
+            return WidgetBounds(0, 0, 0, 0)
+        
+        return WidgetBounds(left, top, right - left, bottom - top)
+    
+    def union(self, other: 'WidgetBounds') -> 'WidgetBounds':
+        """Get the union of this bounds with another bounds."""
+        left = min(self.x, other.x)
+        top = min(self.y, other.y)
+        right = max(self.right, other.right)
+        bottom = max(self.bottom, other.bottom)
+        
+        return WidgetBounds(left, top, right - left, bottom - top)
 
 
 class ReactiveValue:

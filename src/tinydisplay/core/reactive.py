@@ -13,6 +13,8 @@ import time
 import weakref
 from abc import ABC, abstractmethod
 from enum import Enum
+import json
+import copy
 
 from .ring_buffer import RingBuffer, BufferEntry
 from .expressions import ExpressionEvaluator
@@ -30,6 +32,25 @@ class BindingType(Enum):
     TRANSFORM = "transform"     # Transformed value binding
 
 
+class ReactiveValueType(Enum):
+    """Types of reactive values for optimization."""
+    PRIMITIVE = "primitive"      # int, float, str, bool
+    COLLECTION = "collection"    # list, dict, set
+    OBJECT = "object"           # custom objects
+    COMPUTED = "computed"       # computed/derived values
+
+
+@dataclass
+class ReactiveChange:
+    """Represents a change in a reactive value."""
+    old_value: Any
+    new_value: Any
+    timestamp: float
+    source: str
+    change_type: str = "update"  # "update", "add", "remove", "clear"
+    path: Optional[str] = None   # For nested changes in collections
+
+
 @dataclass
 class BindingConfig:
     """Configuration for reactive bindings."""
@@ -40,6 +61,451 @@ class BindingConfig:
     expression: Optional[str] = None
     ring_buffer_key: Optional[str] = None
     dependencies: List[str] = None
+
+
+class ReactiveValue(Generic[T]):
+    """Enhanced reactive value with advanced data type support."""
+    
+    def __init__(self, initial_value: T, value_type: Optional[ReactiveValueType] = None,
+                 reactive_id: Optional[str] = None):
+        self._value: T = initial_value
+        self._value_type = value_type or self._detect_value_type(initial_value)
+        self._reactive_id = reactive_id or f"reactive_{id(self)}"
+        self._observers: Set[Callable[[ReactiveChange], None]] = set()
+        self._dependencies: Set['ReactiveValue'] = set()
+        self._dependents: Set['ReactiveValue'] = weakref.WeakSet()
+        self._lock = threading.RLock()
+        self._change_history: List[ReactiveChange] = []
+        self._max_history = 100
+        self._validation_func: Optional[Callable[[T], bool]] = None
+        self._transform_func: Optional[Callable[[T], T]] = None
+        self._serialization_func: Optional[Callable[[T], str]] = None
+        self._deserialization_func: Optional[Callable[[str], T]] = None
+        self._is_dirty = False
+        self._last_update_time = 0.0
+        
+    @property
+    def value(self) -> T:
+        """Get the current value."""
+        return self._value
+        
+    @value.setter
+    def value(self, new_value: T) -> None:
+        """Set a new value with change notification."""
+        with self._lock:
+            if self._validation_func and not self._validation_func(new_value):
+                raise ValueError(f"Value validation failed for {self._reactive_id}: {new_value}")
+                
+            if self._transform_func:
+                new_value = self._transform_func(new_value)
+                
+            old_value = self._value
+            if not self._values_equal(old_value, new_value):
+                self._value = new_value
+                self._last_update_time = time.time()
+                change = ReactiveChange(
+                    old_value=old_value,
+                    new_value=new_value,
+                    timestamp=self._last_update_time,
+                    source=self._reactive_id
+                )
+                self._record_change(change)
+                self._notify_observers(change)
+                self._notify_dependents(change)
+                self._is_dirty = True
+                
+    @property
+    def reactive_id(self) -> str:
+        """Get the reactive ID."""
+        return self._reactive_id
+        
+    @property
+    def value_type(self) -> ReactiveValueType:
+        """Get the value type."""
+        return self._value_type
+        
+    @property
+    def is_dirty(self) -> bool:
+        """Check if value has changed since last clean."""
+        return self._is_dirty
+        
+    def mark_clean(self) -> None:
+        """Mark value as clean (no pending changes)."""
+        self._is_dirty = False
+        
+    def bind(self, observer: Callable[[ReactiveChange], None]) -> None:
+        """Bind an observer to value changes."""
+        with self._lock:
+            self._observers.add(observer)
+            
+    def unbind(self, observer: Callable[[ReactiveChange], None]) -> None:
+        """Unbind an observer from value changes."""
+        with self._lock:
+            self._observers.discard(observer)
+            
+    def add_dependency(self, dependency: 'ReactiveValue') -> None:
+        """Add a dependency relationship."""
+        with self._lock:
+            self._dependencies.add(dependency)
+            dependency._dependents.add(self)
+            
+    def remove_dependency(self, dependency: 'ReactiveValue') -> None:
+        """Remove a dependency relationship."""
+        with self._lock:
+            self._dependencies.discard(dependency)
+            dependency._dependents.discard(self)
+            
+    def set_validation(self, validation_func: Callable[[T], bool]) -> None:
+        """Set a validation function for value changes."""
+        self._validation_func = validation_func
+        
+    def set_transform(self, transform_func: Callable[[T], T]) -> None:
+        """Set a transformation function for value changes."""
+        self._transform_func = transform_func
+        
+    def set_serialization(self, serialize_func: Callable[[T], str], 
+                         deserialize_func: Callable[[str], T]) -> None:
+        """Set serialization functions for persistence."""
+        self._serialization_func = serialize_func
+        self._deserialization_func = deserialize_func
+        
+    def serialize(self) -> str:
+        """Serialize the current value to string."""
+        if self._serialization_func:
+            return self._serialization_func(self._value)
+        else:
+            # Default JSON serialization
+            try:
+                return json.dumps(self._value)
+            except (TypeError, ValueError):
+                return str(self._value)
+                
+    def deserialize(self, data: str) -> None:
+        """Deserialize and set value from string."""
+        if self._deserialization_func:
+            self.value = self._deserialization_func(data)
+        else:
+            # Default JSON deserialization
+            try:
+                self.value = json.loads(data)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                # Fallback to string value
+                self.value = data
+                
+    def get_change_history(self, limit: int = None) -> List[ReactiveChange]:
+        """Get change history."""
+        with self._lock:
+            if limit is None:
+                return self._change_history.copy()
+            else:
+                return self._change_history[-limit:]
+                
+    def clear_history(self) -> None:
+        """Clear change history."""
+        with self._lock:
+            self._change_history.clear()
+            
+    def get_dependencies(self) -> Set['ReactiveValue']:
+        """Get all dependencies."""
+        return self._dependencies.copy()
+        
+    def get_dependents(self) -> Set['ReactiveValue']:
+        """Get all dependents."""
+        return set(self._dependents)
+        
+    def _detect_value_type(self, value: Any) -> ReactiveValueType:
+        """Detect the type of reactive value for optimization."""
+        if isinstance(value, (int, float, str, bool, type(None))):
+            return ReactiveValueType.PRIMITIVE
+        elif isinstance(value, (list, dict, set, tuple)):
+            return ReactiveValueType.COLLECTION
+        else:
+            return ReactiveValueType.OBJECT
+            
+    def _values_equal(self, old_value: Any, new_value: Any) -> bool:
+        """Check if two values are equal, handling collections properly."""
+        try:
+            if self._value_type == ReactiveValueType.COLLECTION:
+                # Deep comparison for collections
+                return self._deep_equal(old_value, new_value)
+            else:
+                return old_value == new_value
+        except Exception:
+            # Fallback to identity comparison
+            return old_value is new_value
+            
+    def _deep_equal(self, obj1: Any, obj2: Any) -> bool:
+        """Deep equality comparison for complex objects."""
+        try:
+            if type(obj1) != type(obj2):
+                return False
+            if isinstance(obj1, dict):
+                return (len(obj1) == len(obj2) and 
+                       all(k in obj2 and self._deep_equal(v, obj2[k]) 
+                           for k, v in obj1.items()))
+            elif isinstance(obj1, (list, tuple)):
+                return (len(obj1) == len(obj2) and 
+                       all(self._deep_equal(a, b) for a, b in zip(obj1, obj2)))
+            elif isinstance(obj1, set):
+                return obj1 == obj2
+            else:
+                return obj1 == obj2
+        except Exception:
+            return False
+            
+    def _record_change(self, change: ReactiveChange) -> None:
+        """Record change in history."""
+        self._change_history.append(change)
+        if len(self._change_history) > self._max_history:
+            self._change_history.pop(0)
+            
+    def _notify_observers(self, change: ReactiveChange) -> None:
+        """Notify all observers of the change."""
+        for observer in self._observers.copy():
+            try:
+                observer(change)
+            except Exception as e:
+                print(f"Error in reactive observer for {self._reactive_id}: {e}")
+                
+    def _notify_dependents(self, change: ReactiveChange) -> None:
+        """Notify dependent reactive values."""
+        for dependent in self._dependents.copy():
+            try:
+                dependent._on_dependency_changed(self, change)
+            except Exception as e:
+                print(f"Error in dependent notification for {self._reactive_id}: {e}")
+                
+    def _on_dependency_changed(self, dependency: 'ReactiveValue', change: ReactiveChange) -> None:
+        """Handle dependency change - override in subclasses."""
+        pass
+        
+    def __repr__(self) -> str:
+        return f"ReactiveValue(id={self._reactive_id}, type={self._value_type.value}, value={self._value})"
+
+
+class ReactiveCollection(ReactiveValue[T]):
+    """Reactive collection with granular change notifications."""
+    
+    def __init__(self, initial_value: T, reactive_id: Optional[str] = None):
+        super().__init__(initial_value, ReactiveValueType.COLLECTION, reactive_id)
+        self._item_observers: Dict[str, Set[Callable]] = {}
+        
+    def notify_item_change(self, path: str, old_value: Any, new_value: Any, 
+                          change_type: str = "update") -> None:
+        """Notify observers of item-level changes."""
+        change = ReactiveChange(
+            old_value=old_value,
+            new_value=new_value,
+            timestamp=time.time(),
+            source=self._reactive_id,
+            change_type=change_type,
+            path=path
+        )
+        
+        # Notify general observers
+        self._notify_observers(change)
+        
+        # Notify path-specific observers
+        if path in self._item_observers:
+            for observer in self._item_observers[path].copy():
+                try:
+                    observer(change)
+                except Exception as e:
+                    print(f"Error in item observer for {path}: {e}")
+                    
+    def bind_item(self, path: str, observer: Callable[[ReactiveChange], None]) -> None:
+        """Bind observer to specific item changes."""
+        if path not in self._item_observers:
+            self._item_observers[path] = set()
+        self._item_observers[path].add(observer)
+        
+    def unbind_item(self, path: str, observer: Callable[[ReactiveChange], None]) -> None:
+        """Unbind observer from specific item changes."""
+        if path in self._item_observers:
+            self._item_observers[path].discard(observer)
+            if not self._item_observers[path]:
+                del self._item_observers[path]
+
+
+class ReactiveList(ReactiveCollection[List[T]]):
+    """Reactive list with list-specific operations."""
+    
+    def append(self, item: T) -> None:
+        """Append item to list with change notification."""
+        with self._lock:
+            old_value = copy.deepcopy(self._value)
+            self._value.append(item)
+            self.notify_item_change(
+                path=f"[{len(self._value)-1}]",
+                old_value=None,
+                new_value=item,
+                change_type="add"
+            )
+            
+    def insert(self, index: int, item: T) -> None:
+        """Insert item at index with change notification."""
+        with self._lock:
+            old_value = copy.deepcopy(self._value)
+            self._value.insert(index, item)
+            self.notify_item_change(
+                path=f"[{index}]",
+                old_value=None,
+                new_value=item,
+                change_type="add"
+            )
+            
+    def remove(self, item: T) -> None:
+        """Remove item from list with change notification."""
+        with self._lock:
+            try:
+                index = self._value.index(item)
+                old_value = self._value[index]
+                self._value.remove(item)
+                self.notify_item_change(
+                    path=f"[{index}]",
+                    old_value=old_value,
+                    new_value=None,
+                    change_type="remove"
+                )
+            except ValueError:
+                pass  # Item not in list
+                
+    def pop(self, index: int = -1) -> T:
+        """Pop item from list with change notification."""
+        with self._lock:
+            if not self._value:
+                raise IndexError("pop from empty list")
+            old_value = self._value[index]
+            result = self._value.pop(index)
+            self.notify_item_change(
+                path=f"[{index if index >= 0 else len(self._value)}]",
+                old_value=old_value,
+                new_value=None,
+                change_type="remove"
+            )
+            return result
+            
+    def clear(self) -> None:
+        """Clear list with change notification."""
+        with self._lock:
+            old_value = copy.deepcopy(self._value)
+            self._value.clear()
+            self.notify_item_change(
+                path="",
+                old_value=old_value,
+                new_value=[],
+                change_type="clear"
+            )
+            
+    def __setitem__(self, index: int, value: T) -> None:
+        """Set item at index with change notification."""
+        with self._lock:
+            old_value = self._value[index] if 0 <= index < len(self._value) else None
+            self._value[index] = value
+            self.notify_item_change(
+                path=f"[{index}]",
+                old_value=old_value,
+                new_value=value,
+                change_type="update"
+            )
+            
+    def __getitem__(self, index: int) -> T:
+        """Get item at index."""
+        return self._value[index]
+        
+    def __len__(self) -> int:
+        """Get list length."""
+        return len(self._value)
+
+
+class ReactiveDict(ReactiveCollection[Dict[str, T]]):
+    """Reactive dictionary with dict-specific operations."""
+    
+    def __setitem__(self, key: str, value: T) -> None:
+        """Set item with change notification."""
+        with self._lock:
+            old_value = self._value.get(key)
+            self._value[key] = value
+            change_type = "update" if old_value is not None else "add"
+            self.notify_item_change(
+                path=f".{key}",
+                old_value=old_value,
+                new_value=value,
+                change_type=change_type
+            )
+            
+    def __getitem__(self, key: str) -> T:
+        """Get item by key."""
+        return self._value[key]
+        
+    def __delitem__(self, key: str) -> None:
+        """Delete item with change notification."""
+        with self._lock:
+            old_value = self._value.get(key)
+            if key in self._value:
+                del self._value[key]
+                self.notify_item_change(
+                    path=f".{key}",
+                    old_value=old_value,
+                    new_value=None,
+                    change_type="remove"
+                )
+                
+    def pop(self, key: str, default=None) -> T:
+        """Pop item with change notification."""
+        with self._lock:
+            old_value = self._value.get(key, default)
+            result = self._value.pop(key, default)
+            if key in self._value or old_value != default:
+                self.notify_item_change(
+                    path=f".{key}",
+                    old_value=old_value,
+                    new_value=None,
+                    change_type="remove"
+                )
+            return result
+            
+    def update(self, other: Dict[str, T]) -> None:
+        """Update with another dict with change notifications."""
+        with self._lock:
+            for key, value in other.items():
+                self[key] = value
+                
+    def clear(self) -> None:
+        """Clear dict with change notification."""
+        with self._lock:
+            old_value = copy.deepcopy(self._value)
+            self._value.clear()
+            self.notify_item_change(
+                path="",
+                old_value=old_value,
+                new_value={},
+                change_type="clear"
+            )
+            
+    def keys(self):
+        """Get dict keys."""
+        return self._value.keys()
+        
+    def values(self):
+        """Get dict values."""
+        return self._value.values()
+        
+    def items(self):
+        """Get dict items."""
+        return self._value.items()
+        
+    def get(self, key: str, default=None):
+        """Get item with default."""
+        return self._value.get(key, default)
+        
+    def __contains__(self, key: str) -> bool:
+        """Check if key exists."""
+        return key in self._value
+        
+    def __len__(self) -> int:
+        """Get dict length."""
+        return len(self._value)
 
 
 class ReactiveBinding(ABC):

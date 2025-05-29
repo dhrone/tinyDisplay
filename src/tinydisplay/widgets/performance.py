@@ -522,7 +522,20 @@ class PerformanceBenchmark:
         
         widgets = []
         for i in range(count):
-            widget = widget_class(widget_id=f"benchmark_{i}")
+            # Create widgets with appropriate parameters based on type
+            if widget_class.__name__ == 'TextWidget':
+                widget = widget_class(text=f"Benchmark {i}", widget_id=f"benchmark_{i}")
+            elif widget_class.__name__ == 'RectangleWidget':
+                widget = widget_class(width=50, height=30, widget_id=f"benchmark_{i}")
+            elif widget_class.__name__ == 'CircleWidget':
+                widget = widget_class(radius=25, widget_id=f"benchmark_{i}")
+            elif widget_class.__name__ == 'ProgressBarWidget':
+                widget = widget_class(progress=0.5, widget_id=f"benchmark_{i}")
+            elif widget_class.__name__ == 'ImageWidget':
+                widget = widget_class(image_source=b"mock_data", widget_id=f"benchmark_{i}")
+            else:
+                # Default case - try with just widget_id
+                widget = widget_class(widget_id=f"benchmark_{i}")
             widgets.append(widget)
         
         creation_time = time.perf_counter() - start_time
@@ -637,9 +650,9 @@ class PerformanceBenchmark:
         # Rendering performance benchmark
         try:
             test_widgets = [
-                TextWidget("Test", widget_id=f"text_{i}") for i in range(5)
+                TextWidget(text="Test", widget_id=f"text_{i}") for i in range(5)
             ] + [
-                RectangleWidget(50, 50, widget_id=f"rect_{i}") for i in range(15)
+                RectangleWidget(width=50, height=50, widget_id=f"rect_{i}") for i in range(15)
             ]
             
             result = self.benchmark_rendering_performance(test_widgets, 60)
