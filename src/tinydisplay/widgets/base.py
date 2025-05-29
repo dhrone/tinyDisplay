@@ -617,15 +617,7 @@ class Widget(ABC):
         self._animation_target_alpha = 0.0
     
     def _apply_easing(self, progress: float, easing: str) -> float:
-        """Apply easing function to animation progress.
-        
-        Args:
-            progress: Linear progress (0.0 to 1.0)
-            easing: Easing function name
-            
-        Returns:
-            Eased progress value
-        """
+        """Apply easing function to animation progress."""
         if easing == "linear":
             return progress
         elif easing == "ease_in":
@@ -646,29 +638,115 @@ class Widget(ABC):
                 return 4 * progress * progress * progress
             else:
                 return 1 - 4 * (1 - progress) ** 3
+        elif easing == "bounce":
+            # Simple bounce effect
+            if progress < 0.5:
+                return 2 * progress * progress
+            else:
+                return 1 - 2 * (1 - progress) * (1 - progress)
         else:
             # Default to ease_in_out
-            return self._apply_easing(progress, "ease_in_out")
+            if progress < 0.5:
+                return 2 * progress * progress
+            else:
+                return 1 - 2 * (1 - progress) * (1 - progress)
     
     def _on_visibility_changed(self, old_value: Any, new_value: Any) -> None:
-        """Handle visibility change events."""
+        """Handle visibility changes."""
+        if new_value:
+            self._visibility_state = VisibilityState.VISIBLE
+        else:
+            # Only set to HIDDEN if not already in a specific hidden state (like COLLAPSED)
+            if self._visibility_state not in (VisibilityState.COLLAPSED, VisibilityState.FADING_OUT):
+                self._visibility_state = VisibilityState.HIDDEN
+        
         self._mark_dirty()
         self._call_lifecycle_hooks('visibility_changed')
-        
-        # Propagate to children if this is a container
-        if hasattr(self, '_children'):
-            self.propagate_visibility_to_children(new_value)
     
     def _on_alpha_changed(self, old_value: Any, new_value: Any) -> None:
-        """Handle alpha change events."""
-        self._update_effective_alpha()
-        self._call_lifecycle_hooks('alpha_changed')
+        """Handle alpha changes."""
+        # Clamp alpha to valid range
+        clamped_alpha = max(self._transparency_config.min_alpha, 
+                           min(self._transparency_config.max_alpha, new_value))
+        if clamped_alpha != new_value:
+            self._alpha.value = clamped_alpha
+            return
         
-        # Propagate alpha changes to children for inheritance
-        if hasattr(self, '_children'):
-            for child in self.get_children():
-                if child._transparency_config.inherit_from_parent:
-                    child._update_effective_alpha()
+        self._update_effective_alpha()
+        self._mark_dirty()
+        self._call_lifecycle_hooks('alpha_changed')
+    
+    # Widget pooling support methods
+    def _reset_for_reuse(self, *args, **kwargs) -> None:
+        """Reset widget state for reuse from pool.
+        
+        This method should be overridden by subclasses to reset their
+        specific state when being reused from a widget pool.
+        """
+        # Reset core state
+        self._state = WidgetState.CREATED
+        self._dirty = True
+        self._last_render_time = 0.0
+        self._render_cache = None
+        
+        # Reset position and size to defaults
+        self._position.value = (0, 0)
+        self._size.value = (100, 20)
+        
+        # Reset visibility
+        self._visible.value = True
+        self._alpha.value = 1.0
+        self._z_order.value = 0
+        self._visibility_state = VisibilityState.VISIBLE
+        self._effective_alpha = 1.0
+        
+        # Clear animations
+        self._current_animation = None
+        self._animation_start_time = 0.0
+        
+        # Clear parent reference
+        self._parent_widget = None
+        
+        # Clear lifecycle hooks
+        for hook_set in self._lifecycle_hooks.values():
+            hook_set.clear()
+        
+        # Clear reactive bindings
+        self._cleanup_reactive_bindings()
+        self._data_subscriptions.clear()
+    
+    def _cleanup_for_pooling(self) -> None:
+        """Clean up widget for return to pool.
+        
+        This method should be overridden by subclasses to clean up
+        resources before returning to the widget pool.
+        """
+        # Clear render cache
+        self._render_cache = None
+        
+        # Clear any external references
+        self._parent_widget = None
+        
+        # Stop any ongoing animations
+        self._current_animation = None
+        
+        # Clear lifecycle hooks to prevent memory leaks
+        for hook_set in self._lifecycle_hooks.values():
+            hook_set.clear()
+        
+        # Unbind all reactive data
+        self._cleanup_reactive_bindings()
+    
+    @property
+    def _last_modified(self) -> float:
+        """Get timestamp of last modification for caching."""
+        return max(
+            self._position._last_update,
+            self._size._last_update,
+            self._visible._last_update,
+            self._alpha._last_update,
+            self._z_order._last_update
+        )
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(id={self.widget_id}, pos={self.position}, size={self.size})"
@@ -767,6 +845,16 @@ class ContainerWidget(Widget):
     def _on_child_updated(self, child: Widget) -> None:
         """Handle child widget update."""
         self._mark_dirty()
+    
+    def _on_alpha_changed(self, old_value: Any, new_value: Any) -> None:
+        """Handle alpha changes and propagate to children."""
+        # Call parent implementation first
+        super()._on_alpha_changed(old_value, new_value)
+        
+        # Propagate to children that inherit from parent
+        for child in self.get_children():
+            if child._transparency_config.inherit_from_parent:
+                child._update_effective_alpha()
     
     def destroy(self) -> None:
         """Destroy container and all children."""

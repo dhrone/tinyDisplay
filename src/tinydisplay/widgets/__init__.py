@@ -90,6 +90,33 @@ from .shapes import (
     LineJoinStyle
 )
 
+from .styling import (
+    WidgetStyle,
+    BorderStyle,
+    BackgroundStyle,
+    VisualEffect,
+    Color,
+    ColorFormat,
+    BorderStyleType,
+    BackgroundType,
+    EffectType,
+    GradientStop
+)
+
+from .performance import (
+    PerformanceMetrics,
+    WidgetPool as PerformanceWidgetPool,
+    RenderOptimizer,
+    MemoryManager,
+    PerformanceMonitor,
+    ReactiveOptimizer,
+    PerformanceBenchmark,
+    OptimizationLevel,
+    get_performance_monitor,
+    enable_performance_optimization,
+    disable_performance_optimization
+)
+
 __all__ = [
     # Base widget classes
     'Widget',
@@ -161,5 +188,30 @@ __all__ = [
     'FillPattern',
     'StrokeStyle',
     'LineCapStyle',
-    'LineJoinStyle'
+    'LineJoinStyle',
+
+    # Styling
+    'WidgetStyle',
+    'BorderStyle',
+    'BackgroundStyle',
+    'VisualEffect',
+    'Color',
+    'ColorFormat',
+    'BorderStyleType',
+    'BackgroundType',
+    'EffectType',
+    'GradientStop',
+
+    # Performance
+    'PerformanceMetrics',
+    'PerformanceWidgetPool',
+    'RenderOptimizer',
+    'MemoryManager',
+    'PerformanceMonitor',
+    'ReactiveOptimizer',
+    'PerformanceBenchmark',
+    'OptimizationLevel',
+    'get_performance_monitor',
+    'enable_performance_optimization',
+    'disable_performance_optimization'
 ]

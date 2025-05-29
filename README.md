@@ -82,58 +82,194 @@ You can modify the program to:
 
 # tinyDisplay
 
-tinyDisplay is a flexible and powerful system for creating and managing displays with dynamic content.
+A high-performance, reactive widget system for embedded displays with automatic data binding and sophisticated rendering capabilities.
 
-## Dynamic Values
+## 🚀 Quick Start
 
-tinyDisplay now supports an improved way to define dynamic properties for widgets. There are two ways to use dynamic values:
+### Prerequisites
 
-### 1. Using the `dynamic()` function (recommended)
+- Python 3.8+
+- Poetry (for dependency management)
 
+### Installation
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd tinyDisplay
+
+# Install dependencies using Poetry (REQUIRED)
+poetry install
+
+# Install optional performance dependencies
+poetry install --extras performance
+```
+
+## 🔧 Development
+
+### ⚠️ CRITICAL: Poetry Dependency Management
+
+**This project MUST use Poetry for all development activities:**
+
+```bash
+# Run tests (ALWAYS use poetry run)
+poetry run pytest
+
+# Run specific test files
+poetry run pytest tests/unit/test_text_widget.py -v
+
+# Run all tests with coverage
+poetry run pytest tests/unit/ --cov=src --cov-report=html
+
+# Run Python scripts
+poetry run python examples/demo.py
+
+# Install new dependencies
+poetry add package-name
+
+# Install development dependencies
+poetry add --group dev package-name
+```
+
+**❌ DO NOT use `pip` or `python` directly - this will cause dependency conflicts!**
+
+### Project Structure
+
+```
+src/tinydisplay/
+├── core/                    # Core reactive system
+│   ├── reactive.py         # Reactive data management
+│   └── ring_buffer.py      # High-performance data buffers
+├── widgets/                # Widget implementations
+│   ├── base.py            # Abstract widget foundation
+│   ├── text.py            # Text widget with font rendering
+│   ├── image.py           # Image widget with caching
+│   ├── progress.py        # Progress bar with animations
+│   ├── shapes.py          # Shape primitives
+│   ├── styling.py         # Styling framework
+│   └── performance.py     # Performance optimization
+├── canvas/                 # Canvas composition system
+│   └── canvas.py          # Canvas implementation
+└── utils/                  # Utilities and helpers
+
+tests/
+├── unit/                   # Unit tests (623 tests)
+└── integration/           # Integration tests
+
+docs/                       # Documentation
+├── epic-1.md              # Epic 1: Foundation
+├── epic-2.md              # Epic 2: Core Widgets
+└── stories/               # Detailed story documentation
+```
+
+## 🧪 Testing
+
+The project has comprehensive test coverage with **623 passing tests**:
+
+```bash
+# Run all tests
+poetry run pytest tests/unit/ -v
+
+# Run performance tests
+poetry run pytest tests/unit/test_performance.py -v
+
+# Run specific widget tests
+poetry run pytest tests/unit/test_text_widget.py -v
+poetry run pytest tests/unit/test_image_widget.py -v
+poetry run pytest tests/unit/test_progress_widget.py -v
+```
+
+## 📊 Performance Targets
+
+- **Rendering:** 60fps sustained on Raspberry Pi Zero 2W
+- **Memory:** <100MB for 20+ widget applications
+- **Reactive Updates:** <50ms response time
+- **Widget Creation:** <50ms for 100 widgets
+
+## 🎯 Current Status
+
+### ✅ Epic 1: Foundation (Complete)
+- Reactive data management system
+- Widget base classes and lifecycle
+- Canvas composition framework
+- Ring buffer for high-performance data
+
+### ✅ Epic 2: Core Widgets (Complete)
+- **Story 2.1:** Core Widget Implementation ✅
+  - Text widget with font rendering and caching
+  - Image widget with scaling and effects
+  - Progress bar with predictive animations
+  - Shape widgets (Rectangle, Circle, Line)
+  - Comprehensive styling system
+  - Performance optimization suite
+
+### 🚧 Epic 3: Advanced Features (Planned)
+- Animation coordination system
+- Layout managers
+- Event handling system
+
+## 🔧 Widget Usage Examples
+
+### Text Widget
 ```python
-from tinyDisplay.utility.dynamic import dynamic
-from tinyDisplay.render.widget import text
+from src.tinydisplay.widgets.text import TextWidget
+from src.tinydisplay.widgets.base import ReactiveValue
 
-# Create a text widget with dynamic foreground color
-my_text = text(
-    value="Hello World",
-    foreground=dynamic("sys['theme']['text_color']"),
-    background=dynamic("sys['theme']['background']")
+# Static text
+text_widget = TextWidget("Hello World", font_size=16)
+
+# Reactive text
+reactive_text = ReactiveValue("Dynamic Content")
+text_widget = TextWidget(reactive_text, font_size=16)
+```
+
+### Image Widget
+```python
+from src.tinydisplay.widgets.image import ImageWidget, ScaleMode
+
+# Load image with scaling
+image_widget = ImageWidget(
+    image_source="path/to/image.png",
+    scale_mode=ScaleMode.FIT
 )
 ```
 
-The `dynamic()` function automatically:
-- Makes the property evaluate at runtime
-- Tracks dependencies between data sources and widgets
-- Triggers updates only for affected widgets when data changes
-
-### 2. Using the legacy "d"-prefix (backward compatibility)
-
+### Progress Bar
 ```python
-# Legacy approach still works
-my_text = text(
-    value="Hello World",
-    dforeground="sys['theme']['text_color']",
-    dbackground="sys['theme']['background']"
+from src.tinydisplay.widgets.progress import ProgressBarWidget
+from src.tinydisplay.widgets.base import ReactiveValue
+
+# Progress with predictive animation
+progress_value = ReactiveValue(0.0)
+progress_widget = ProgressBarWidget(
+    progress_value,
+    enable_prediction=True
 )
 ```
 
-## Benefits of the New Approach
+## 🛠️ Development Guidelines
 
-The new dynamic value system offers several advantages:
-- More intuitive and clearer code
-- Explicit marking of dynamic values
-- Efficient updates through dependency tracking
-- Self-documenting code that makes the dynamic nature explicit
+1. **Always use Poetry** for dependency management
+2. **Write tests** for all new functionality (target >90% coverage)
+3. **Follow performance targets** - validate with benchmarks
+4. **Use reactive patterns** for dynamic data
+5. **Document APIs** with comprehensive docstrings
 
-## Dependency Tracking
+## 📚 Documentation
 
-The system automatically tracks dependencies between widgets and data sources. When a data source changes, only the affected widgets are updated, improving performance:
+- [Epic 1 Documentation](docs/epic-1.md) - Foundation system
+- [Epic 2 Documentation](docs/epic-2.md) - Core widgets
+- [Story Documentation](docs/stories/) - Detailed implementation guides
+- [Project Structure](docs/project-structure.md) - Architecture overview
 
-```python
-# Update a data source
-sys_data.update('theme', {'text_color': 'red'})
+## 🤝 Contributing
 
-# All widgets that depend on sys['theme']['text_color'] will automatically
-# be marked for update during the next render cycle
-``` 
+1. Ensure Poetry is installed and used for all operations
+2. Run the full test suite before submitting changes
+3. Follow the existing code patterns and architecture
+4. Update documentation for new features
+5. Validate performance targets are maintained
+
+## 📄 License
+
+[License information here] 
