@@ -15,6 +15,7 @@ from abc import ABC, abstractmethod
 
 from ..widgets.base import Widget
 from ..canvas.canvas import Canvas
+from ..animation.tick_based import TickAnimationEngine, TickAnimationState
 
 
 class RenderingState(Enum):
@@ -50,6 +51,8 @@ class FrameStats:
     memory_usage: float
     fps: float
     dropped_frames: int
+    current_tick: int = 0  # Current animation tick
+    active_animations: int = 0  # Number of active animations
 
 
 class DisplayAdapter(Protocol):
@@ -242,35 +245,46 @@ class RenderingEngine:
     """
     
     def __init__(self, config: RenderingConfig, display_adapter: Optional[DisplayAdapter] = None):
+        """Initialize the rendering engine.
+        
+        Args:
+            config: Rendering configuration
+            display_adapter: Display hardware adapter (optional)
+        """
         self._config = config
         self._display_adapter = display_adapter
-        self._state = RenderingState.STOPPED
         
-        # Core components
+        # Engine state
+        self._state = RenderingState.STOPPED
+        self._stop_event = threading.Event()
+        self._pause_event = threading.Event()
+        self._render_thread: Optional[threading.Thread] = None
+        self._lock = threading.RLock()
+        
+        # Rendering components
         self._frame_timer = FrameTimer(config.target_fps)
         self._memory_manager = MemoryManager(config.memory_limit_mb)
         
-        # Rendering state
+        # Tick-based animation system
+        self._tick_animation_engine = TickAnimationEngine()
+        self._current_tick = 0
+        self._animation_frame_states: Dict[str, TickAnimationState] = {}
+        
+        # Canvas management
         self._current_canvas: Optional[Canvas] = None
-        self._frame_buffers: Dict[str, Any] = {}
         self._render_queue: List[Canvas] = []
         
-        # Statistics and monitoring
+        # Statistics
         self._frame_stats: List[FrameStats] = []
         self._stats_history_size = 300  # Keep 5 seconds at 60fps
         
-        # Threading
-        self._render_thread: Optional[threading.Thread] = None
-        self._stop_event = threading.Event()
-        self._pause_event = threading.Event()
-        self._lock = threading.RLock()
-        
-        # Event handlers
+        # Event handling
         self._event_handlers: Dict[str, Set[Callable]] = {
             'frame_rendered': set(),
-            'fps_changed': set(),
+            'error': set(),
             'memory_warning': set(),
-            'error': set()
+            'animation_tick': set(),  # New event for tick advancement
+            'animation_state_changed': set()  # New event for animation state changes
         }
     
     # Properties
@@ -301,8 +315,23 @@ class RenderingEngine:
     
     @property
     def latest_frame_stats(self) -> Optional[FrameStats]:
-        """Get latest frame statistics."""
+        """Get the latest frame statistics."""
         return self._frame_stats[-1] if self._frame_stats else None
+    
+    @property
+    def tick_animation_engine(self) -> TickAnimationEngine:
+        """Get the tick animation engine."""
+        return self._tick_animation_engine
+    
+    @property
+    def current_tick(self) -> int:
+        """Get the current animation tick."""
+        return self._current_tick
+    
+    @property
+    def active_animation_count(self) -> int:
+        """Get the number of active animations."""
+        return len(self._tick_animation_engine.get_active_animations_at(self._current_tick))
     
     # Lifecycle methods
     def initialize(self) -> bool:
@@ -458,6 +487,16 @@ class RenderingEngine:
                 # Start frame timing
                 frame_start_time = self._frame_timer.start_frame()
                 
+                # Advance animation tick once per render cycle
+                self._tick_animation_engine.advance_tick()
+                self._current_tick = self._tick_animation_engine.current_tick
+                
+                # Compute current frame animation state using current tick
+                self._animation_frame_states = self._tick_animation_engine.compute_frame_state(self._current_tick)
+                
+                # Apply frame state to widgets and render
+                self._apply_frame_state_to_widgets(self._animation_frame_states)
+                
                 # Render current canvas
                 rendered_widgets = 0
                 dirty_regions = 0
@@ -475,6 +514,7 @@ class RenderingEngine:
                 # Calculate frame statistics
                 frame_end_time = time.time()
                 render_time = frame_end_time - frame_start_time
+                active_animations = self.active_animation_count
                 
                 frame_stats = FrameStats(
                     frame_number=self._frame_timer.frame_count,
@@ -483,7 +523,9 @@ class RenderingEngine:
                     dirty_regions=dirty_regions,
                     memory_usage=self.memory_usage,
                     fps=self._frame_timer.current_fps,
-                    dropped_frames=self._frame_timer.dropped_frames
+                    dropped_frames=self._frame_timer.dropped_frames,
+                    current_tick=self._current_tick,
+                    active_animations=active_animations
                 )
                 
                 # Store statistics
@@ -493,12 +535,16 @@ class RenderingEngine:
                 
                 # Call event handlers
                 self._call_event_handlers('frame_rendered', frame_stats)
+                self._call_event_handlers('animation_tick', self._current_tick, self._animation_frame_states)
+                
+                if active_animations > 0:
+                    self._call_event_handlers('animation_state_changed', self._animation_frame_states)
                 
                 # Check for memory warnings
                 if self.memory_usage > 80:
                     self._call_event_handlers('memory_warning', self.memory_usage)
                 
-                # Wait for next frame
+                # Wait for next frame (real-time only for FPS control, not animation logic)
                 if self._config.vsync_enabled:
                     self._frame_timer.wait_for_next_frame()
                 
@@ -535,6 +581,81 @@ class RenderingEngine:
         except Exception as e:
             self._call_event_handlers('error', e)
             return 0, 0
+    
+    def _apply_frame_state_to_widgets(self, frame_states: Dict[str, TickAnimationState]) -> None:
+        """Apply tick-based animation states to widgets.
+        
+        Args:
+            frame_states: Dictionary mapping animation_id to animation state
+        """
+        try:
+            # Apply animation states to current canvas widgets
+            if self._current_canvas:
+                self._apply_animation_states_to_canvas(self._current_canvas, frame_states)
+            
+            # Apply animation states to queued canvas widgets
+            for canvas in self._render_queue:
+                self._apply_animation_states_to_canvas(canvas, frame_states)
+                
+        except Exception as e:
+            self._call_event_handlers('error', e)
+    
+    def _apply_animation_states_to_canvas(self, canvas: Canvas, frame_states: Dict[str, TickAnimationState]) -> None:
+        """Apply animation states to all widgets in a canvas.
+        
+        Args:
+            canvas: Canvas containing widgets
+            frame_states: Dictionary mapping animation_id to animation state
+        """
+        try:
+            # Update animations for all widgets in canvas
+            for widget in canvas.get_children():
+                # Call widget's tick-based animation update
+                if hasattr(widget, 'update_animations'):
+                    widget.update_animations(self._current_tick)
+                
+                # Apply any specific animation states for this widget
+                widget_animation_ids = [aid for aid in frame_states.keys() 
+                                      if aid.startswith(f"{widget.widget_id}_")]
+                
+                for animation_id in widget_animation_ids:
+                    animation_state = frame_states[animation_id]
+                    self._apply_animation_state_to_widget(widget, animation_state)
+                    
+        except Exception as e:
+            self._call_event_handlers('error', e)
+    
+    def _apply_animation_state_to_widget(self, widget: Widget, animation_state: TickAnimationState) -> None:
+        """Apply a specific animation state to a widget.
+        
+        Args:
+            widget: Widget to apply animation state to
+            animation_state: Animation state to apply
+        """
+        try:
+            # Apply position if different
+            if widget.position != animation_state.position:
+                widget.position = animation_state.position
+            
+            # Apply opacity/alpha if different
+            if abs(widget.alpha - animation_state.opacity) > 0.001:
+                widget.alpha = animation_state.opacity
+            
+            # Apply rotation if widget supports it
+            if hasattr(widget, 'rotation') and abs(getattr(widget, 'rotation', 0) - animation_state.rotation) > 0.001:
+                widget.rotation = animation_state.rotation
+            
+            # Apply scale if widget supports it
+            if hasattr(widget, 'scale') and getattr(widget, 'scale', (1.0, 1.0)) != animation_state.scale:
+                widget.scale = animation_state.scale
+            
+            # Apply custom properties
+            for prop_name, prop_value in animation_state.custom_properties.items():
+                if hasattr(widget, prop_name):
+                    setattr(widget, prop_name, prop_value)
+                    
+        except Exception as e:
+            self._call_event_handlers('error', e)
     
     def _call_event_handlers(self, event: str, *args, **kwargs) -> None:
         """Call all registered event handlers for an event."""

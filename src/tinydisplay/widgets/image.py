@@ -6,7 +6,7 @@ Provides image rendering with reactive data binding, format support,
 caching, scaling, and comprehensive styling for the tinyDisplay framework.
 """
 
-from typing import Union, Optional, Tuple, Dict, Any, BinaryIO
+from typing import Union, Optional, Tuple, Dict, Any, BinaryIO, Callable
 from dataclasses import dataclass
 from enum import Enum
 import threading
@@ -18,6 +18,7 @@ from pathlib import Path
 
 from .base import Widget, ReactiveValue, WidgetBounds
 from ..core.reactive import ReactiveDataManager
+from ..animation.tick_based import TickAnimationEngine, create_tick_fade_animation
 
 try:
     from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
@@ -262,7 +263,8 @@ class ImageWidget(Widget):
     __slots__ = (
         '_image_source', '_scale_mode', '_image_style', '_cached_image',
         '_cache_key', '_load_result', '_scaled_image', '_needs_reload',
-        '_needs_rescale', '_last_scale_size', '_loading_error'
+        '_needs_rescale', '_last_scale_size', '_loading_error',
+        '_current_animation'
     )
     
     def __init__(
@@ -294,6 +296,9 @@ class ImageWidget(Widget):
         
         # Bind to size changes for re-scaling
         self._size.bind(self._on_size_changed)
+        
+        # Tick-based animation state
+        self._current_animation: Optional[Dict[str, Any]] = None
     
     @property
     def image_source(self) -> Any:
@@ -771,6 +776,262 @@ class ImageWidget(Widget):
         pass
     
     def __repr__(self) -> str:
-        source_str = str(self._image_source.value)[:30] + "..." if len(str(self._image_source.value)) > 30 else str(self._image_source.value)
-        return (f"ImageWidget(id={self.widget_id}, source='{source_str}', "
-                f"scale_mode={self._scale_mode.value}, loaded={self.is_loaded}, visible={self.visible})") 
+        source_info = "None"
+        if self._image_source.value:
+            if isinstance(self._image_source.value, str):
+                source_info = f"'{self._image_source.value[:30]}...'"
+            else:
+                source_info = f"{type(self._image_source.value).__name__}"
+        return f"ImageWidget(id={self.widget_id}, source={source_info}, pos={self.position})"
+    
+    # Tick-based animation methods
+    def fade_in_animated(self, duration_ticks: int = 30, easing: str = "ease_out",
+                        on_complete: Optional[Callable] = None) -> bool:
+        """Animate image fade in using tick-based animation.
+        
+        Args:
+            duration_ticks: Animation duration in ticks (default 30 = 0.5s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        return self.start_tick_based_animation(
+            animation_type='fade_in',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def fade_out_animated(self, duration_ticks: int = 30, easing: str = "ease_in",
+                         on_complete: Optional[Callable] = None) -> bool:
+        """Animate image fade out using tick-based animation.
+        
+        Args:
+            duration_ticks: Animation duration in ticks (default 30 = 0.5s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        return self.start_tick_based_animation(
+            animation_type='fade_out',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def set_opacity_animated(self, target_opacity: float, duration_ticks: int = 60,
+                            easing: str = "ease_in_out", 
+                            on_complete: Optional[Callable] = None) -> bool:
+        """Animate image opacity transition using tick-based animation.
+        
+        Args:
+            target_opacity: Target opacity value (0.0 to 1.0)
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if not 0.0 <= target_opacity <= 1.0:
+            raise ValueError("Opacity must be between 0.0 and 1.0")
+        
+        current_opacity = self._image_style.opacity
+        
+        return self.start_tick_based_animation(
+            animation_type='opacity_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_opacity=current_opacity,
+            target_opacity=target_opacity,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def set_brightness_animated(self, target_brightness: float, duration_ticks: int = 60,
+                               easing: str = "ease_in_out",
+                               on_complete: Optional[Callable] = None) -> bool:
+        """Animate image brightness transition using tick-based animation.
+        
+        Args:
+            target_brightness: Target brightness value (0.0 = black, 1.0 = normal, >1.0 = brighter)
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if target_brightness < 0.0:
+            raise ValueError("Brightness must be non-negative")
+        
+        current_brightness = self._image_style.brightness
+        
+        return self.start_tick_based_animation(
+            animation_type='brightness_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_brightness=current_brightness,
+            target_brightness=target_brightness,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def set_contrast_animated(self, target_contrast: float, duration_ticks: int = 60,
+                             easing: str = "ease_in_out",
+                             on_complete: Optional[Callable] = None) -> bool:
+        """Animate image contrast transition using tick-based animation.
+        
+        Args:
+            target_contrast: Target contrast value (0.0 = gray, 1.0 = normal, >1.0 = higher contrast)
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if target_contrast < 0.0:
+            raise ValueError("Contrast must be non-negative")
+        
+        current_contrast = self._image_style.contrast
+        
+        return self.start_tick_based_animation(
+            animation_type='contrast_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_contrast=current_contrast,
+            target_contrast=target_contrast,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def crossfade_to_image(self, new_image_source: Union[str, bytes, 'Image.Image'], 
+                          duration_ticks: int = 60, easing: str = "ease_in_out",
+                          on_complete: Optional[Callable] = None) -> bool:
+        """Crossfade to a new image using tick-based animation.
+        
+        Args:
+            new_image_source: New image source to fade to
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        # Store current image for crossfade
+        current_image = self._scaled_image
+        
+        return self.start_tick_based_animation(
+            animation_type='crossfade',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            current_image=current_image,
+            new_image_source=new_image_source,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def _apply_animation_progress(self, progress: float) -> None:
+        """Apply animation progress to image widget properties.
+        
+        Args:
+            progress: Animation progress from 0.0 to 1.0
+        """
+        # Call parent implementation for base animations (alpha, etc.)
+        super()._apply_animation_progress(progress)
+        
+        if not self._current_animation:
+            return
+        
+        animation_type = self._current_animation['type']
+        
+        if animation_type == 'opacity_transition':
+            # Interpolate between start and target opacity
+            start_opacity = self._current_animation['start_opacity']
+            target_opacity = self._current_animation['target_opacity']
+            
+            current_opacity = start_opacity + (target_opacity - start_opacity) * progress
+            
+            # Update image style opacity
+            self._image_style.opacity = current_opacity
+            self._scaled_image = None  # Force re-processing
+            self._mark_dirty()
+            
+        elif animation_type == 'brightness_transition':
+            # Interpolate between start and target brightness
+            start_brightness = self._current_animation['start_brightness']
+            target_brightness = self._current_animation['target_brightness']
+            
+            current_brightness = start_brightness + (target_brightness - start_brightness) * progress
+            
+            # Update image style brightness
+            self._image_style.brightness = current_brightness
+            self._scaled_image = None  # Force re-processing
+            self._mark_dirty()
+            
+        elif animation_type == 'contrast_transition':
+            # Interpolate between start and target contrast
+            start_contrast = self._current_animation['start_contrast']
+            target_contrast = self._current_animation['target_contrast']
+            
+            current_contrast = start_contrast + (target_contrast - start_contrast) * progress
+            
+            # Update image style contrast
+            self._image_style.contrast = current_contrast
+            self._scaled_image = None  # Force re-processing
+            self._mark_dirty()
+            
+        elif animation_type == 'crossfade':
+            # Crossfade between current and new image
+            # This would require more complex implementation with blending
+            # For now, we'll do a simple opacity-based transition
+            if progress >= 0.5:
+                # Switch to new image at halfway point
+                new_image_source = self._current_animation['new_image_source']
+                if self._image_source.value != new_image_source:
+                    self.image_source = new_image_source
+            
+            # Adjust opacity for crossfade effect
+            fade_opacity = 1.0 - abs(progress - 0.5) * 2.0  # Creates a dip in opacity
+            self._image_style.opacity = max(0.1, fade_opacity)  # Minimum opacity to avoid complete disappearance
+            self._scaled_image = None  # Force re-processing
+            self._mark_dirty()
+    
+    def _complete_animation(self) -> None:
+        """Complete the current animation and finalize image properties."""
+        if not self._current_animation:
+            return
+        
+        animation_type = self._current_animation['type']
+        
+        if animation_type == 'opacity_transition':
+            # Set final opacity
+            self._image_style.opacity = self._current_animation['target_opacity']
+            
+        elif animation_type == 'brightness_transition':
+            # Set final brightness
+            self._image_style.brightness = self._current_animation['target_brightness']
+            
+        elif animation_type == 'contrast_transition':
+            # Set final contrast
+            self._image_style.contrast = self._current_animation['target_contrast']
+            
+        elif animation_type == 'crossfade':
+            # Ensure new image is set and opacity is restored
+            new_image_source = self._current_animation['new_image_source']
+            self.image_source = new_image_source
+            self._image_style.opacity = 1.0  # Restore full opacity
+        
+        # Force re-processing of image with final values
+        self._scaled_image = None
+        
+        # Call parent implementation to handle completion
+        super()._complete_animation() 

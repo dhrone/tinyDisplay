@@ -554,49 +554,150 @@ class Widget(ABC):
         self._parent_widget = parent
         self._update_effective_alpha()
     
-    def update_animations(self) -> None:
-        """Update any running animations."""
+    def update_animations(self, current_tick: Optional[int] = None) -> None:
+        """Update any running animations.
+        
+        Args:
+            current_tick: Current animation tick for tick-based animations.
+                         If None, uses time-based animation (backward compatibility).
+        """
         if not self._current_animation:
             return
         
+        # Support both tick-based and time-based animations
+        if current_tick is not None:
+            # Tick-based animation (new system)
+            self._update_tick_based_animation(current_tick)
+        else:
+            # Time-based animation (legacy system for backward compatibility)
+            self._update_time_based_animation()
+    
+    def _update_tick_based_animation(self, current_tick: int) -> None:
+        """Update tick-based animations.
+        
+        Args:
+            current_tick: Current animation tick
+        """
+        if not self._current_animation:
+            return
+            
+        # Convert duration from seconds to ticks (assuming 60 FPS)
+        duration_ticks = int(self._current_animation['duration'] * 60)
+        start_tick = self._current_animation.get('start_tick', 0)
+        elapsed_ticks = current_tick - start_tick
+        
+        if elapsed_ticks >= duration_ticks:
+            # Animation complete
+            self._complete_animation()
+        else:
+            # Update animation progress using tick-based timing
+            progress = elapsed_ticks / duration_ticks if duration_ticks > 0 else 1.0
+            progress = self._apply_easing(progress, self._current_animation.get('easing', 'ease_in_out'))
+            self._apply_animation_progress(progress)
+    
+    def _update_time_based_animation(self) -> None:
+        """Update time-based animations (legacy system)."""
+        if not self._current_animation:
+            return
+            
         current_time = time.time()
         elapsed = current_time - self._animation_start_time
         duration = self._current_animation['duration']
         
         if elapsed >= duration:
             # Animation complete
-            if self._current_animation['type'] == 'alpha':
-                self.alpha = self._animation_target_alpha
-            elif self._current_animation['type'] == 'fade_in':
-                self.alpha = 1.0
-                self._visibility_state = VisibilityState.VISIBLE
-                self.visible = True
-            elif self._current_animation['type'] == 'fade_out':
-                self.alpha = 0.0
-                self._visibility_state = VisibilityState.HIDDEN
-                self.visible = False
-            
-            # Call completion callback
-            if self._current_animation.get('on_complete'):
-                self._current_animation['on_complete']()
-            
-            self._current_animation = None
-            self._call_lifecycle_hooks('visibility_changed')
+            self._complete_animation()
         else:
-            # Update animation progress
+            # Update animation progress using time-based timing
             progress = elapsed / duration
             progress = self._apply_easing(progress, self._current_animation.get('easing', 'ease_in_out'))
+            self._apply_animation_progress(progress)
+    
+    def _complete_animation(self) -> None:
+        """Complete the current animation."""
+        if self._current_animation['type'] == 'alpha':
+            self.alpha = self._animation_target_alpha
+        elif self._current_animation['type'] == 'fade_in':
+            self.alpha = 1.0
+            self._visibility_state = VisibilityState.VISIBLE
+            self.visible = True
+        elif self._current_animation['type'] == 'fade_out':
+            self.alpha = 0.0
+            self._visibility_state = VisibilityState.HIDDEN
+            self.visible = False
+        
+        # Call completion callback
+        if self._current_animation.get('on_complete'):
+            self._current_animation['on_complete']()
+        
+        self._current_animation = None
+        self._call_lifecycle_hooks('visibility_changed')
+    
+    def _apply_animation_progress(self, progress: float) -> None:
+        """Apply animation progress to widget properties.
+        
+        Args:
+            progress: Animation progress from 0.0 to 1.0
+        """
+        if self._current_animation['type'] == 'alpha':
+            current_alpha = self._animation_start_alpha + (
+                self._animation_target_alpha - self._animation_start_alpha
+            ) * progress
+            self.alpha = current_alpha
+        elif self._current_animation['type'] == 'fade_in':
+            self.alpha = progress
+        elif self._current_animation['type'] == 'fade_out':
+            self.alpha = 1.0 - progress
+    
+    def start_tick_based_animation(self, animation_type: str, start_tick: int, 
+                                  duration_ticks: int, **kwargs) -> bool:
+        """Start a tick-based animation.
+        
+        Args:
+            animation_type: Type of animation ('alpha', 'fade_in', 'fade_out', etc.)
+            start_tick: Starting tick for the animation
+            duration_ticks: Duration in ticks
+            **kwargs: Additional animation parameters
             
-            if self._current_animation['type'] == 'alpha':
-                current_alpha = self._animation_start_alpha + (
-                    self._animation_target_alpha - self._animation_start_alpha
-                ) * progress
-                self.alpha = current_alpha
-            elif self._current_animation['type'] == 'fade_in':
-                self.alpha = progress
-            elif self._current_animation['type'] == 'fade_out':
-                self.alpha = 1.0 - progress
-
+        Returns:
+            True if animation started successfully, False otherwise
+        """
+        try:
+            # Convert tick duration to seconds for compatibility
+            duration_seconds = duration_ticks / 60.0  # Assuming 60 FPS
+            
+            if animation_type == 'alpha':
+                self._animation_start_alpha = self.alpha
+                self._animation_target_alpha = kwargs.get('target_alpha', 1.0)
+            elif animation_type == 'fade_in':
+                self._animation_start_alpha = 0.0
+                self._animation_target_alpha = 1.0
+                self._visibility_state = VisibilityState.FADING_IN
+                self.visible = True
+                self.alpha = 0.0
+            elif animation_type == 'fade_out':
+                self._animation_start_alpha = self.alpha
+                self._animation_target_alpha = 0.0
+                self._visibility_state = VisibilityState.FADING_OUT
+            
+            # Store all animation parameters in _current_animation
+            self._current_animation = {
+                'type': animation_type,
+                'duration': duration_seconds,
+                'start_tick': start_tick,
+                'duration_ticks': duration_ticks,
+                'easing': kwargs.get('easing', 'ease_in_out'),
+                'on_complete': kwargs.get('on_complete'),
+                **kwargs  # Include all additional parameters
+            }
+            self._animation_start_time = time.time()  # Keep for backward compatibility
+            
+            return True
+            
+        except Exception:
+            # If animation setup fails, return False
+            return False
+    
     def _update_effective_alpha(self) -> None:
         """Update effective alpha based on own alpha and parent inheritance."""
         base_alpha = self.alpha
@@ -862,14 +963,19 @@ class ContainerWidget(Widget):
         for child in self.get_children():
             child.hide(animated, animation_config)
     
-    def update_all_animations(self) -> None:
-        """Update animations for this widget and all children."""
-        self.update_animations()
+    def update_all_animations(self, current_tick: Optional[int] = None) -> None:
+        """Update animations for this widget and all children.
+        
+        Args:
+            current_tick: Current animation tick for tick-based animations.
+                         If None, uses time-based animation (backward compatibility).
+        """
+        self.update_animations(current_tick)
         for child in self.get_children():
             if hasattr(child, 'update_all_animations'):
-                child.update_all_animations()
+                child.update_all_animations(current_tick)
             else:
-                child.update_animations()
+                child.update_animations(current_tick)
     
     def _on_child_updated(self, child: Widget) -> None:
         """Handle child widget update."""

@@ -16,6 +16,8 @@ import math
 
 from .base import Widget, ReactiveValue, WidgetBounds
 from ..core.reactive import ReactiveDataManager
+from ..core.ring_buffer import RingBuffer
+from ..animation.tick_based import TickAnimationEngine, create_tick_fade_animation, EasingFunction
 
 
 class ProgressOrientation(Enum):
@@ -32,16 +34,6 @@ class ProgressTextPosition(Enum):
     RIGHT = "right"        # Right side (or bottom for vertical)
     OUTSIDE_LEFT = "outside_left"    # Outside left edge
     OUTSIDE_RIGHT = "outside_right"  # Outside right edge
-
-
-class EasingFunction(Enum):
-    """Animation easing functions."""
-    LINEAR = "linear"
-    EASE_IN = "ease_in"
-    EASE_OUT = "ease_out"
-    EASE_IN_OUT = "ease_in_out"
-    BOUNCE = "bounce"
-    ELASTIC = "elastic"
 
 
 @dataclass
@@ -518,70 +510,232 @@ class ProgressBarWidget(Widget):
         self._mark_dirty()
     
     def _start_animation(self) -> None:
-        """Start progress animation to new value."""
+        """Start progress animation using tick-based system."""
         if not self._animation.enabled:
-            self._cached_progress = self._normalize_progress(self._progress.value)
             return
         
-        with self._animation_lock:
-            current_time = time.time()
-            new_target = self._normalize_progress(self._progress.value)
-            
-            # Set up animation
-            self._animation.start_time = current_time
-            self._animation.start_value = self._animation.current_value or self._cached_progress
-            self._animation.target_value = new_target
+        # Convert duration from seconds to ticks (assuming 60 FPS)
+        duration_ticks = int(self._animation.duration * 60)
+        
+        # Start tick-based animation
+        self.start_tick_based_animation(
+            animation_type='progress_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_value=self._animation.start_value,
+            target_value=self._animation.target_value,
+            easing=self._animation.easing.value
+        )
     
     def _update_animation(self, current_time: float) -> None:
-        """Update animation progress."""
-        with self._animation_lock:
-            if (self._animation.start_time is None or 
-                self._animation.start_value is None or 
-                self._animation.target_value is None):
-                return
-            
-            # Calculate animation progress
-            elapsed = current_time - self._animation.start_time
-            progress = min(elapsed / self._animation.duration, 1.0)
-            
-            if progress >= 1.0:
-                # Animation complete
-                self._animation.current_value = self._animation.target_value
-                self._cached_progress = self._animation.target_value
-                self._animation.start_time = None
-            else:
-                # Apply easing function
-                eased_progress = self._apply_easing(progress, self._animation.easing)
-                
-                # Interpolate between start and target
-                start_val = self._animation.start_value
-                target_val = self._animation.target_value
-                self._animation.current_value = start_val + (target_val - start_val) * eased_progress
+        """Update progress animation - now handled by tick-based system."""
+        # This method is kept for backward compatibility but animation
+        # is now handled by the tick-based system in update_animations()
+        pass
     
-    def _apply_easing(self, progress: float, easing: EasingFunction) -> float:
-        """Apply easing function to animation progress."""
-        if easing == EasingFunction.LINEAR:
-            return progress
-        elif easing == EasingFunction.EASE_IN:
-            return progress * progress
-        elif easing == EasingFunction.EASE_OUT:
-            return 1.0 - (1.0 - progress) * (1.0 - progress)
-        elif easing == EasingFunction.EASE_IN_OUT:
-            if progress < 0.5:
-                return 2.0 * progress * progress
-            else:
-                return 1.0 - 2.0 * (1.0 - progress) * (1.0 - progress)
-        elif easing == EasingFunction.BOUNCE:
-            if progress < 0.5:
-                return 2.0 * progress * progress
-            else:
-                return 1.0 - 2.0 * (1.0 - progress) * (1.0 - progress) * abs(math.sin(progress * math.pi * 4))
-        elif easing == EasingFunction.ELASTIC:
-            if progress == 0.0 or progress == 1.0:
-                return progress
-            return math.pow(2, -10 * progress) * math.sin((progress - 0.1) * 2 * math.pi / 0.4) + 1.0
-        else:
-            return progress
+    # Tick-based animation methods
+    def set_progress_animated(self, target_progress: float, duration_ticks: int = 60,
+                             easing: str = "ease_out", on_complete: Optional[Callable] = None) -> bool:
+        """Animate progress to target value using tick-based animation.
+        
+        Args:
+            target_progress: Target progress value (0.0 to 1.0)
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        self._validate_progress(target_progress)
+        current_progress = self._normalize_progress(self._progress.value)
+        
+        return self.start_tick_based_animation(
+            animation_type='progress_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_value=current_progress,
+            target_value=target_progress,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def pulse_animated(self, duration_ticks: int = 120, intensity: float = 0.3,
+                      on_complete: Optional[Callable] = None) -> bool:
+        """Animate progress bar pulse effect using tick-based animation.
+        
+        Args:
+            duration_ticks: Animation duration in ticks (default 120 = 2s at 60fps)
+            intensity: Pulse intensity (0.0 to 1.0)
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if not 0.0 <= intensity <= 1.0:
+            raise ValueError("Pulse intensity must be between 0.0 and 1.0")
+        
+        return self.start_tick_based_animation(
+            animation_type='pulse',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            intensity=intensity,
+            easing='ease_in_out',
+            on_complete=on_complete
+        )
+    
+    def fill_color_animated(self, target_color: Tuple[int, int, int], duration_ticks: int = 60,
+                           easing: str = "ease_in_out", on_complete: Optional[Callable] = None) -> bool:
+        """Animate progress bar fill color transition using tick-based animation.
+        
+        Args:
+            target_color: Target RGB color tuple
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if not all(0 <= c <= 255 for c in target_color):
+            raise ValueError("Color values must be between 0 and 255")
+        
+        current_color = self._style.fill_color
+        
+        return self.start_tick_based_animation(
+            animation_type='color_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_color=current_color,
+            target_color=target_color,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def fade_in_animated(self, duration_ticks: int = 30, easing: str = "ease_out",
+                        on_complete: Optional[Callable] = None) -> bool:
+        """Animate progress bar fade in using tick-based animation.
+        
+        Args:
+            duration_ticks: Animation duration in ticks (default 30 = 0.5s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        return self.start_tick_based_animation(
+            animation_type='fade_in',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def fade_out_animated(self, duration_ticks: int = 30, easing: str = "ease_in",
+                         on_complete: Optional[Callable] = None) -> bool:
+        """Animate progress bar fade out using tick-based animation.
+        
+        Args:
+            duration_ticks: Animation duration in ticks (default 30 = 0.5s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        return self.start_tick_based_animation(
+            animation_type='fade_out',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def _apply_animation_progress(self, progress: float) -> None:
+        """Apply animation progress to progress bar properties.
+        
+        Args:
+            progress: Animation progress from 0.0 to 1.0
+        """
+        # Call parent implementation for base animations (alpha, etc.)
+        super()._apply_animation_progress(progress)
+        
+        if not self._current_animation:
+            return
+        
+        animation_type = self._current_animation['type']
+        
+        if animation_type == 'progress_transition':
+            # Interpolate between start and target progress values
+            start_value = self._current_animation['start_value']
+            target_value = self._current_animation['target_value']
+            
+            current_value = start_value + (target_value - start_value) * progress
+            
+            # Update animation current value
+            self._animation.current_value = current_value
+            self._mark_dirty()
+            
+        elif animation_type == 'pulse':
+            # Apply pulse effect to fill color brightness
+            intensity = self._current_animation['intensity']
+            
+            # Create sine wave pulse effect
+            import math
+            pulse_factor = 1.0 + intensity * math.sin(progress * math.pi * 2)
+            
+            # Apply pulse to fill color
+            base_color = self._style.fill_color
+            pulsed_color = tuple(
+                min(255, int(base_color[i] * pulse_factor))
+                for i in range(3)
+            )
+            
+            # Temporarily store pulsed color (would need proper implementation)
+            self._mark_dirty()
+            
+        elif animation_type == 'color_transition':
+            # Interpolate between start and target colors
+            start_color = self._current_animation['start_color']
+            target_color = self._current_animation['target_color']
+            
+            current_color = tuple(
+                int(start_color[i] + (target_color[i] - start_color[i]) * progress)
+                for i in range(3)
+            )
+            
+            # Update fill color
+            self._style.fill_color = current_color
+            self._mark_dirty()
+    
+    def _complete_animation(self) -> None:
+        """Complete the current animation and finalize progress bar properties."""
+        if not self._current_animation:
+            return
+        
+        animation_type = self._current_animation['type']
+        
+        if animation_type == 'progress_transition':
+            # Set final progress value
+            target_value = self._current_animation['target_value']
+            self._animation.current_value = target_value
+            
+            # Update actual progress if this was a direct progress animation
+            if 'target_progress' in self._current_animation:
+                self._progress.value = self._current_animation['target_progress']
+            
+        elif animation_type == 'color_transition':
+            # Set final color
+            self._style.fill_color = self._current_animation['target_color']
+            
+        elif animation_type == 'pulse':
+            # Restore original fill color after pulse
+            # (pulse effect should not permanently change color)
+            pass
+        
+        # Call parent implementation to handle completion
+        super()._complete_animation()
     
     def _render_background(self, canvas: 'Canvas') -> None:
         """Render progress bar background."""

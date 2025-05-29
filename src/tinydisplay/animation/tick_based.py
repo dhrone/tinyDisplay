@@ -19,7 +19,15 @@ from dataclasses import dataclass, field
 from enum import Enum
 from abc import ABC, abstractmethod
 
-from src.tinydisplay.widgets.progress import EasingFunction
+
+class EasingFunction(Enum):
+    """Animation easing functions."""
+    LINEAR = "linear"
+    EASE_IN = "ease_in"
+    EASE_OUT = "ease_out"
+    EASE_IN_OUT = "ease_in_out"
+    BOUNCE = "bounce"
+    ELASTIC = "elastic"
 
 
 @dataclass(frozen=True)
@@ -190,7 +198,10 @@ class TickEasing:
         amplitude = 1.0
         s = period / (2 * math.pi) * math.asin(1.0 / amplitude)
         
-        return amplitude * math.pow(2, -10 * t) * math.sin((t - s) * 2 * math.pi / period) + 1.0
+        result = amplitude * math.pow(2, -10 * t) * math.sin((t - s) * 2 * math.pi / period) + 1.0
+        
+        # Clamp result to valid range [0.0, 1.0] to prevent interpolation errors
+        return max(0.0, min(1.0, result))
     
     @classmethod
     def get_easing_function(cls, easing: Union[EasingFunction, str]) -> Callable[[float], float]:

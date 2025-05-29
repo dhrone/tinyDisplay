@@ -6,7 +6,7 @@ Provides shape rendering widgets with reactive data binding, advanced styling,
 and geometric operations for the tinyDisplay framework.
 """
 
-from typing import Union, Optional, Tuple, Dict, Any, List
+from typing import Union, Optional, Tuple, Dict, Any, List, Callable
 from dataclasses import dataclass
 from enum import Enum
 import math
@@ -14,6 +14,7 @@ import threading
 
 from .base import Widget, ReactiveValue, WidgetBounds
 from ..core.reactive import ReactiveDataManager
+from ..animation.tick_based import TickAnimationEngine, create_tick_fade_animation
 
 
 class FillPattern(Enum):
@@ -289,6 +290,259 @@ class ShapeWidget(Widget):
         """Render shape stroke - implemented by subclasses."""
         pass
 
+    # Tick-based animation methods
+    def fade_in_animated(self, duration_ticks: int = 30, easing: str = "ease_out",
+                        on_complete: Optional[Callable] = None) -> bool:
+        """Animate shape fade in using tick-based animation.
+        
+        Args:
+            duration_ticks: Animation duration in ticks (default 30 = 0.5s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        return self.start_tick_based_animation(
+            animation_type='fade_in',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def fade_out_animated(self, duration_ticks: int = 30, easing: str = "ease_in",
+                         on_complete: Optional[Callable] = None) -> bool:
+        """Animate shape fade out using tick-based animation.
+        
+        Args:
+            duration_ticks: Animation duration in ticks (default 30 = 0.5s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        return self.start_tick_based_animation(
+            animation_type='fade_out',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def set_fill_color_animated(self, target_color: Tuple[int, int, int], 
+                               duration_ticks: int = 60, easing: str = "ease_in_out",
+                               on_complete: Optional[Callable] = None) -> bool:
+        """Animate fill color transition using tick-based animation.
+        
+        Args:
+            target_color: Target RGB color tuple
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if not all(0 <= c <= 255 for c in target_color):
+            raise ValueError("Color values must be between 0 and 255")
+        
+        current_color = self._style.fill_color
+        
+        return self.start_tick_based_animation(
+            animation_type='fill_color_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_color=current_color,
+            target_color=target_color,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def set_stroke_color_animated(self, target_color: Tuple[int, int, int],
+                                 duration_ticks: int = 60, easing: str = "ease_in_out",
+                                 on_complete: Optional[Callable] = None) -> bool:
+        """Animate stroke color transition using tick-based animation.
+        
+        Args:
+            target_color: Target RGB color tuple
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if not all(0 <= c <= 255 for c in target_color):
+            raise ValueError("Color values must be between 0 and 255")
+        
+        current_color = self._style.stroke_color
+        
+        return self.start_tick_based_animation(
+            animation_type='stroke_color_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_color=current_color,
+            target_color=target_color,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def set_fill_alpha_animated(self, target_alpha: float, duration_ticks: int = 60,
+                               easing: str = "ease_in_out", 
+                               on_complete: Optional[Callable] = None) -> bool:
+        """Animate fill alpha transition using tick-based animation.
+        
+        Args:
+            target_alpha: Target alpha value (0.0 to 1.0)
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if not 0.0 <= target_alpha <= 1.0:
+            raise ValueError("Alpha must be between 0.0 and 1.0")
+        
+        current_alpha = self._style.fill_alpha
+        
+        return self.start_tick_based_animation(
+            animation_type='fill_alpha_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_alpha=current_alpha,
+            target_alpha=target_alpha,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def set_stroke_width_animated(self, target_width: float, duration_ticks: int = 60,
+                                 easing: str = "ease_in_out",
+                                 on_complete: Optional[Callable] = None) -> bool:
+        """Animate stroke width transition using tick-based animation.
+        
+        Args:
+            target_width: Target stroke width
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if target_width < 0:
+            raise ValueError("Stroke width must be non-negative")
+        
+        current_width = self._style.stroke_width
+        
+        return self.start_tick_based_animation(
+            animation_type='stroke_width_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_width=current_width,
+            target_width=target_width,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def _apply_animation_progress(self, progress: float) -> None:
+        """Apply animation progress to shape widget properties.
+        
+        Args:
+            progress: Animation progress from 0.0 to 1.0
+        """
+        # Call parent implementation for base animations (alpha, etc.)
+        super()._apply_animation_progress(progress)
+        
+        if not self._current_animation:
+            return
+        
+        animation_type = self._current_animation['type']
+        
+        if animation_type == 'fill_color_transition':
+            # Interpolate between start and target fill colors
+            start_color = self._current_animation['start_color']
+            target_color = self._current_animation['target_color']
+            
+            current_color = tuple(
+                int(start_color[i] + (target_color[i] - start_color[i]) * progress)
+                for i in range(3)
+            )
+            
+            with self._style_lock:
+                self._style.fill_color = current_color
+                self._mark_dirty()
+                
+        elif animation_type == 'stroke_color_transition':
+            # Interpolate between start and target stroke colors
+            start_color = self._current_animation['start_color']
+            target_color = self._current_animation['target_color']
+            
+            current_color = tuple(
+                int(start_color[i] + (target_color[i] - start_color[i]) * progress)
+                for i in range(3)
+            )
+            
+            with self._style_lock:
+                self._style.stroke_color = current_color
+                self._mark_dirty()
+                
+        elif animation_type == 'fill_alpha_transition':
+            # Interpolate between start and target fill alpha
+            start_alpha = self._current_animation['start_alpha']
+            target_alpha = self._current_animation['target_alpha']
+            
+            current_alpha = start_alpha + (target_alpha - start_alpha) * progress
+            
+            with self._style_lock:
+                self._style.fill_alpha = current_alpha
+                self._mark_dirty()
+                
+        elif animation_type == 'stroke_width_transition':
+            # Interpolate between start and target stroke width
+            start_width = self._current_animation['start_width']
+            target_width = self._current_animation['target_width']
+            
+            current_width = start_width + (target_width - start_width) * progress
+            
+            with self._style_lock:
+                self._style.stroke_width = current_width
+                self._style.stroke_enabled = current_width > 0
+                self._bounds_dirty = True
+                self._mark_dirty()
+    
+    def _complete_animation(self) -> None:
+        """Complete the current animation and finalize shape properties."""
+        if not self._current_animation:
+            return
+        
+        animation_type = self._current_animation['type']
+        
+        with self._style_lock:
+            if animation_type == 'fill_color_transition':
+                # Set final fill color
+                self._style.fill_color = self._current_animation['target_color']
+                
+            elif animation_type == 'stroke_color_transition':
+                # Set final stroke color
+                self._style.stroke_color = self._current_animation['target_color']
+                
+            elif animation_type == 'fill_alpha_transition':
+                # Set final fill alpha
+                self._style.fill_alpha = self._current_animation['target_alpha']
+                
+            elif animation_type == 'stroke_width_transition':
+                # Set final stroke width
+                target_width = self._current_animation['target_width']
+                self._style.stroke_width = target_width
+                self._style.stroke_enabled = target_width > 0
+                self._bounds_dirty = True
+        
+        # Call parent implementation to handle completion
+        super()._complete_animation()
+
 
 class RectangleWidget(ShapeWidget):
     """Rectangle shape widget with reactive dimensions and styling."""
@@ -469,8 +723,204 @@ class RectangleWidget(ShapeWidget):
         pass
     
     def __repr__(self) -> str:
-        return (f"RectangleWidget(id={self.widget_id}, width={self.width}, height={self.height}, "
-                f"corner_radius={self.corner_radius}, visible={self.visible})")
+        return f"RectangleWidget(id={self.widget_id}, size=({self.width}x{self.height}), pos={self.position})"
+    
+    # Rectangle-specific tick-based animation methods
+    def set_width_animated(self, target_width: float, duration_ticks: int = 60,
+                          easing: str = "ease_in_out", on_complete: Optional[Callable] = None) -> bool:
+        """Animate rectangle width using tick-based animation.
+        
+        Args:
+            target_width: Target width value
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if target_width <= 0:
+            raise ValueError("Width must be positive")
+        
+        current_width = self.width
+        
+        return self.start_tick_based_animation(
+            animation_type='width_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_width=current_width,
+            target_width=target_width,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def set_height_animated(self, target_height: float, duration_ticks: int = 60,
+                           easing: str = "ease_in_out", on_complete: Optional[Callable] = None) -> bool:
+        """Animate rectangle height using tick-based animation.
+        
+        Args:
+            target_height: Target height value
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if target_height <= 0:
+            raise ValueError("Height must be positive")
+        
+        current_height = self.height
+        
+        return self.start_tick_based_animation(
+            animation_type='height_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_height=current_height,
+            target_height=target_height,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def set_size_animated(self, target_width: float, target_height: float, 
+                         duration_ticks: int = 60, easing: str = "ease_in_out",
+                         on_complete: Optional[Callable] = None) -> bool:
+        """Animate rectangle size (width and height) using tick-based animation.
+        
+        Args:
+            target_width: Target width value
+            target_height: Target height value
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if target_width <= 0 or target_height <= 0:
+            raise ValueError("Width and height must be positive")
+        
+        current_width = self.width
+        current_height = self.height
+        
+        return self.start_tick_based_animation(
+            animation_type='size_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_width=current_width,
+            start_height=current_height,
+            target_width=target_width,
+            target_height=target_height,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def set_corner_radius_animated(self, target_radius: float, duration_ticks: int = 60,
+                                  easing: str = "ease_in_out", 
+                                  on_complete: Optional[Callable] = None) -> bool:
+        """Animate corner radius using tick-based animation.
+        
+        Args:
+            target_radius: Target corner radius value
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if target_radius < 0:
+            raise ValueError("Corner radius must be non-negative")
+        
+        current_radius = self.corner_radius
+        
+        return self.start_tick_based_animation(
+            animation_type='corner_radius_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_radius=current_radius,
+            target_radius=target_radius,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def _apply_animation_progress(self, progress: float) -> None:
+        """Apply animation progress to rectangle properties.
+        
+        Args:
+            progress: Animation progress from 0.0 to 1.0
+        """
+        # Call parent implementation for base shape animations
+        super()._apply_animation_progress(progress)
+        
+        if not self._current_animation:
+            return
+        
+        animation_type = self._current_animation['type']
+        
+        if animation_type == 'width_transition':
+            # Interpolate between start and target width
+            start_width = self._current_animation['start_width']
+            target_width = self._current_animation['target_width']
+            
+            current_width = start_width + (target_width - start_width) * progress
+            self._width.value = current_width
+            
+        elif animation_type == 'height_transition':
+            # Interpolate between start and target height
+            start_height = self._current_animation['start_height']
+            target_height = self._current_animation['target_height']
+            
+            current_height = start_height + (target_height - start_height) * progress
+            self._height.value = current_height
+            
+        elif animation_type == 'size_transition':
+            # Interpolate both width and height
+            start_width = self._current_animation['start_width']
+            start_height = self._current_animation['start_height']
+            target_width = self._current_animation['target_width']
+            target_height = self._current_animation['target_height']
+            
+            current_width = start_width + (target_width - start_width) * progress
+            current_height = start_height + (target_height - start_height) * progress
+            
+            self._width.value = current_width
+            self._height.value = current_height
+            
+        elif animation_type == 'corner_radius_transition':
+            # Interpolate between start and target corner radius
+            start_radius = self._current_animation['start_radius']
+            target_radius = self._current_animation['target_radius']
+            
+            current_radius = start_radius + (target_radius - start_radius) * progress
+            self._corner_radius.value = current_radius
+    
+    def _complete_animation(self) -> None:
+        """Complete the current animation and finalize rectangle properties."""
+        if not self._current_animation:
+            return
+        
+        animation_type = self._current_animation['type']
+        
+        if animation_type == 'width_transition':
+            # Set final width
+            self._width.value = self._current_animation['target_width']
+            
+        elif animation_type == 'height_transition':
+            # Set final height
+            self._height.value = self._current_animation['target_height']
+            
+        elif animation_type == 'size_transition':
+            # Set final size
+            self._width.value = self._current_animation['target_width']
+            self._height.value = self._current_animation['target_height']
+            
+        elif animation_type == 'corner_radius_transition':
+            # Set final corner radius
+            self._corner_radius.value = self._current_animation['target_radius']
+        
+        # Call parent implementation to handle completion
+        super()._complete_animation()
 
 
 class CircleWidget(ShapeWidget):

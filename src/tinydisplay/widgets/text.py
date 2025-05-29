@@ -14,6 +14,7 @@ import time
 
 from .base import Widget, ReactiveValue, WidgetBounds
 from ..core.reactive import ReactiveDataManager
+from ..animation.tick_based import TickAnimationEngine, create_tick_fade_animation
 
 
 class TextAlignment(Enum):
@@ -521,5 +522,203 @@ class TextWidget(Widget):
         pass
     
     def __repr__(self) -> str:
-        return (f"TextWidget(id={self.widget_id}, text='{self.text[:20]}...', "
-                f"font_size={self._font_style.size}, visible={self.visible})") 
+        return f"TextWidget(id={self.widget_id}, text='{self.text[:20]}...', pos={self.position})"
+    
+    # Tick-based animation methods
+    def fade_in_animated(self, duration_ticks: int = 30, easing: str = "ease_out",
+                        on_complete: Optional[Callable] = None) -> bool:
+        """Animate text fade in using tick-based animation.
+        
+        Args:
+            duration_ticks: Animation duration in ticks (default 30 = 0.5s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        return self.start_tick_based_animation(
+            animation_type='fade_in',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def fade_out_animated(self, duration_ticks: int = 30, easing: str = "ease_in",
+                         on_complete: Optional[Callable] = None) -> bool:
+        """Animate text fade out using tick-based animation.
+        
+        Args:
+            duration_ticks: Animation duration in ticks (default 30 = 0.5s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        return self.start_tick_based_animation(
+            animation_type='fade_out',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def set_text_color_animated(self, target_color: Tuple[int, int, int], 
+                               duration_ticks: int = 60, easing: str = "ease_in_out",
+                               on_complete: Optional[Callable] = None) -> bool:
+        """Animate text color transition using tick-based animation.
+        
+        Args:
+            target_color: Target RGB color tuple
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        # Validate color values
+        if not all(0 <= c <= 255 for c in target_color):
+            raise ValueError("Color values must be between 0 and 255")
+        
+        # Store current and target colors for animation
+        current_color = self._font_style.color
+        
+        return self.start_tick_based_animation(
+            animation_type='color_transition',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_color=current_color,
+            target_color=target_color,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def set_font_size_animated(self, target_size: int, duration_ticks: int = 60,
+                              easing: str = "ease_in_out", 
+                              on_complete: Optional[Callable] = None) -> bool:
+        """Animate font size change using tick-based animation.
+        
+        Args:
+            target_size: Target font size
+            duration_ticks: Animation duration in ticks (default 60 = 1s at 60fps)
+            easing: Easing function name
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        if target_size <= 0:
+            raise ValueError("Font size must be positive")
+        
+        current_size = self._font_style.size
+        
+        return self.start_tick_based_animation(
+            animation_type='font_size',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            start_size=current_size,
+            target_size=target_size,
+            easing=easing,
+            on_complete=on_complete
+        )
+    
+    def typewriter_effect_animated(self, duration_ticks: int = 180, 
+                                  on_complete: Optional[Callable] = None) -> bool:
+        """Animate text appearing character by character using tick-based animation.
+        
+        Args:
+            duration_ticks: Animation duration in ticks (default 180 = 3s at 60fps)
+            on_complete: Callback when animation completes
+            
+        Returns:
+            True if animation started successfully
+        """
+        full_text = self.text
+        if not full_text:
+            return False
+        
+        return self.start_tick_based_animation(
+            animation_type='typewriter',
+            start_tick=0,  # Will be set by rendering engine
+            duration_ticks=duration_ticks,
+            full_text=full_text,
+            on_complete=on_complete
+        )
+    
+    def _apply_animation_progress(self, progress: float) -> None:
+        """Apply animation progress to text widget properties.
+        
+        Args:
+            progress: Animation progress from 0.0 to 1.0
+        """
+        # Call parent implementation for base animations (alpha, etc.)
+        super()._apply_animation_progress(progress)
+        
+        if not self._current_animation:
+            return
+        
+        animation_type = self._current_animation['type']
+        
+        if animation_type == 'color_transition':
+            # Interpolate between start and target colors
+            start_color = self._current_animation['start_color']
+            target_color = self._current_animation['target_color']
+            
+            current_color = tuple(
+                int(start_color[i] + (target_color[i] - start_color[i]) * progress)
+                for i in range(3)
+            )
+            
+            # Update font style color
+            self._font_style.color = current_color
+            self._mark_dirty()
+            
+        elif animation_type == 'font_size':
+            # Interpolate between start and target font sizes
+            start_size = self._current_animation['start_size']
+            target_size = self._current_animation['target_size']
+            
+            current_size = int(start_size + (target_size - start_size) * progress)
+            
+            # Update font style size
+            self._font_style.size = current_size
+            self._needs_layout = True  # Font size change requires re-layout
+            self._mark_dirty()
+            
+        elif animation_type == 'typewriter':
+            # Show characters progressively
+            full_text = self._current_animation['full_text']
+            char_count = len(full_text)
+            visible_chars = int(char_count * progress)
+            
+            # Update displayed text
+            self._text.value = full_text[:visible_chars]
+            self._needs_layout = True
+            self._mark_dirty()
+    
+    def _complete_animation(self) -> None:
+        """Complete the current animation and finalize text properties."""
+        if not self._current_animation:
+            return
+        
+        animation_type = self._current_animation['type']
+        
+        if animation_type == 'color_transition':
+            # Set final color
+            self._font_style.color = self._current_animation['target_color']
+            
+        elif animation_type == 'font_size':
+            # Set final font size
+            self._font_style.size = self._current_animation['target_size']
+            self._needs_layout = True
+            
+        elif animation_type == 'typewriter':
+            # Show full text
+            self._text.value = self._current_animation['full_text']
+            self._needs_layout = True
+        
+        # Call parent implementation to handle completion
+        super()._complete_animation() 
