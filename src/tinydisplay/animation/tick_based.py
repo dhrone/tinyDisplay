@@ -441,6 +441,76 @@ class TickAnimationEngine:
         """Get frame state at specific tick (alias for compute_frame_state)."""
         return self.compute_frame_state(tick)
     
+    def predict_frame_at_tick(self, target_tick: int) -> Dict[str, TickAnimationState]:
+        """Predict animation states at future tick.
+        
+        Pure function - deterministic across cores. This method is specifically
+        designed for multi-core frame pre-computation.
+        
+        Args:
+            target_tick: Future tick to predict
+            
+        Returns:
+            Complete frame state for target tick
+        """
+        return self.compute_frame_state(target_tick)
+    
+    def predict_frame_range(self, start_tick: int, end_tick: int) -> Dict[int, Dict[str, TickAnimationState]]:
+        """Batch prediction for multiple future frames.
+        
+        Optimized for multi-core worker distribution. Each tick prediction
+        is independent and can be computed on separate cores.
+        
+        Args:
+            start_tick: Starting tick for prediction range
+            end_tick: Ending tick for prediction range (inclusive)
+            
+        Returns:
+            Dictionary mapping ticks to their complete frame states
+        """
+        frame_predictions = {}
+        for tick in range(start_tick, end_tick + 1):
+            frame_predictions[tick] = self.predict_frame_at_tick(tick)
+        return frame_predictions
+    
+    def get_prediction_workload(self, start_tick: int, num_frames: int, num_workers: int) -> List[Tuple[int, int]]:
+        """Generate workload distribution for multi-core frame prediction.
+        
+        Divides frame prediction work into balanced chunks for worker distribution.
+        
+        Args:
+            start_tick: Starting tick for prediction
+            num_frames: Number of frames to predict
+            num_workers: Number of worker cores available
+            
+        Returns:
+            List of (start_tick, end_tick) tuples for each worker
+        """
+        if num_workers <= 0 or num_frames <= 0:
+            return []
+        
+        frames_per_worker = max(1, num_frames // num_workers)
+        workload = []
+        
+        current_tick = start_tick
+        for worker_id in range(num_workers):
+            if current_tick >= start_tick + num_frames:
+                break
+            
+            # Calculate end tick for this worker
+            if worker_id == num_workers - 1:
+                # Last worker gets remaining frames
+                end_tick = start_tick + num_frames - 1
+            else:
+                end_tick = min(current_tick + frames_per_worker - 1, start_tick + num_frames - 1)
+            
+            if current_tick <= end_tick:
+                workload.append((current_tick, end_tick))
+            
+            current_tick = end_tick + 1
+        
+        return workload
+    
     def serialize_engine_state(self) -> Dict[str, Any]:
         """Serialize engine state for cross-core communication."""
         return {
