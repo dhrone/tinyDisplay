@@ -118,6 +118,8 @@ class ImageCache:
         self._cache: Dict[str, 'Image.Image'] = {}
         self._cache_info: Dict[str, Dict[str, Any]] = {}
         self._access_times: Dict[str, float] = {}
+        self._access_counters: Dict[str, int] = {}  # Counter for deterministic ordering
+        self._counter = 0  # Global counter
         self._max_cache_size = max_cache_size
         self._max_memory_bytes = max_memory_mb * 1024 * 1024
         self._current_memory_usage = 0
@@ -134,6 +136,8 @@ class ImageCache:
         with self._lock:
             if cache_key in self._cache:
                 self._access_times[cache_key] = time.time()
+                self._counter += 1
+                self._access_counters[cache_key] = self._counter
                 self._stats['hits'] += 1
                 return self._cache[cache_key]
             
@@ -165,6 +169,8 @@ class ImageCache:
                 'added_time': time.time()
             }
             self._access_times[cache_key] = time.time()
+            self._counter += 1
+            self._access_counters[cache_key] = self._counter
             self._current_memory_usage += memory_size
             self._stats['memory_usage'] = self._current_memory_usage
     
@@ -184,14 +190,16 @@ class ImageCache:
         if not self._cache:
             return
         
-        # Find LRU item
+        # Find LRU item using both timestamp and counter for deterministic ordering
+        # First sort by timestamp, then by counter for ties
         lru_key = min(self._access_times.keys(), 
-                     key=lambda k: self._access_times[k])
+                     key=lambda k: (self._access_times[k], self._access_counters[k]))
         
         # Remove from cache
         self._cache.pop(lru_key, None)
         cache_info = self._cache_info.pop(lru_key, {})
         self._access_times.pop(lru_key, None)
+        self._access_counters.pop(lru_key, None)
         
         # Update memory usage
         memory_size = cache_info.get('memory_size', 0)
@@ -205,6 +213,8 @@ class ImageCache:
             self._cache.clear()
             self._cache_info.clear()
             self._access_times.clear()
+            self._access_counters.clear()
+            self._counter = 0
             self._current_memory_usage = 0
             self._stats['memory_usage'] = 0
     
@@ -707,8 +717,7 @@ class ImageWidget(Widget):
                 processed_image = self._apply_opacity(processed_image)
             
         except Exception as e:
-            # If style processing fails, return original
-            print(f"Warning: Image style processing failed: {e}")
+            # If style processing fails, return original image silently
             return image
         
         return processed_image
