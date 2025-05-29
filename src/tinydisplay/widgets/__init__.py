@@ -9,6 +9,7 @@ Provides the complete widget framework for tinyDisplay including:
 - Container widgets for composition
 - Widget pools for performance optimization
 - Lifecycle event management and hooks
+- Collection widgets for sophisticated layouts
 """
 
 from .base import (
@@ -88,6 +89,31 @@ from .shapes import (
     StrokeStyle,
     LineCapStyle,
     LineJoinStyle
+)
+
+from .collection_base import (
+    CollectionWidget,
+    CollectionConfig,
+    CollectionEvent,
+    CollectionChange,
+    CollectionLayout,
+    SelectionMode,
+    VirtualScrollInfo
+)
+
+from .collections import (
+    StackWidget,
+    StackDirection,
+    StackAlignment,
+    StackConfig,
+    GridWidget,
+    GridSizing,
+    GridColumnConfig,
+    GridRowConfig,
+    GridConfig,
+    SequenceWidget,
+    SequenceTransition,
+    SequenceConfig
 )
 
 from .styling import (
@@ -190,6 +216,29 @@ __all__ = [
     'LineCapStyle',
     'LineJoinStyle',
 
+    # Collection widget base framework
+    'CollectionWidget',
+    'CollectionConfig',
+    'CollectionEvent',
+    'CollectionChange',
+    'CollectionLayout',
+    'SelectionMode',
+    'VirtualScrollInfo',
+
+    # Collection widgets
+    'StackWidget',
+    'StackDirection',
+    'StackAlignment',
+    'StackConfig',
+    'GridWidget',
+    'GridSizing',
+    'GridColumnConfig',
+    'GridRowConfig',
+    'GridConfig',
+    'SequenceWidget',
+    'SequenceTransition',
+    'SequenceConfig',
+
     # Styling
     'WidgetStyle',
     'BorderStyle',
@@ -200,8 +249,7 @@ __all__ = [
     'BorderStyleType',
     'BackgroundType',
     'EffectType',
-    'GradientStop',
-
+    
     # Performance
     'PerformanceMetrics',
     'PerformanceWidgetPool',
